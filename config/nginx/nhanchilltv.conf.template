@@ -1,0 +1,110 @@
+server {
+    listen __NGINX_PORT__;
+    server_name __SERVER_NAME__;
+
+    root __APP_DIR__/public;
+    index index.html;
+
+    access_log /var/log/nginx/nhanchilltv.access.log;
+    error_log /var/log/nginx/nhanchilltv.error.log warn;
+
+    client_max_body_size 12m;
+    keepalive_timeout 30s;
+    send_timeout 10s;
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+
+    gzip on;
+    gzip_comp_level 4;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css application/javascript application/json image/svg+xml application/xml;
+
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+
+    location / {
+        try_files $uri $uri/ $uri.html /index.html;
+    }
+
+    location /api/proxy/ {
+        proxy_pass http://127.0.0.1:__API_PORT__;
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_read_timeout 300s;
+        proxy_connect_timeout 60s;
+    }
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:__API_PORT__/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 120s;
+        proxy_connect_timeout 30s;
+    }
+
+    location /socket.io/ {
+        proxy_pass http://127.0.0.1:__API_PORT__/socket.io/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 120s;
+    }
+
+    location /event_temp/ {
+        alias __APP_DIR__/temp/event_temp/;
+        add_header Cache-Control "public, max-age=31536000";
+    }
+
+    location ~ ^/hls/([a-zA-Z0-9_-]+)/([0-9]+)/([^/]+)/(.*)$ {
+        set $secure_token $1;
+        set $secure_expires $2;
+        set $channel_id $3;
+        set $hls_file $4;
+
+        secure_link $secure_token,$secure_expires;
+        secure_link_md5 "$secure_expires/$channel_id$remote_addr __JWT_SECRET__";
+
+        if ($secure_link = "") { return 403; }
+        if ($secure_link = "0") { return 410; }
+
+        alias __APP_DIR__/temp/hls_temp/$channel_id/$hls_file;
+        types {
+            application/vnd.apple.mpegurl m3u8;
+            video/mp2t ts;
+            video/iso.segment m4s;
+        }
+        expires -1;
+        add_header Cache-Control no-cache always;
+        add_header Access-Control-Allow-Origin "*" always;
+        add_header Access-Control-Allow-Methods "GET, HEAD, OPTIONS" always;
+        add_header Access-Control-Allow-Headers "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range" always;
+        add_header Access-Control-Expose-Headers "Content-Length,Content-Range" always;
+    }
+
+    location ~ ^/hls/([^/]+)/(.*)$ {
+        alias __APP_DIR__/temp/hls_temp/$1/$2;
+        types {
+            application/vnd.apple.mpegurl m3u8;
+            video/mp2t ts;
+            video/iso.segment m4s;
+        }
+        expires -1;
+        add_header Cache-Control no-cache always;
+        add_header Access-Control-Allow-Origin "*" always;
+        add_header Access-Control-Allow-Methods "GET, HEAD, OPTIONS" always;
+        add_header Access-Control-Allow-Headers "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range" always;
+        add_header Access-Control-Expose-Headers "Content-Length,Content-Range" always;
+    }
+}
