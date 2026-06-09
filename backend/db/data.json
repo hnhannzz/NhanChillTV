@@ -1,0 +1,58 @@
+{
+  "events": [],
+  "favorites": [],
+  "m3uSources": [
+    {
+      "id": "src_1780846294003",
+      "name": "Default Server Source",
+      "type": "url",
+      "url": "https://tinyurl.com/vmt47",
+      "active": true,
+      "createdAt": "2026-06-07T15:31:34.003Z"
+    }
+  ],
+  "iptvSettings": {
+    "hiddenGroups": [
+      "LIVE EVENTS 🔴",
+      "Other",
+      "Rạp Phim",
+      "🇨🇳| Trung Quốc",
+      "🇬🇧 UK Radio",
+      "🇰🇭| Campuchia",
+      "🇰🇷| Hàn Quốc",
+      "🇹🇭| Thái Lan",
+      "📦| In The Box"
+    ],
+    "hiddenChannels": [
+      "ninochannel",
+      "sglive"
+    ],
+    "groupOrder": [
+      "VTV",
+      "HTV",
+      "HTVC",
+      "LIVE EVENTS 🔴",
+      "SCTV",
+      "Other",
+      "Quốc Tế",
+      "Radio",
+      "Rạp Phim",
+      "VTVcab",
+      "Sự Kiện",
+      "Sự Kiện FPT PLAY",
+      "Sự Kiện TV360",
+      "Sự Kiện VTVPrime",
+      "THỂ THAO QUỐC TẾ",
+      "TVB",
+      "Địa phương",
+      "⚽| Thể thao quốc tế",
+      "🇨🇳| Trung Quốc",
+      "🇬🇧 UK Radio",
+      "🇰🇭| Campuchia",
+      "🇰🇷| Hàn Quốc",
+      "🇹🇭| Thái Lan",
+      "🌐| Thiết yếu",
+      "📦| In The Box"
+    ]
+  }
+}

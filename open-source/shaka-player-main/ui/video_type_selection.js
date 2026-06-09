@@ -1,0 +1,180 @@
+/*! @license
+ * Shaka Player
+ * Copyright 2016 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+
+goog.provide('shaka.ui.VideoTypeSelection');
+
+goog.require('shaka.ui.Controls');
+goog.require('shaka.ui.Enums');
+goog.require('shaka.ui.Locales');
+goog.require('shaka.ui.OverflowMenu');
+goog.require('shaka.ui.SettingsMenu');
+goog.require('shaka.ui.Utils');
+goog.require('shaka.util.Dom');
+goog.requireType('shaka.ui.Controls');
+
+/**
+ * @extends {shaka.ui.SettingsMenu}
+ * @final
+ * @export
+ */
+shaka.ui.VideoTypeSelection = class extends shaka.ui.SettingsMenu {
+  /**
+   * @param {!HTMLElement} parent
+   * @param {!shaka.ui.Controls} controls
+   */
+  constructor(parent, controls) {
+    super(parent, controls,
+        shaka.ui.Enums.MaterialDesignSVGIcons['VIDEO_TYPE']);
+
+    this.button.classList.add('shaka-playbackrate-button');
+    this.menu.classList.add('shaka-video-type');
+    this.button.classList.add('shaka-tooltip-status');
+
+    this.eventManager.listenMulti(
+        this.player,
+        [
+          'loading',
+          'loaded',
+          'unloading',
+          'variantchanged',
+          'trackschanged',
+          'abrstatuschanged',
+          'adaptation',
+        ], () => {
+          this.updateVideoRoles_();
+        });
+
+    this.updateLocalizedStrings();
+  }
+
+  /** @override */
+  updateLocalizedStrings() {
+    const LocIds = shaka.ui.Locales.Ids;
+
+    this.backButton.ariaLabel = this.localization.resolve(LocIds.BACK);
+
+    const label = this.localization.resolve(LocIds.VIDEO_TYPE);
+    this.button.ariaLabel = label;
+    this.nameSpan.textContent = label;
+    this.backSpan.textContent = label;
+
+    this.updateVideoRoles_();
+  }
+
+  /** @override */
+  checkAvailability() {
+    this.updateVideoRoles_();
+  }
+
+  /**
+   * @private
+   */
+  updateVideoRoles_() {
+    // Remove old shaka-resolutions
+    // 1. Save the back to menu button
+    const backButton = shaka.ui.Utils.getFirstDescendantWithClassName(
+        this.menu, 'shaka-back-to-overflow-button');
+
+    // 2. Remove everything
+    shaka.util.Dom.removeAllChildren(this.menu);
+
+    // 3. Add the backTo Menu button back
+    this.menu.appendChild(backButton);
+
+
+    /** @type {!Array<shaka.extern.VideoTrack>} */
+    const tracks = this.player.getVideoTracks() || [];
+
+    const selectedTrack = tracks.find((track) => track.active);
+
+    const roles = new Set();
+    for (const track of tracks) {
+      for (const role of track.roles) {
+        if (role) {
+          roles.add(role);
+        }
+      }
+    };
+
+    if (roles.size > 1) {
+      for (const role of roles) {
+        const button = shaka.util.Dom.createButton();
+        // ARIA: single-select menu item
+        button.setAttribute('role', 'menuitemradio');
+        button.setAttribute('aria-checked', 'false');
+        this.eventManager.listen(button, 'click',
+            () => this.onVideoRoleSelected_(role));
+
+        const span = shaka.util.Dom.createHTMLElement('span');
+        span.textContent = this.getRoleLabel_(role);
+        button.appendChild(span);
+
+        if (selectedTrack.roles.includes(role)) {
+          button.setAttribute('aria-checked', 'true');
+          button.appendChild(shaka.ui.Utils.checkmarkIcon());
+          span.classList.add('shaka-chosen-item');
+          this.currentSelection.textContent = span.textContent;
+        }
+        this.menu.appendChild(button);
+      }
+    }
+
+    shaka.ui.Utils.setDisplay(
+        this.button, roles.size > 1 && !this.isSubMenuOpened);
+  }
+
+  /**
+   * @param {string} role
+   * @return {string}
+   * @private
+   */
+  getRoleLabel_(role) {
+    const LocIds = shaka.ui.Locales.Ids;
+    switch (role) {
+      case 'main':
+      case '':
+        return this.localization.resolve(LocIds.VIDEO_MAIN);
+      case 'sign':
+        return this.localization.resolve(LocIds.VIDEO_SIGN);
+      default:
+        return role;
+    }
+  }
+
+  /**
+   * @param {string} role
+   * @private
+   */
+  onVideoRoleSelected_(role) {
+    this.player.configure({
+      preferredVideo: [{
+        role,
+        label: '',
+        codec: '',
+        hdrLevel: '',
+        layout: '',
+      }],
+    });
+  }
+};
+
+/**
+ * @implements {shaka.extern.IUIElement.Factory}
+ * @final
+ */
+shaka.ui.VideoTypeSelection.Factory = class {
+  /** @override */
+  create(rootElement, controls) {
+    return new shaka.ui.VideoTypeSelection(rootElement, controls);
+  }
+};
+
+shaka.ui.OverflowMenu.registerElement(
+    'video_type', new shaka.ui.VideoTypeSelection.Factory());
+
+shaka.ui.Controls.registerElement(
+    'video_type', new shaka.ui.VideoTypeSelection.Factory());

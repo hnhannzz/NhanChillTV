@@ -1,0 +1,18 @@
+NhanChillTV Linux build — Version 1.4
+
+Supported targets: Debian 12/13, Ubuntu 24.04+
+
+app/backend                 Node/Express API source, without node_modules
+app/ffmpeg-core/wrapper.js   Linux-compatible ffmpeg wrapper
+app/public                  Astro-built static frontend (pre-built)
+app/m3u_iptv/list.example.m3u Clean playlist template
+app/temp                    Runtime HLS and event thumbnail directories
+config/nginx                nginx site and RTMP templates
+config/systemd              nhanchilltv systemd service
+config/logrotate            nginx log rotation
+config/nhanchilltv.env.example Environment variable template
+scripts/install.sh          Unified installer (auto-detect distro)
+scripts/install-debian13.sh Legacy alias for install.sh
+scripts/healthcheck.sh       Runtime verification helper
+scripts/backup-data.sh       Mutable data backup helper
+.github/workflows/check.yml  Basic backend syntax check workflow

@@ -1,0 +1,21 @@
+[Unit]
+Description=NhanChillTV Backend
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=nhanchill
+Group=nhanchill
+WorkingDirectory=/opt/nhanchilltv/app/backend
+EnvironmentFile=/etc/nhanchilltv/nhanchilltv.env
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=3
+TimeoutStopSec=15
+KillSignal=SIGTERM
+LimitNOFILE=65536
+MemoryMax=400M
+
+[Install]
+WantedBy=multi-user.target

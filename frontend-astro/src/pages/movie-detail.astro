@@ -1,0 +1,13 @@
+---
+import Layout from '../layouts/Layout.astro';
+import MainLayout from '../components/MainLayout.jsx';
+import MovieDetailContainer from '../components/MovieDetailContainer.jsx';
+---
+
+<Layout title="Chi tiết Phim - NhanChillTV 1.61 Beta">
+  <MainLayout client:load>
+    <div className="pt-4 md:pt-6 px-4 md:px-8 pb-8 max-w-[1200px] mx-auto mt-4 md:mt-8">
+      <MovieDetailContainer client:only="react" />
+    </div>
+  </MainLayout>
+</Layout>

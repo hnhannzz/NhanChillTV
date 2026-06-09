@@ -1,0 +1,14 @@
+{
+  "users": [
+    {
+      "id": "1780808283458",
+      "username": "testuser",
+      "password": "password",
+      "favorites": {
+        "channels": [],
+        "movies": []
+      },
+      "createdAt": "2026-06-07T04:58:03.458Z"
+    }
+  ]
+}

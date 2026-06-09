@@ -1,0 +1,133 @@
+/*! @license
+ * Shaka Player
+ * Copyright 2016 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+
+goog.provide('shaka.ui.SkipPreviousButton');
+
+goog.require('shaka.ui.Controls');
+goog.require('shaka.ui.Element');
+goog.require('shaka.ui.Enums');
+goog.require('shaka.ui.Icon');
+goog.require('shaka.ui.Locales');
+goog.require('shaka.ui.Utils');
+goog.require('shaka.util.Dom');
+
+
+/**
+ * @extends {shaka.ui.Element}
+ * @final
+ * @export
+ */
+shaka.ui.SkipPreviousButton = class extends shaka.ui.Element {
+  /**
+   * @param {!HTMLElement} parent
+   * @param {!shaka.ui.Controls} controls
+   * @param {boolean=} showWhenUnavailable
+   */
+  constructor(parent, controls, showWhenUnavailable = false) {
+    super(parent, controls);
+
+    /** @private {boolean} */
+    this.showWhenUnavailable_ = showWhenUnavailable;
+
+    this.queueManager_ = this.controls.getQueueManager();
+
+    if (!this.queueManager_) {
+      return;
+    }
+
+    /** @private {!HTMLButtonElement} */
+    this.button_ = shaka.util.Dom.createButton();
+    this.button_.classList.add('shaka-skip-previous-button');
+    this.button_.classList.add('shaka-tooltip');
+    this.button_.classList.add('shaka-no-propagation');
+    new shaka.ui.Icon(this.button_).use(
+        shaka.ui.Enums.MaterialDesignSVGIcons['SKIP_PREVIOUS']);
+    this.parent.appendChild(this.button_);
+
+    this.updateLocalizedStrings();
+    this.checkAvailability();
+
+    this.eventManager.listen(this.button_, 'click', () => {
+      if (!this.controls.isOpaque()) {
+        return;
+      }
+      this.queueManager_.playItem(this.queueManager_.getCurrentItemIndex() - 1);
+    });
+
+    this.eventManager.listenMulti(
+        this.queueManager_,
+        [
+          'currentitemchanged',
+          'itemsinserted',
+          'itemsremoved',
+        ], () => {
+          this.checkAvailability();
+        });
+
+    this.eventManager.listen(this.player, 'loading', () => {
+      this.checkAvailability();
+    });
+  }
+
+  /** @override */
+  updateLocalizedStrings() {
+    this.button_.ariaLabel =
+        this.localization.resolve(shaka.ui.Locales.Ids.SKIP_PREVIOUS);
+  }
+
+  /** @override */
+  checkAvailability() {
+    const itemsLength = this.queueManager_.getItems().length;
+    const hasPrevious = itemsLength > 1 &&
+        this.queueManager_.getCurrentItemIndex() > 0;
+    if (this.showWhenUnavailable_) {
+      // Always visible when queue has more than one item
+      // disabled if no previous.
+      shaka.ui.Utils.setDisplay(this.button_, itemsLength > 1);
+      this.button_.disabled = !hasPrevious;
+    } else {
+      shaka.ui.Utils.setDisplay(this.button_, hasPrevious);
+    }
+  }
+};
+
+
+/**
+ * @implements {shaka.extern.IUIElement.Factory}
+ * @final
+ */
+shaka.ui.SkipPreviousButton.Factory = class {
+  /** @override */
+  create(rootElement, controls) {
+    return new shaka.ui.SkipPreviousButton(rootElement, controls);
+  }
+};
+
+shaka.ui.Controls.registerElement(
+    'skip_previous', new shaka.ui.SkipPreviousButton.Factory());
+
+shaka.ui.Controls.registerBigElement(
+    'skip_previous', new shaka.ui.SkipPreviousButton.Factory());
+
+
+/**
+ * @implements {shaka.extern.IUIElement.Factory}
+ * @final
+ */
+shaka.ui.SkipPreviousButton.AlwaysFactory = class {
+  /** @override */
+  create(rootElement, controls) {
+    return new shaka.ui.SkipPreviousButton(
+        rootElement, controls, /* showDisabled= */ true);
+  }
+};
+
+shaka.ui.Controls.registerElement(
+    'skip_previous_always', new shaka.ui.SkipPreviousButton.AlwaysFactory());
+
+shaka.ui.Controls.registerBigElement(
+    'skip_previous_always', new shaka.ui.SkipPreviousButton.AlwaysFactory());

@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nhân Chill TV — Live Stream</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@300;400;600;700;900&family=Be+Vietnam+Pro:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg:        #03060c;
+            --surface-1: #080f1a;
+            --surface-2: #0e1929;
+            --border:    rgba(255,255,255,0.06);
+            --green:     #00e676;
+            --green-dim: rgba(0,230,118,0.12);
+            --red:       #ff3b30;
+            --red-dim:   rgba(255,59,48,0.12);
+            --text-1:    #e8edf4;
+            --text-2:    #8a9bb2;
+            --text-3:    #4e5f75;
+            --radius-md: 10px;
+            --radius-lg: 14px;
+            --font-disp: 'Exo 2', sans-serif;
+            --font-body: 'Be Vietnam Pro', sans-serif;
+            --shadow:    0 24px 64px rgba(0,0,0,0.9);
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html { scroll-behavior: smooth; }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text-1);
+            font-family: var(--font-body);
+            min-height: 100vh;
+            overflow-x: hidden;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse 70% 35% at 50% -5%, rgba(0,230,118,0.055) 0%, transparent 60%),
+                radial-gradient(ellipse 50% 45% at 95% 95%, rgba(0,80,255,0.03) 0%, transparent 55%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ===== HEADER ===== */
+        header {
+            position: sticky;
+            top: 0;
+            z-index: 200;
+            height: 62px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 28px;
+            background: rgba(3,6,12,0.85);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border-bottom: 1px solid var(--border);
+        }
+
+        header::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 260px;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--green), transparent);
+            opacity: 0.35;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            user-select: none;
+            text-decoration: none;
+        }
+
+        .logo-img {
+            height: 38px;
+            width: auto;
+            display: block;
+            object-fit: contain;
+            filter: drop-shadow(0 0 10px rgba(0,230,118,0.2));
+        }
+
+        .logo-sub {
+            font-family: var(--font-disp);
+            font-size: 10px;
+            font-weight: 500;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: var(--text-3);
+        }
+
+        .live-badge {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            padding: 5px 14px;
+            border-radius: 20px;
+            background: var(--red-dim);
+            border: 1px solid rgba(255,59,48,0.22);
+            font-family: var(--font-disp);
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1.8px;
+            text-transform: uppercase;
+            color: var(--red);
+        }
+
+        .live-dot {
+            width: 7px; height: 7px;
+            border-radius: 50%;
+            background: var(--red);
+            flex-shrink: 0;
+            animation: blink 1.6s ease-in-out infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; box-shadow: 0 0 6px var(--red); }
+            50%       { opacity: 0.35; box-shadow: none; }
+        }
+
+        /* ===== PAGE LAYOUT ===== */
+        .page {
+            position: relative;
+            z-index: 1;
+            display: grid;
+            grid-template-columns: 1fr 330px;
+            gap: 20px;
+            padding: 22px 28px 40px;
+            max-width: 1440px;
+            margin: 0 auto;
+        }
+
+        .main { min-width: 0; }
+
+        /* ===== MATCH HEADER CARD ===== */
+        .match-header {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 18px;
+            background: var(--surface-1);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            margin-bottom: 14px;
+        }
+
+        .match-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 5px;
+            background: rgba(0,230,118,0.1);
+            border: 1px solid rgba(0,230,118,0.2);
+            font-family: var(--font-disp);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: var(--green);
+            flex-shrink: 0;
+        }
+
+        .match-header-title {
+            font-family: var(--font-disp);
+            font-size: 17px;
+            font-weight: 700;
+            letter-spacing: -0.2px;
+            color: var(--text-1);
+            flex: 1;
+        }
+
+        .match-header-sub {
+            font-size: 11px;
+            color: var(--text-3);
+            margin-top: 1px;
+        }
+
+        /* ===== PLAYER ===== */
+        .player-wrapper {
+            position: relative;
+            background: #000;
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            aspect-ratio: 16/9;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+        }
+
+        .player-wrapper::before,
+        .player-wrapper::after,
+        .player-corner-tr,
+        .player-corner-bl {
+            position: absolute;
+            width: 22px; height: 22px;
+            z-index: 10;
+            pointer-events: none;
+            opacity: 0.6;
+            transition: opacity 0.3s;
+        }
+
+        .player-wrapper::before { top:14px; left:14px; border-top:2px solid var(--green); border-left:2px solid var(--green); border-radius:2px 0 0 0; }
+        .player-wrapper::after  { bottom:14px; right:14px; border-bottom:2px solid var(--green); border-right:2px solid var(--green); border-radius:0 0 2px 0; }
+        .player-corner-tr       { top:14px; right:14px; border-top:2px solid var(--green); border-right:2px solid var(--green); border-radius:0 2px 0 0; }
+        .player-corner-bl       { bottom:14px; left:14px; border-bottom:2px solid var(--green); border-left:2px solid var(--green); border-radius:0 0 0 2px; }
+
+        .player-wrapper:hover::before,
+        .player-wrapper:hover::after,
+        .player-wrapper:hover .player-corner-tr,
+        .player-wrapper:hover .player-corner-bl { opacity: 1; }
+
+        .player-placeholder {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .placeholder-icon { font-size: 44px; opacity: 0.2; }
+        .placeholder-text { font-size: 13px; color: var(--text-3); }
+
+        #video {
+            width: 100%; height: 100%;
+            display: none;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* ===== STATUS BAR ===== */
+        .status-bar {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding: 10px 0 0;
+        }
+
+        .status-pill {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-family: var(--font-disp);
+            font-size: 11.5px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            border: 1px solid var(--border);
+            color: var(--text-2);
+            background: var(--surface-1);
+            transition: all 0.25s ease;
+        }
+
+        .status-pill.live  { background: rgba(0,230,118,0.1); border-color: rgba(0,230,118,0.3); color: var(--green); }
+        .status-pill.error { background: var(--red-dim); border-color: rgba(255,59,48,0.3); color: var(--red); }
+
+        .status-dot {
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+            flex-shrink: 0;
+        }
+
+        .status-pill.live .status-dot { animation: blink 1.6s ease-in-out infinite; }
+
+        /* ===== SIDEBAR ===== */
+        .sidebar { display: flex; flex-direction: column; }
+
+        .chat-card {
+            background: var(--surface-1);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-head {
+            padding: 12px 18px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-family: var(--font-disp);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 2.5px;
+            text-transform: uppercase;
+            color: var(--text-3);
+            flex-shrink: 0;
+        }
+
+        .chat-head::before {
+            content: '';
+            width: 3px; height: 14px;
+            background: var(--green);
+            border-radius: 2px;
+            flex-shrink: 0;
+        }
+
+        .chat-body { height: 520px; }
+
+        .chat-body iframe {
+            width: 100%; height: 100%;
+            display: block; border: none;
+        }
+
+        /* ===== FOOTER ===== */
+        footer {
+            position: relative;
+            z-index: 1;
+            text-align: center;
+            padding: 20px 28px;
+            border-top: 1px solid var(--border);
+            font-size: 11.5px;
+            color: var(--text-3);
+        }
+
+        footer span { color: var(--green); opacity: 0.7; }
+
+        /* ===== ANIMATIONS ===== */
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .main > * { animation: fadeUp 0.4s ease both; }
+        .main > *:nth-child(1) { animation-delay: 0.05s; }
+        .main > *:nth-child(2) { animation-delay: 0.10s; }
+        .main > *:nth-child(3) { animation-delay: 0.15s; }
+        .sidebar > * { animation: fadeUp 0.4s ease both; animation-delay: 0.18s; }
+
+        /* ===== RESPONSIVE ===== */
+        @media (max-width: 960px) {
+            .page { grid-template-columns: 1fr; padding: 16px 18px 32px; }
+            .chat-body { height: 380px; }
+        }
+
+        @media (max-width: 480px) {
+            header { padding: 0 16px; }
+            .match-header-title { font-size: 14px; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo">
+            <img class="logo-img" src="https://bongda.nhanchill.lol/logo.png" alt="Nhân Chill TV" onerror="this.style.display='none'">
+            <div class="logo-sub">Beta v1.1</div>
+        </div>
+        <div class="live-badge">
+            <div class="live-dot"></div>
+            Trực Tiếp
+        </div>
+    </header>
+
+    <div class="page">
+        <main class="main">
+
+            <!-- Match title card -->
+            <div class="match-header">
+                <div>
+                    <div class="match-header-title">Arsenal vs PSG</div>
+                    <div class="match-header-sub">🏆 UEFA Champions League</div>
+                </div>
+                <div class="match-badge">⚽ LIVE</div>
+            </div>
+
+            <!-- Player -->
+            <div class="player-wrapper" id="playerWrapper">
+                <div class="player-corner-tr"></div>
+                <div class="player-corner-bl"></div>
+                <div class="player-placeholder" id="placeholder">
+                    <div class="placeholder-icon">📡</div>
+                    <div class="placeholder-text">Đang kết nối luồng...</div>
+                </div>
+                <video id="video" controls autoplay muted playsinline></video>
+            </div>
+
+            <!-- Status -->
+            <div class="status-bar">
+                <div class="status-pill" id="statusPill">
+                    <div class="status-dot"></div>
+                    <span id="statusText">Đang kết nối...</span>
+                </div>
+            </div>
+
+        </main>
+
+        <aside class="sidebar">
+            <div class="chat-card">
+                <div class="chat-head">Live Chat</div>
+                <div class="chat-body">
+                    <iframe src="https://www5.cbox.ws/box/?boxid=963172&boxtag=2JejR5" scrolling="auto"></iframe>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <footer>© 2025 <span>Nhân Chill TV</span> · Beta v1.0 · Xem bóng đá trực tiếp miễn phí</footer>
+
+    <script>
+        (function () {
+            var video      = document.getElementById('video');
+            var placeholder = document.getElementById('placeholder');
+            var statusPill = document.getElementById('statusPill');
+            var statusText = document.getElementById('statusText');
+
+            var STREAM_URL = 'https://bongda.nhanchill.lol/hls/ar_vs_psg/index.m3u8';
+
+            function setStatus(text, cls) {
+                statusText.textContent = text;
+                statusPill.className = 'status-pill' + (cls ? ' ' + cls : '');
+            }
+
+            function startStream() {
+                placeholder.style.display = 'none';
+                video.style.display = 'block';
+
+                if (Hls.isSupported()) {
+                    var hls = new Hls({ lowLatencyMode: true });
+                    hls.loadSource(STREAM_URL);
+                    hls.attachMedia(video);
+                    hls.on(Hls.Events.MANIFEST_PARSED, function () {
+                        video.play().catch(function () {});
+                        setStatus('Đang phát trực tiếp', 'live');
+                    });
+                    hls.on(Hls.Events.ERROR, function (e, d) {
+                        if (d.fatal) setStatus('Lỗi luồng, đang thử lại...', 'error');
+                    });
+                } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                    video.src = STREAM_URL;
+                    video.play();
+                    setStatus('Đang phát trực tiếp', 'live');
+                } else {
+                    setStatus('Trình duyệt không hỗ trợ HLS', 'error');
+                }
+            }
+
+            startStream();
+        })();
+    </script>
+</body>
+</html>
