@@ -1,55 +1,43 @@
 # NhanChillTV Linux Server Build
 
-NhanChillTV Linux deployment package for small VPS servers.
+NhanChillTV — IPTV streaming platform for small VPS servers.
 
-Target server:
-
-- Debian 13 trixie minimal x86_64
-- 2 vCPU / 1 GB RAM
-- nginx on port 80
-- Node.js backend on 127.0.0.1:3000
-- optional RTMP ingest on port 1935
+**Target**: Debian 12/13, Ubuntu 24.04 — 2 vCPU / 1 GB RAM
 
 ## Quick deploy
 
 ```bash
+# Upload to server
 scp -r NhanChillLinuxBuild root@YOUR_SERVER_IP:/root/
+
+# SSH and install
 ssh root@YOUR_SERVER_IP
 cd /root/NhanChillLinuxBuild
-sudo bash scripts/install-debian13.sh
+sudo bash scripts/install.sh
 ```
 
-Open:
+## Access
 
-```text
-http://YOUR_SERVER_IP/
-http://YOUR_SERVER_IP/tv/
-http://YOUR_SERVER_IP/admin/
-```
+| Page | URL |
+|---|---|
+| Home | `http://YOUR_SERVER_IP/` |
+| TV | `http://YOUR_SERVER_IP/tv/` |
+| Admin | `http://YOUR_SERVER_IP/admin/` |
+
+## Stack
+
+| Component | Role |
+|---|---|
+| nginx :80 | Reverse proxy, HLS delivery, RTMP ingest |
+| Node/Express :3000 | API, proxy, stream management |
+| FFmpeg | Transcoding (optional, default off) |
+| SQLite-less (JSON files) | Data persistence |
+
+## Resource profile
+
+- Idle RAM: ~150 MB (Debian 12)
+- With 1 viewer (direct mode): ~180 MB
+- With ffmpeg transcode: ~350 MB + stream overhead
+- Swap: 1 GB recommended
 
 Full deployment guide: [README_DEPLOY.md](README_DEPLOY.md).
-
-## Repository layout
-
-```text
-app/backend/          Node/Express API
-app/ffmpeg-core/      Linux-compatible ffmpeg wrapper
-app/public/           Prebuilt Astro frontend
-app/m3u_iptv/         Local playlist examples
-config/nginx/         nginx templates
-config/systemd/       systemd service
-scripts/              install, healthcheck, backup scripts
-```
-
-## GitHub safety notes
-
-Runtime files are ignored by `.gitignore`:
-
-- `app/backend/db/*.json`
-- `app/m3u_iptv/*.m3u`
-- `app/temp/**`
-- `.env` and generated env files
-
-Use the `.example` files as templates. Add real IPTV sources from the admin UI or in `/etc/nhanchilltv/nhanchilltv.env` after deploying.
-
-Only use playlist/content sources that you are allowed to access and redistribute.
