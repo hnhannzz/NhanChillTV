@@ -51,7 +51,7 @@ module.exports = {
   directMode: parseBool(process.env.DIRECT_MODE, true), // Bypass FFmpeg and return M3U link directly
   streamTimeout: parseIntEnv(process.env.STREAM_TIMEOUT_MS, 120000), // 2 minutes
   cleanupInterval: parseIntEnv(process.env.CLEANUP_INTERVAL_MS, 60000), // 1 minute
-  metricsInterval: parseIntEnv(process.env.METRICS_INTERVAL_MS, 5000),
+  metricsInterval: parseIntEnv(process.env.METRICS_INTERVAL_MS, 30000),
   
   // Admin
   adminPassword: process.env.ADMIN_PASSWORD || 'change_me_before_deploy', // Change in production

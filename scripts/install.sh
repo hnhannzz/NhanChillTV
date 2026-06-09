@@ -35,7 +35,7 @@ ENV_FILE="${ENV_DIR}/nhanchilltv.env"
 SERVER_NAME="${SERVER_NAME:-_}"
 NGINX_PORT="${NGINX_PORT:-80}"
 
-echo "[1/9] Installing system packages..."
+echo "[1/10] Installing system packages..."
 
 # NodeSource setup for older distros that lack Node 22+
 NODE_MAJOR=22
@@ -67,22 +67,36 @@ elif [[ "${DISTRO}" == "debian" ]]; then
     echo "[WARN] libnginx-mod-rtmp not available; RTMP ingest disabled"
 fi
 
-echo "[2/9] Creating service user and directories..."
+echo "[2/10] Setting up swap (1 GB)..."
+if ! swapon --show | grep -q '^/swapfile'; then
+  fallocate -l 1G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=1024
+  chmod 0600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  if ! grep -q '/swapfile' /etc/fstab; then
+    echo '/swapfile none swap sw 0 0' >> /etc/fstab
+  fi
+  echo "Swap file created at /swapfile (1 GB)"
+else
+  echo "Swap already active, skipping"
+fi
+
+echo "[3/10] Creating service user and directories..."
 id -u nhanchill &>/dev/null || useradd --system --home /opt/nhanchilltv --shell /usr/sbin/nologin nhanchill
 install -d -m 0755 /opt/nhanchilltv
 install -d -m 0755 "${APP_DIR}"
 install -d -m 0755 "${ENV_DIR}"
 
 if [[ -d "${APP_DIR}/backend/db" || -d "${APP_DIR}/temp/event_temp" ]]; then
-  echo "[3/9] Backing up mutable data to ${BACKUP_DIR}..."
+  echo "[4/10] Backing up mutable data to ${BACKUP_DIR}..."
   install -d -m 0750 "${BACKUP_DIR}"
   [[ -d "${APP_DIR}/backend/db" ]] && cp -a "${APP_DIR}/backend/db" "${BACKUP_DIR}/db"
   [[ -d "${APP_DIR}/temp/event_temp" ]] && cp -a "${APP_DIR}/temp/event_temp" "${BACKUP_DIR}/event_temp"
 else
-  echo "[3/9] No previous mutable data found."
+  echo "[4/10] No previous mutable data found."
 fi
 
-echo "[4/9] Copying application files..."
+echo "[5/10] Copying application files..."
 cp -a "${BUILD_DIR}/app/." "${APP_DIR}/"
 install -d -m 0755 "${APP_DIR}/temp/hls_temp" "${APP_DIR}/temp/event_temp"
 
@@ -93,7 +107,7 @@ if [[ -d "${BACKUP_DIR}/event_temp" ]]; then
   cp -a "${BACKUP_DIR}/event_temp/." "${APP_DIR}/temp/event_temp/"
 fi
 
-echo "[5/9] Writing environment file..."
+echo "[6/10] Writing environment file..."
 if [[ ! -f "${ENV_FILE}" ]]; then
   ADMIN_PASSWORD="$(openssl rand -base64 18 | tr -d '=+/')"
   JWT_SECRET="$(openssl rand -hex 32)"
@@ -111,11 +125,11 @@ set -a
 source "${ENV_FILE}"
 set +a
 
-echo "[6/9] Installing Node dependencies..."
+echo "[7/10] Installing Node dependencies..."
 cd "${APP_DIR}/backend"
 npm ci --omit=dev --no-audit --no-fund 2>/dev/null || npm install --omit=dev --no-audit --no-fund
 
-echo "[7/9] Configuring nginx..."
+echo "[8/10] Configuring nginx..."
 sed \
   -e "s#__APP_DIR__#${APP_DIR}#g" \
   -e "s#__API_PORT__#${PORT:-3000}#g" \
@@ -135,7 +149,7 @@ if [[ -f "${BUILD_DIR}/config/nginx/nhanchilltv-rtmp.conf.template" ]]; then
   fi
 fi
 
-echo "[8/9] Configuring systemd and logrotate..."
+echo "[9/10] Configuring systemd and logrotate..."
 cp "${BUILD_DIR}/config/systemd/nhanchilltv.service" /etc/systemd/system/nhanchilltv.service
 if [[ -f "${BUILD_DIR}/config/logrotate/nhanchilltv" ]]; then
   cp "${BUILD_DIR}/config/logrotate/nhanchilltv" /etc/logrotate.d/nhanchilltv
@@ -152,7 +166,7 @@ systemctl restart nhanchilltv
 systemctl enable nginx
 systemctl reload nginx || systemctl restart nginx
 
-echo "[9/9] Done."
+echo "[10/10] Done."
 echo ""
 echo "============================================"
 echo " NhanChillTV deployment complete!"

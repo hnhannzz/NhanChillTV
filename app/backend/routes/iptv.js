@@ -6,7 +6,7 @@ const Database = require('../db/database');
 const config = require('../config');
 const db = new Database(config.dbPath);
 
-// Get all channels
+// Get all channels (with optional pagination and field selection)
 router.get('/channels', (req, res) => {
   try {
     let channels = m3uManager.getChannels();
@@ -19,26 +19,42 @@ router.get('/channels', (req, res) => {
       return true;
     });
 
-    // We don't sort the channels array by groupOrder directly here because the frontend 
-    // uses the channels array to extract unique groups. 
-    // But we CAN sort the channels such that groups appear in the correct order.
     if (settings.groupOrder && settings.groupOrder.length > 0) {
       channels.sort((a, b) => {
         const orderA = settings.groupOrder.indexOf(a.group);
         const orderB = settings.groupOrder.indexOf(b.group);
-        
-        // If both groups are in the order list, sort by index
         if (orderA !== -1 && orderB !== -1) return orderA - orderB;
-        // If only A is in order list, it comes first
         if (orderA !== -1) return -1;
-        // If only B is in order list, it comes first
         if (orderB !== -1) return 1;
-        // Otherwise keep original order
         return 0;
       });
     }
 
-    res.json({ success: true, data: channels });
+    // Field selection (comma-separated, e.g. ?fields=id,name,group)
+    if (req.query.fields) {
+      const fields = req.query.fields.split(',').map(f => f.trim());
+      channels = channels.map(ch => {
+        const subset = {};
+        fields.forEach(f => { if (ch[f] !== undefined) subset[f] = ch[f]; });
+        return subset;
+      });
+    }
+
+    // Pagination (e.g. ?page=1&limit=50)
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 0));
+    const total = channels.length;
+    let paginated = channels;
+    if (limit > 0) {
+      const start = (page - 1) * limit;
+      paginated = channels.slice(start, start + limit);
+    }
+
+    res.json({
+      success: true,
+      data: paginated,
+      pagination: limit > 0 ? { page, limit, total, totalPages: Math.ceil(total / limit) } : undefined
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

@@ -1,3 +1,5 @@
+proxy_cache_path /var/cache/nginx/nhanchilltv levels=1:2 keys_zone=nhanchilltv_cache:5m max_size=64m inactive=10m use_temp_path=off;
+
 server {
     listen __NGINX_PORT__;
     server_name __SERVER_NAME__;
@@ -17,8 +19,10 @@ server {
 
     gzip on;
     gzip_comp_level 4;
-    gzip_min_length 1024;
+    gzip_min_length 256;
     gzip_types text/plain text/css application/javascript application/json image/svg+xml application/xml;
+    gzip_vary on;
+    gzip_proxied any;
 
     add_header X-Content-Type-Options nosniff always;
     add_header Referrer-Policy strict-origin-when-cross-origin always;
@@ -49,6 +53,14 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 120s;
         proxy_connect_timeout 30s;
+
+        # Cache API responses (bypass with ?no-cache=1 or Cache-Control: no-cache)
+        proxy_cache nhanchilltv_cache;
+        proxy_cache_key "$scheme$request_method$host$request_uri";
+        proxy_cache_valid 200 5s;
+        proxy_cache_use_stale error timeout updating http_500 http_502 http_503;
+        proxy_cache_lock on;
+        proxy_no_cache $arg_no_cache;
     }
 
     location /socket.io/ {

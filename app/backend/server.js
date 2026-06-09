@@ -39,6 +39,22 @@ app.use('/api/comments', require('./routes/comment'));
 app.use('/api/epg', require('./routes/epg'));
 app.use('/api/proxy', require('./routes/proxy'));
 
+// Cache control for API responses
+app.use('/api', (req, res, next) => {
+  res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+  next();
+});
+
+// Cache static assets aggressively
+app.use('/_astro', (req, res, next) => {
+  res.set('Cache-Control', 'public, max-age=31536000, immutable');
+  next();
+});
+app.use('/logo', (req, res, next) => {
+  res.set('Cache-Control', 'public, max-age=86400');
+  next();
+});
+
 // Health check & Metrics for Load Balancing
 app.get('/api/health', async (req, res) => {
   try {
