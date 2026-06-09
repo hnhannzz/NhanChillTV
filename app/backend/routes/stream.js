@@ -38,8 +38,8 @@ router.post('/start/:channelId', async (req, res) => {
       }
     }
 
-    // Direct mode: bypass FFmpeg
-    if (config.directMode) {
+    // Direct mode: bypass FFmpeg (skip for MPD+DRM which fails with JW Player error 232600)
+    if (config.directMode && !channel.clearKey) {
       let isMpd = false;
       let encryptedUrl = null;
 
@@ -81,12 +81,13 @@ router.post('/start/:channelId', async (req, res) => {
           isDirect: true,
           hlsUrl: finalTarget,
           isMpd: isMpd,
-          clearKey: channel.clearKey
+          clearKey: null
         }
       });
     }
 
-    // Nếu là STANDALONE hoặc WORKER, tự chạy FFmpeg
+    // For MPD+DRM or non-direct mode: transcode to HLS via FFmpeg
+    // This converts MPD/DASH to HLS (removing DRM dependency)
     const result = await ffmpegWrapper.startTranscode(channelId, channel);
     res.json({ 
       success: true, 

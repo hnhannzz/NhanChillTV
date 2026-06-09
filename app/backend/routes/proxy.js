@@ -189,6 +189,10 @@ function rewriteM3u8(content, baseUrl, proxyBase, origin, customUa) {
 function rewriteMpd(content, baseUrl, proxyBase, origin, customUa) {
   const appendUa = (url) => customUa ? url + (url.includes('?') ? '&' : '?') + `ua=${encodeURIComponent(customUa)}` : url;
 
+  // 0. Strip ContentProtection (DRM) elements - some providers include DRM headers
+  //    for unencrypted content, causing JW Player error 232600
+  content = content.replace(/<ContentProtection[^>]*>[\s\S]*?<\/ContentProtection>/g, '');
+
   // 1. Rewrite <BaseURL> tags
   content = content.replace(/<BaseURL>([^<]+)<\/BaseURL>/g, (match, url) => {
     const absUrl = resolveUrl(baseUrl, origin, url);
@@ -202,7 +206,6 @@ function rewriteMpd(content, baseUrl, proxyBase, origin, customUa) {
   });
 
   content = content.replace(/media="([^"]+)"/g, (match, url) => {
-    // Chỉ rewrite nếu chứa dấu / (là path, không phải template variable thuần)
     if (url.startsWith('$') && !url.includes('/')) return match;
     const absUrl = resolveUrl(baseUrl, origin, url);
     return `media="${appendUa(proxyBase + absUrl)}"`;
@@ -213,6 +216,9 @@ function rewriteMpd(content, baseUrl, proxyBase, origin, customUa) {
     const absUrl = resolveUrl(baseUrl, origin, url);
     return `sourceURL="${appendUa(proxyBase + absUrl)}"`;
   });
+
+  // 4. Remove ContentProtection attributes from AdaptationSet and MPD
+  content = content.replace(/ contentProtection="[^"]*"/g, '');
 
   return content;
 }

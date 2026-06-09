@@ -138,6 +138,9 @@ sed \
   -e "s#__JWT_SECRET__#${JWT_SECRET}#g" \
   "${BUILD_DIR}/config/nginx/nhanchilltv.conf.template" > /etc/nginx/sites-available/nhanchilltv.conf
 
+# Create nginx cache directory before enabling site
+install -d -m 0755 /var/cache/nginx/nhanchilltv
+
 ln -sfn /etc/nginx/sites-available/nhanchilltv.conf /etc/nginx/sites-enabled/nhanchilltv.conf
 rm -f /etc/nginx/sites-enabled/default
 
