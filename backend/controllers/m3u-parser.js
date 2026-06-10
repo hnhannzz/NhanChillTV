@@ -1,5 +1,6 @@
 // M3U Parser for NhanChillTV Beta v1.4
 const fs = require('fs');
+const crypto = require('crypto');
 
 const DEFAULT_USER_AGENT = 'Dalvik/2.1.0 (Linux; U; Android 10; TV Box Build/QQ3A.200805.001)';
 
@@ -34,6 +35,13 @@ function splitUrlAndHeaders(line) {
   };
 }
 
+function createStableChannelId(channel) {
+  const fingerprint = [channel.group, channel.name, channel.url]
+    .map(value => String(value || '').trim().toLowerCase())
+    .join('|');
+  return `ch_${crypto.createHash('sha1').update(fingerprint).digest('hex').slice(0, 16)}`;
+}
+
 class M3UParser {
   static parseString(content) {
     if (!content) return [];
@@ -52,7 +60,7 @@ class M3UParser {
           const name = line.split(',').slice(1).join(',').trim();
           
           currentChannel = {
-            id: tvgId || `ch_${idx}_${Date.now()}`,
+            id: tvgId || null,
             name: name || 'Unknown Channel',
             group: groupTitle,
             logo: tvgLogo,
@@ -112,6 +120,7 @@ class M3UParser {
           currentChannel.url = parsedUrl.url;
           if (parsedUrl.userAgent) currentChannel.userAgent = parsedUrl.userAgent;
           if (currentChannel.url) {
+            if (!currentChannel.id) currentChannel.id = createStableChannelId(currentChannel);
             channels.push(currentChannel);
           }
           currentChannel = null;

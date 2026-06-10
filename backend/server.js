@@ -141,6 +141,7 @@ setInterval(async () => {
 
 // Start server
 m3uManager.refreshAll().then(() => {
+  m3uManager.startAutoRefresh(Number(process.env.M3U_REFRESH_INTERVAL_MS || 60 * 60 * 1000));
   server.listen(config.apiPort, () => {
     console.log(`[Server] NhanChillTV ${config.version} running in ${config.mode} mode on port ${config.apiPort}`);
     console.log(`[FFmpeg] Binary check: ${ffmpegWrapper.checkFFmpegExists()}`);

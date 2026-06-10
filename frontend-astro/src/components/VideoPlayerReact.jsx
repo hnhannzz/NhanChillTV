@@ -3,16 +3,21 @@ import videojs from 'video.js';
 import 'video.js/dist/video-js.css';
 import { getMimeType, inferPlaybackType } from '../lib/playbackUrl';
 
-const MAX_RETRIES = 5;
+const RETRIES_PER_SOURCE = 1;
+const STALL_RECOVERY_MS = 12000;
 
 export const VideoPlayerReact = (props) => {
   const videoRef = useRef(null);
   const playerRef = useRef(null);
   const retryTimeoutRef = useRef(null);
+  const stallTimeoutRef = useRef(null);
+  const sourceIndexRef = useRef(0);
   const retryCountRef = useRef(0);
+  const sourcesRef = useRef([]);
   const [error, setError] = useState(null);
   const {
     url,
+    fallbackUrls = [],
     type,
     poster,
     style,
@@ -24,11 +29,16 @@ export const VideoPlayerReact = (props) => {
     onError,
   } = props;
 
-  const source = useMemo(() => {
-    const src = url || options?.sources?.[0]?.src || options?.sources?.src;
-    const sourceType = inferPlaybackType(src, type || options?.sources?.[0]?.type);
-    return src ? { src, type: getMimeType(sourceType) } : null;
-  }, [url, type, options]);
+  const sources = useMemo(() => {
+    const optionSources = Array.isArray(options?.sources)
+      ? options.sources.map(source => source?.src).filter(Boolean)
+      : [options?.sources?.src].filter(Boolean);
+    const urls = [url, ...fallbackUrls, ...optionSources].filter(Boolean);
+    return [...new Set(urls)].map(src => ({
+      src,
+      type: getMimeType(inferPlaybackType(src, type || options?.sources?.[0]?.type)),
+    }));
+  }, [fallbackUrls, options, type, url]);
 
   const playerOptions = useMemo(() => ({
     controls: true,
@@ -43,126 +53,128 @@ export const VideoPlayerReact = (props) => {
       vhs: {
         overrideNative: !videojs.browser.IS_SAFARI,
         enableLowInitialPlaylist: true,
-        smoothQualityChange: true,
-        useBandwidthFromLocalStorage: true,
+        smoothQualityChange: false,
+        useBandwidthFromLocalStorage: false,
         limitRenditionByPlayerDimensions: true,
         handleManifestRedirects: true,
-        maxPlaylistRetries: 10,
+        maxPlaylistRetries: 6,
+        playlistExclusionDuration: 30,
       },
       nativeAudioTracks: false,
       nativeVideoTracks: false,
       nativeTextTracks: false,
     },
     ...(options || {}),
-    sources: source ? [source] : [],
-  }), [autoplay, muted, options, poster, source]);
+    sources: sources.slice(0, 1),
+  }), [autoplay, muted, options, poster, sources]);
 
   useEffect(() => {
-    if (!videoRef.current || !source) return undefined;
+    if (!videoRef.current || !sources.length) return undefined;
 
-    const clearRetry = () => {
-      if (retryTimeoutRef.current) {
-        clearTimeout(retryTimeoutRef.current);
-        retryTimeoutRef.current = null;
-      }
+    sourcesRef.current = sources;
+    sourceIndexRef.current = 0;
+    retryCountRef.current = 0;
+    setError(null);
+
+    const clearTimers = () => {
+      if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+      if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current);
+      retryTimeoutRef.current = null;
+      stallTimeoutRef.current = null;
     };
 
     const play = (player) => {
       if (!autoplay) return;
-      player.play()?.catch((err) => {
-        console.log('[Video.js] autoplay blocked:', err.message);
-      });
+      player.play()?.catch(err => console.info('[Video.js] Autoplay blocked:', err.message));
+    };
+
+    const loadSource = (player, index) => {
+      const nextSource = sourcesRef.current[index];
+      if (!nextSource || player.isDisposed()) return;
+      player.error(null);
+      player.src(nextSource);
+      player.load();
+      play(player);
+    };
+
+    const handlePlaybackError = (player) => {
+      const playerError = player.error();
+      const currentIndex = sourceIndexRef.current;
+
+      if (retryCountRef.current < RETRIES_PER_SOURCE) {
+        retryCountRef.current += 1;
+        retryTimeoutRef.current = setTimeout(() => loadSource(player, currentIndex), 1000);
+        return;
+      }
+
+      const nextIndex = currentIndex + 1;
+      if (nextIndex < sourcesRef.current.length) {
+        sourceIndexRef.current = nextIndex;
+        retryCountRef.current = 0;
+        setError('Nguồn trực tiếp không ổn định, đang chuyển sang máy chủ dự phòng...');
+        retryTimeoutRef.current = setTimeout(() => loadSource(player, nextIndex), 350);
+        return;
+      }
+
+      const message = playerError?.message || 'Không thể phát luồng video';
+      setError(message);
+      onError?.(playerError);
     };
 
     if (!playerRef.current) {
       const videoElement = document.createElement('video-js');
-
       videoElement.classList.add('vjs-big-play-centered');
       videoElement.style.width = '100%';
       videoElement.style.height = '100%';
       videoRef.current.appendChild(videoElement);
 
       const player = playerRef.current = videojs(videoElement, playerOptions, () => {
-        onReady && onReady(player);
+        onReady?.(player);
         play(player);
       });
 
       player.on('playing', () => {
         retryCountRef.current = 0;
         setError(null);
+        if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current);
       });
-
-      player.on('error', () => {
-        const playerError = player.error();
-        const message = playerError?.message || 'Khong the phat luong video';
-        setError(message);
-        onError && onError(playerError);
-
-        if (retryCountRef.current >= MAX_RETRIES) return;
-        retryCountRef.current += 1;
-        const delay = Math.min(1000 * retryCountRef.current, 5000);
-
-        clearRetry();
-        retryTimeoutRef.current = setTimeout(() => {
-          if (!playerRef.current || playerRef.current.isDisposed()) return;
-          player.error(null);
-          player.src(source);
-          player.load();
-          play(player);
-        }, delay);
+      player.on('error', () => handlePlaybackError(player));
+      player.on('waiting', () => {
+        if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current);
+        stallTimeoutRef.current = setTimeout(() => {
+          if (!player.isDisposed() && !player.paused()) loadSource(player, sourceIndexRef.current);
+        }, STALL_RECOVERY_MS);
       });
     } else {
       const player = playerRef.current;
-      clearRetry();
-      retryCountRef.current = 0;
-      setError(null);
+      clearTimers();
       player.autoplay(playerOptions.autoplay);
       player.muted(playerOptions.muted);
       if (poster) player.poster(poster);
-      player.src(source);
-      player.load();
-      play(player);
+      loadSource(player, 0);
     }
 
-    return clearRetry;
-  }, [autoplay, muted, onError, onReady, playerOptions, poster, source]);
+    return clearTimers;
+  }, [autoplay, muted, onError, onReady, playerOptions, poster, sources]);
 
-  useEffect(() => {
-    return () => {
-      if (retryTimeoutRef.current) {
-        clearTimeout(retryTimeoutRef.current);
-        retryTimeoutRef.current = null;
-      }
-      const player = playerRef.current;
-      if (player && !player.isDisposed()) {
-        player.dispose();
-        playerRef.current = null;
-      }
-    };
+  useEffect(() => () => {
+    if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+    if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current);
+    const player = playerRef.current;
+    if (player && !player.isDisposed()) player.dispose();
+    playerRef.current = null;
   }, []);
 
   return (
     <div data-vjs-player className={className} style={{ width: '100%', height: '100%', position: 'relative', background: '#000', ...style }}>
       <div ref={videoRef} style={{ width: '100%', height: '100%' }} />
       {error && (
-        <div style={{
-          position: 'absolute',
-          left: 8,
-          right: 8,
-          bottom: 8,
-          zIndex: 20,
-          borderRadius: 6,
-          background: 'rgba(185, 28, 28, 0.92)',
-          color: '#fff',
-          padding: '6px 10px',
-          fontSize: 12,
-          textAlign: 'center',
-        }}>
+        <div className="absolute bottom-2 left-2 right-2 z-20 rounded-md bg-red-700/95 px-3 py-2 text-center text-xs text-white">
           {error}
         </div>
       )}
     </div>
   );
-}
+};
 
 export default VideoPlayerReact;

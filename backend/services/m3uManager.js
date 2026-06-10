@@ -7,15 +7,32 @@ class M3UManager {
     this.db = db;
     this.channels = [];
     this.isRefreshing = false;
+    this.refreshPromise = null;
+    this.refreshTimer = null;
+    this.sourceChannels = new Map();
+    this.lastAttemptAt = null;
+    this.lastRefreshAt = null;
+    this.lastError = null;
+    this.sourceResults = [];
   }
 
   async refreshAll() {
-    if (this.isRefreshing) return;
-    this.isRefreshing = true;
-    try {
+    if (this.refreshPromise) return this.refreshPromise;
+
+    this.refreshPromise = (async () => {
+      this.isRefreshing = true;
+      this.lastAttemptAt = new Date().toISOString();
+      const sourceResults = [];
+      const errors = [];
+
+      try {
       console.log('[M3U Manager] Starting refresh of all sources...');
       const sources = this.db.getM3uSources().filter(s => s.active);
-      let aggregatedChannels = [];
+      const activeSourceIds = new Set(sources.map(source => source.id));
+
+      for (const sourceId of this.sourceChannels.keys()) {
+        if (!activeSourceIds.has(sourceId)) this.sourceChannels.delete(sourceId);
+      }
 
       for (const source of sources) {
         try {
@@ -34,17 +51,23 @@ class M3UManager {
             console.log(`[M3U Manager] Reading file source: ${source.name} (${filePath})`);
             parsedChannels = M3UParser.parseFile(filePath);
           }
-          
-          // Modify IDs to ensure uniqueness if needed, or just append
-          parsedChannels.forEach(ch => {
-            // Option: append source ID to channel ID to prevent collisions
-            // ch.id = `${source.id}_${ch.id}`;
-            aggregatedChannels.push(ch);
-          });
+
+          this.sourceChannels.set(source.id, parsedChannels);
+          sourceResults.push({ id: source.id, name: source.name, success: true, channels: parsedChannels.length });
         } catch (err) {
           console.error(`[M3U Manager] Failed to load source ${source.name}:`, err.message);
+          errors.push(`${source.name}: ${err.message}`);
+          sourceResults.push({
+            id: source.id,
+            name: source.name,
+            success: false,
+            channels: this.sourceChannels.get(source.id)?.length || 0,
+            error: err.message
+          });
         }
       }
+
+      const aggregatedChannels = sources.flatMap(source => this.sourceChannels.get(source.id) || []);
 
       // Deduplicate by ID (keep the last one, or first one? Let's keep the first one found)
       const uniqueChannels = [];
@@ -57,12 +80,44 @@ class M3UManager {
       }
 
       this.channels = uniqueChannels;
+      this.lastRefreshAt = new Date().toISOString();
+      this.lastError = errors.length ? errors.join('; ') : null;
+      this.sourceResults = sourceResults;
       console.log(`[M3U Manager] Refresh complete. Total unique channels: ${this.channels.length}`);
-    } catch (err) {
-      console.error('[M3U Manager] Refresh error:', err);
-    } finally {
-      this.isRefreshing = false;
-    }
+      return this.getStatus();
+      } catch (err) {
+        this.lastError = err.message;
+        console.error('[M3U Manager] Refresh error:', err);
+        throw err;
+      } finally {
+        this.isRefreshing = false;
+      }
+    })().finally(() => {
+      this.refreshPromise = null;
+    });
+
+    return this.refreshPromise;
+  }
+
+  startAutoRefresh(intervalMs = 60 * 60 * 1000) {
+    if (this.refreshTimer) clearInterval(this.refreshTimer);
+    this.refreshTimer = setInterval(() => {
+      this.refreshAll().catch(err => {
+        console.error('[M3U Manager] Scheduled refresh failed:', err.message);
+      });
+    }, intervalMs);
+    this.refreshTimer.unref?.();
+  }
+
+  getStatus() {
+    return {
+      isRefreshing: this.isRefreshing,
+      channelsCount: this.channels.length,
+      lastAttemptAt: this.lastAttemptAt,
+      lastRefreshAt: this.lastRefreshAt,
+      lastError: this.lastError,
+      sources: this.sourceResults
+    };
   }
 
   getChannels() {

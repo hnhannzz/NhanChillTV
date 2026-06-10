@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Play, Info } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Info, Play } from 'lucide-react';
 import MovieModal from './MovieModal';
 import { fetchNguoncJson, getNguoncItems } from '../lib/nguoncApi';
 
@@ -11,150 +11,52 @@ export default function HeroBanner() {
   const [modalSlug, setModalSlug] = useState(null);
 
   useEffect(() => {
-    Promise.all([
-      fetch('/api/admin/events').then(res => res.json()).catch(() => ({ success: false })),
-      fetchNguoncJson('/films/phim-moi-cap-nhat').catch(() => ({ status: 'error' }))
-    ]).then(([eventsData, moviesData]) => {
-      let combined = [];
-      
-      if (eventsData.success) {
-        const pinned = eventsData.data.filter(e => e.isPinned);
-        combined = [...combined, ...pinned.map(e => ({
-          type: 'event',
-          slug: e.id,
-          name: e.title,
-          original_name: 'Sự kiện nổi bật',
-          description: e.description || 'Sự kiện thể thao/giải trí đặc biệt không thể bỏ lỡ.',
-          poster_url: e.thumbnailUrl || e.thumbnailBase64 || '/poster.jpg',
-          quality: e.status === 'live' ? 'LIVE' : 'SỰ KIỆN',
-          channelId: e.sourceChannelId || 'custom'
-        }))];
-      }
-
-      if (moviesData.status === 'success') {
-        const movies = getNguoncItems(moviesData).slice(0, 5).map(m => ({
-          type: 'movie',
-          ...m
-        }));
-        combined = [...combined, ...movies];
-      }
-
-      setSlides(combined.slice(0, 6));
-    }).finally(() => setLoading(false));
+    fetchNguoncJson('/popular')
+      .catch(() => fetchNguoncJson('/films/phim-moi-cap-nhat'))
+      .then(data => setSlides(getNguoncItems(data).slice(0, 6)))
+      .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
-    if (slides.length === 0) return;
-    const timer = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % slides.length);
-    }, 8000);
+    if (slides.length < 2) return undefined;
+    const timer = setInterval(() => setCurrentIndex(index => (index + 1) % slides.length), 8000);
     return () => clearInterval(timer);
   }, [slides]);
 
-  if (loading) {
-    return <div className="w-full h-[60vh] md:h-[80vh] bg-[#0A0A0A] animate-pulse"></div>;
-  }
-
-  if (slides.length === 0) return null;
+  if (loading) return <div className="h-[60vh] w-full animate-pulse bg-[#0A0A0A] md:h-[80vh]" />;
+  if (!slides.length) return null;
 
   const currentSlide = slides[currentIndex];
-
-  const handlePanEnd = (event, info) => {
-    const swipeThreshold = 50;
-    if (info.offset.x < -swipeThreshold) {
-      setCurrentIndex((prev) => (prev + 1) % slides.length);
-    } else if (info.offset.x > swipeThreshold) {
-      setCurrentIndex((prev) => (prev - 1 + slides.length) % slides.length);
-    }
-  };
+  const description = String(currentSlide.description || 'Khám phá bộ phim đang được nhiều khán giả quan tâm trên NhanChillTV.').replace(/<[^>]+>/g, ' ');
 
   return (
-    <motion.div 
-      className="relative w-full h-[60vh] md:h-[80vh] bg-black overflow-hidden group select-none"
-      onContextMenu={(e) => e.preventDefault()}
-      onPanEnd={handlePanEnd}
-    >
+    <motion.section className="group relative h-[60vh] w-full select-none overflow-hidden bg-black md:h-[80vh]" onPanEnd={(event, info) => {
+      if (info.offset.x < -50) setCurrentIndex(index => (index + 1) % slides.length);
+      if (info.offset.x > 50) setCurrentIndex(index => (index - 1 + slides.length) % slides.length);
+    }}>
       <AnimatePresence mode="wait">
-        <motion.div
-          key={currentIndex}
-          initial={{ opacity: 0, scale: 1.05 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 1 }}
-          className="absolute inset-0"
-        >
-          <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/20 to-transparent z-10" />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#050505]/90 via-[#050505]/40 to-transparent z-10" />
-          <img 
-            src={currentSlide.poster_url || currentSlide.thumb_url} 
-            alt={currentSlide.name}
-            className="w-full h-full object-cover opacity-60"
-          />
+        <motion.div key={currentIndex} initial={{ opacity: 0, scale: 1.03 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.8 }} className="absolute inset-0">
+          <img src={currentSlide.poster_url || currentSlide.thumb_url || '/poster.jpg'} alt={currentSlide.name} className="h-full w-full object-cover opacity-65" />
+          <div className="absolute inset-0 bg-gradient-to-r from-black via-black/45 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-transparent to-transparent" />
         </motion.div>
       </AnimatePresence>
 
-      <div className="absolute inset-0 z-20 flex flex-col justify-end px-4 md:px-12 pb-16 md:pb-32 w-full md:w-2/3">
-        <motion.div
-          key={`content-${currentIndex}`}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.3 }}
-        >
-          <span className="inline-block px-2 py-0.5 md:px-3 md:py-1 mb-2 md:mb-4 text-[10px] md:text-xs font-semibold tracking-wider text-white bg-[#ED2C25] rounded-full">
-            {currentSlide.quality || 'Phim Mới'}
-          </span>
-          <h1 className="text-2xl md:text-6xl font-black text-white mb-1 md:mb-2 leading-tight line-clamp-2">
-            {currentSlide.name}
-          </h1>
-          <h2 className="text-sm md:text-2xl font-bold text-white/60 mb-2 md:mb-4">
-            {currentSlide.original_name}
-          </h2>
-          <p 
-            className="text-white/80 text-xs md:text-lg mb-4 md:mb-8 line-clamp-3 md:line-clamp-4 max-w-3xl"
-            dangerouslySetInnerHTML={{ __html: currentSlide.description || 'Phim đang được cập nhật trên hệ thống. Hãy xem ngay để không bỏ lỡ những tình tiết hấp dẫn nhất!' }}
-          />
-          <div className="flex items-center gap-4">
-            <button 
-              onClick={() => {
-                if (currentSlide.type === 'event') {
-                  window.location.href = `/tv/?channel=${currentSlide.channelId}&event=${currentSlide.slug}`;
-                } else {
-                  window.location.href = `/movie-detail/?slug=${currentSlide.slug}`;
-                }
-              }}
-              className="flex items-center gap-2 px-6 py-3 md:px-8 md:py-4 bg-[#ED2C25] hover:bg-red-700 transition-colors rounded-lg text-white font-bold text-sm md:text-base shadow-lg shadow-red-500/20"
-            >
-              <Play fill="currentColor" size={20} />
-              Xem Ngay
-            </button>
-            {currentSlide.type === 'movie' && (
-              <button 
-                onClick={() => setModalSlug(currentSlide.slug)}
-                className="flex items-center gap-2 px-6 py-3 md:px-8 md:py-4 bg-white/20 hover:bg-white/30 backdrop-blur-md transition-colors rounded-lg text-white font-bold text-sm md:text-base"
-              >
-                <Info size={20} />
-                Chi Tiết
-              </button>
-            )}
+      <div className="absolute inset-0 z-20 flex w-full flex-col justify-end px-4 pb-16 md:w-2/3 md:px-12 md:pb-28">
+        <motion.div key={`content-${currentIndex}`} initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+          <span className="mb-3 inline-block rounded bg-[#ED2C25] px-2 py-1 text-[10px] font-bold tracking-wide text-white md:text-xs">PHIM PHỔ BIẾN</span>
+          <h1 className="line-clamp-2 text-3xl font-black leading-tight text-white md:text-6xl">{currentSlide.name}</h1>
+          <h2 className="mt-2 text-sm font-bold text-white/60 md:text-xl">{currentSlide.original_name}</h2>
+          <p className="mb-6 mt-3 line-clamp-3 max-w-3xl text-xs text-white/80 md:text-base">{description}</p>
+          <div className="flex items-center gap-3">
+            <a href={`/movie-detail/?slug=${encodeURIComponent(currentSlide.slug)}`} className="flex items-center gap-2 rounded-md bg-[#ED2C25] px-5 py-3 text-sm font-bold text-white hover:bg-red-700"><Play fill="currentColor" size={19} /> Xem ngay</a>
+            <button onClick={() => setModalSlug(currentSlide.slug)} className="flex items-center gap-2 rounded-md bg-white/20 px-5 py-3 text-sm font-bold text-white backdrop-blur-md hover:bg-white/30"><Info size={19} /> Chi tiết</button>
           </div>
         </motion.div>
       </div>
 
-      <div className="absolute bottom-8 right-8 md:right-12 z-20 flex gap-2">
-        {slides.map((_, idx) => (
-          <button
-            key={idx}
-            onClick={() => setCurrentIndex(idx)}
-            className={`h-1.5 rounded-full transition-all duration-300 ${
-              idx === currentIndex ? 'w-8 bg-[#ED2C25]' : 'w-4 bg-white/30 hover:bg-white/50'
-            }`}
-          />
-        ))}
-      </div>
-
-      {modalSlug && (
-        <MovieModal slug={modalSlug} onClose={() => setModalSlug(null)} />
-      )}
-    </motion.div>
+      <div className="absolute bottom-7 right-5 z-20 flex gap-2 md:right-12">{slides.map((slide, index) => <button key={slide.slug || index} onClick={() => setCurrentIndex(index)} className={`h-1.5 rounded-full ${index === currentIndex ? 'w-8 bg-[#ED2C25]' : 'w-4 bg-white/35'}`} title={`Phim ${index + 1}`} />)}</div>
+      {modalSlug && <MovieModal slug={modalSlug} onClose={() => setModalSlug(null)} />}
+    </motion.section>
   );
 }

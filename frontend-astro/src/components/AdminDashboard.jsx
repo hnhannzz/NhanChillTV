@@ -1,728 +1,256 @@
-import React, { useState, useEffect } from 'react';
-import { io } from 'socket.io-client';
-import { Activity, Server, Cpu, Network, Video, Plus, Trash2, Edit2, Play, Square, RefreshCcw, MonitorPlay, Database, RefreshCw, Settings, EyeOff, LayoutList, ChevronUp, ChevronDown } from 'lucide-react';
-import classNames from 'classnames';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Activity, CalendarDays, ChevronDown, ChevronUp, CircleStop, Eye, EyeOff,
+  Gauge, ListVideo, LogOut, Pencil, Plus, Radio, RefreshCw, RotateCcw,
+  Save, Server, Settings, Trash2, X,
+} from 'lucide-react';
 
 const API_BASE = '/api';
 
 export default function AdminDashboard() {
-  const [token, setToken] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('adminToken');
-    }
-    return null;
-  });
-  const [passwordInput, setPasswordInput] = useState('');
-
-  const [metrics, setMetrics] = useState({
-    cpu: '0.00',
-    memoryUsed: '0.00',
-    networkRx: '0.00',
-    networkTx: '0.00',
-    activeStreams: 0
-  });
-
-  const [activeTab, setActiveTab] = useState('events');
-  const [streams, setStreams] = useState([]);
+  const [token, setToken] = useState(() => localStorage.getItem('adminToken'));
+  const [password, setPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [events, setEvents] = useState([]);
-  const [m3uSources, setM3uSources] = useState([]);
-  const [newSource, setNewSource] = useState({ name: '', url: '' });
-  const [isLoading, setIsLoading] = useState(true);
-  const [showEventModal, setShowEventModal] = useState(false);
-  const [editingEvent, setEditingEvent] = useState(null);
+  const [sources, setSources] = useState([]);
+  const [channels, setChannels] = useState([]);
+  const [settings, setSettings] = useState({ hiddenGroups: [], hiddenChannels: [], groupOrder: [] });
+  const [status, setStatus] = useState(null);
+  const [streams, setStreams] = useState([]);
+  const [health, setHealth] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [eventModal, setEventModal] = useState(null);
+  const [sourceForm, setSourceForm] = useState({ name: '', url: '', type: 'url' });
+  const [channelSearch, setChannelSearch] = useState('');
 
-  const [iptvSettings, setIptvSettings] = useState({ hiddenGroups: [], hiddenChannels: [], groupOrder: [] });
-  const [allChannels, setAllChannels] = useState([]);
-
-  useEffect(() => {
-    const socket = io({ path: '/socket.io' });
-    socket.on('system_metrics', (data) => {
-      setMetrics({
-        cpu: data.cpu,
-        memoryUsed: data.memoryUsed,
-        networkRx: data.networkRx,
-        networkTx: data.networkTx,
-        activeStreams: data.activeStreams
-      });
-    });
-    return () => socket.disconnect();
+  const logout = useCallback(() => {
+    localStorage.removeItem('adminToken');
+    setToken(null);
   }, []);
 
-  const fetchData = async () => {
-    try {
-      const [eventsRes, m3uRes, settingsRes, channelsRes] = await Promise.all([
-        fetch(`${API_BASE}/admin/events`),
-        fetch(`${API_BASE}/admin/m3u-sources`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${API_BASE}/admin/iptv-settings`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${API_BASE}/admin/iptv-channels`, { headers: { 'Authorization': `Bearer ${token}` } })
-      ]);
-      const eventsData = await eventsRes.json();
-      const m3uData = await m3uRes.json();
-      const settingsData = await settingsRes.json();
-      const channelsData = await channelsRes.json();
-      
-      if (eventsData.success) setEvents(eventsData.data);
-      if (m3uData.success) setM3uSources(m3uData.data);
-      if (settingsData.success) setIptvSettings(settingsData.data);
-      if (channelsData.success) setAllChannels(channelsData.data);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsLoading(false);
+  const adminRequest = useCallback(async (path, options = {}) => {
+    const response = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers: {
+        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+        Authorization: `Bearer ${token}`,
+        ...(options.headers || {}),
+      },
+    });
+    const data = await response.json().catch(() => ({}));
+    if (response.status === 401) {
+      logout();
+      throw new Error('Phiên quản trị đã hết hạn.');
     }
-  };
+    if (!response.ok || data.success === false) throw new Error(data.error || `HTTP ${response.status}`);
+    return data;
+  }, [logout, token]);
 
+  const loadData = useCallback(async () => {
+    if (!token) return;
+    const requests = await Promise.allSettled([
+      fetch(`${API_BASE}/admin/events`).then(response => response.json()),
+      adminRequest('/admin/m3u-sources'),
+      adminRequest('/admin/iptv-settings'),
+      adminRequest('/admin/iptv-channels'),
+      adminRequest('/admin/status'),
+      fetch(`${API_BASE}/stream/active`).then(response => response.json()),
+      fetch(`${API_BASE}/health`).then(response => response.json()),
+    ]);
+    if (requests[0].status === 'fulfilled') setEvents(requests[0].value.data || []);
+    if (requests[1].status === 'fulfilled') setSources(requests[1].value.data || []);
+    if (requests[2].status === 'fulfilled') setSettings(requests[2].value.data || { hiddenGroups: [], hiddenChannels: [], groupOrder: [] });
+    if (requests[3].status === 'fulfilled') setChannels(requests[3].value.data || []);
+    if (requests[4].status === 'fulfilled') setStatus(requests[4].value.data || null);
+    if (requests[5].status === 'fulfilled') setStreams(requests[5].value.data || []);
+    if (requests[6].status === 'fulfilled') setHealth(requests[6].value || null);
+  }, [adminRequest, token]);
+
+  useEffect(() => { loadData(); }, [loadData]);
   useEffect(() => {
-    if (token) {
-      fetchData();
-    }
-  }, [activeTab, token]);
+    if (!token) return undefined;
+    const timer = setInterval(loadData, 15000);
+    return () => clearInterval(timer);
+  }, [loadData, token]);
 
-  const addM3uSource = async (e) => {
-    e.preventDefault();
+  const login = async event => {
+    event.preventDefault();
+    setLoginError('');
     try {
-      const res = await fetch(`${API_BASE}/admin/m3u-sources`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(newSource)
+      const response = await fetch(`${API_BASE}/admin/login`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }),
       });
-      if (res.ok) {
-        setNewSource({ name: '', url: '' });
-        fetchData();
-        alert('Đã thêm nguồn M3U thành công!');
-      }
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Sai mật khẩu');
+      localStorage.setItem('adminToken', data.token);
+      setToken(data.token);
+      setPassword('');
     } catch (err) {
-      console.error(err);
-      alert('Lỗi thêm nguồn M3U');
+      setLoginError(err.message);
     }
   };
 
-  const deleteM3uSource = async (id) => {
-    if (confirm('Xóa nguồn này?')) {
-      await fetch(`${API_BASE}/admin/m3u-sources/${id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      fetchData();
-    }
-  };
-
-  const refreshM3uSources = async () => {
+  const runAction = async (action, successMessage) => {
+    setBusy(true);
+    setNotice('');
     try {
-      alert('Đang làm mới danh sách kênh từ tất cả các nguồn... Vui lòng chờ!');
-      const res = await fetch(`${API_BASE}/admin/m3u-sources/refresh`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (data.success) {
-        alert(`Hoàn tất! Tổng số kênh hiện tại: ${data.channelsCount}`);
-      }
+      await action();
+      if (successMessage) setNotice(successMessage);
+      await loadData();
     } catch (err) {
-      alert('Lỗi refresh M3U');
+      setNotice(`Lỗi: ${err.message}`);
+    } finally {
+      setBusy(false);
     }
   };
+
+  if (!token) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#090909] p-4 text-white">
+        <form onSubmit={login} className="w-full max-w-sm rounded-lg border border-white/10 bg-[#151515] p-6">
+          <h1 className="text-xl font-bold">Quản trị NhanChillTV</h1>
+          <p className="mt-1 text-sm text-white/50">Đăng nhập để quản lý hệ thống.</p>
+          <input autoFocus type="password" value={password} onChange={event => setPassword(event.target.value)} placeholder="Mật khẩu quản trị" className="mt-5 w-full rounded-md border border-white/10 bg-black/30 px-3 py-2.5 outline-none focus:border-[#ED2C25]" />
+          {loginError && <p className="mt-2 text-sm text-red-400">{loginError}</p>}
+          <button className="mt-4 w-full rounded-md bg-[#ED2C25] py-2.5 font-bold hover:bg-red-700">Đăng nhập</button>
+        </form>
+      </div>
+    );
+  }
 
   const tabs = [
-    { id: 'dashboard', label: 'Tổng quan', icon: Activity },
-    { id: 'events', label: 'Sự kiện Live', icon: MonitorPlay },
-    { id: 'm3u', label: 'Nguồn M3U', icon: Database },
-    { id: 'settings', label: 'Cài đặt Kênh', icon: Settings },
-    { id: 'streams', label: 'Luồng Stream', icon: Server },
+    ['dashboard', 'Tổng quan', Gauge], ['events', 'Sự kiện', CalendarDays], ['m3u', 'Nguồn M3U', Radio],
+    ['channels', 'Kênh IPTV', ListVideo], ['streams', 'Luồng phát', Activity],
   ];
 
   return (
-    <div className="flex h-screen bg-[#0A0A0A] text-white overflow-hidden">
-      {!token && (
-        <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center backdrop-blur-sm">
-          <div className="bg-[#121212] p-8 rounded-2xl border border-white/10 w-96 text-center shadow-2xl">
-            <h2 className="text-2xl font-black text-[#ED2C25] mb-6 tracking-tighter">NhanChill<span className="text-white">TV</span> Admin</h2>
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              try {
-                const res = await fetch('/api/admin/login', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ password: passwordInput })
-                });
-                const data = await res.json();
-                if (data.success) {
-                  setToken(data.token);
-                  localStorage.setItem('adminToken', data.token);
-                } else {
-                  alert('Sai mật khẩu!');
-                }
-              } catch(e) {
-                alert('Lỗi đăng nhập');
-              }
-            }}>
-              <input 
-                type="password" 
-                placeholder="Nhập mật khẩu..." 
-                value={passwordInput}
-                onChange={e => setPasswordInput(e.target.value)}
-                className="w-full bg-[#1A1A1A] border border-white/10 rounded-xl py-3 px-4 mb-4 text-white focus:border-[#ED2C25] focus:outline-none"
-              />
-              <button type="submit" className="w-full bg-[#ED2C25] text-white font-bold py-3 rounded-xl hover:bg-red-700 transition-colors">
-                Đăng nhập
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
+    <div className="min-h-screen bg-[#090909] text-white">
+      <header className="flex h-16 items-center justify-between border-b border-white/10 bg-[#111] px-4 md:px-6">
+        <div><div className="font-black">NhanChillTV Admin</div><div className="text-xs text-white/40">Điều khiển hệ thống</div></div>
+        <button onClick={logout} className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-white/60 hover:bg-white/5 hover:text-white"><LogOut size={17} /> Đăng xuất</button>
+      </header>
 
-      <aside className="w-[260px] bg-[#121212] border-r border-white/5 flex flex-col">
-        <div className="h-[70px] flex items-center px-6 border-b border-white/5">
-          <div className="text-2xl font-black text-[#ED2C25] tracking-tighter">
-            Admin<span className="text-white text-sm font-normal ml-2 tracking-normal bg-[#ED2C25]/20 px-2 py-0.5 rounded text-[#ED2C25]">v1.65</span>
-          </div>
-        </div>
-        <nav className="flex-1 py-6 px-4 space-y-2">
-          {tabs.map(tab => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={classNames(
-                  "w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all font-medium text-sm",
-                  activeTab === tab.id 
-                    ? "bg-[#ED2C25] text-white shadow-lg shadow-[#ED2C25]/20" 
-                    : "text-white/60 hover:text-white hover:bg-white/5"
-                )}
-              >
-                <Icon size={20} />
-                {tab.label}
-              </button>
-            )
-          })}
+      <div className="flex min-h-[calc(100vh-64px)] flex-col md:flex-row">
+        <nav className="flex shrink-0 gap-1 overflow-x-auto border-b border-white/10 bg-[#111] p-2 md:w-56 md:flex-col md:border-b-0 md:border-r md:p-3">
+          {tabs.map(([id, label, Icon]) => <button key={id} onClick={() => setActiveTab(id)} className={`flex shrink-0 items-center gap-2 rounded-md px-3 py-2.5 text-left text-sm font-medium ${activeTab === id ? 'bg-[#ED2C25] text-white' : 'text-white/55 hover:bg-white/5 hover:text-white'}`}><Icon size={17} /> {label}</button>)}
         </nav>
-        <div className="p-4 border-t border-white/5">
-          <a href="/" className="w-full flex items-center justify-center gap-2 py-3 bg-white/5 hover:bg-white/10 rounded-xl text-sm font-medium transition-colors">
-            Quay lại Web
-          </a>
-        </div>
-      </aside>
 
-      <main className="flex-1 overflow-y-auto p-8">
-        
-        {activeTab === 'dashboard' && (
-          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <h1 className="text-3xl font-bold">Realtime Metrics</h1>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <MetricCard title="CPU Load" value={`${metrics.cpu}%`} icon={Cpu} color="text-blue-500" bg="bg-blue-500/10" />
-              <MetricCard title="RAM Usage" value={`${metrics.memoryUsed}%`} icon={Server} color="text-purple-500" bg="bg-purple-500/10" />
-              <MetricCard title="Network (Rx/Tx)" value={`${metrics.networkRx} / ${metrics.networkTx} MB/s`} icon={Network} color="text-emerald-500" bg="bg-emerald-500/10" />
-              <MetricCard title="Active Streams" value={metrics.activeStreams} icon={Activity} color="text-[#ED2C25]" bg="bg-[#ED2C25]/10" />
-            </div>
-            
-            <div className="mt-12 bg-[#121212] rounded-2xl p-6 border border-white/5">
-              <h2 className="text-xl font-bold mb-4">Điều khiển Server</h2>
-              <button className="flex items-center gap-2 bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500 hover:text-black transition-colors px-6 py-3 rounded-xl font-bold">
-                <RefreshCcw size={18} /> Khởi động lại Nginx
-              </button>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'events' && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="flex items-center justify-between">
-              <h1 className="text-3xl font-bold">Quản lý sự kiện</h1>
-              <button 
-                onClick={() => { setEditingEvent(null); setShowEventModal(true); }}
-                className="flex items-center gap-2 bg-[#ED2C25] hover:bg-red-700 transition-colors px-4 py-2.5 rounded-xl font-bold text-sm"
-              >
-                <Plus size={18} /> Thêm sự kiện
-              </button>
-            </div>
-            
-            <div className="bg-[#121212] border border-white/5 rounded-2xl overflow-hidden">
-              <table className="w-full text-left">
-                <thead className="bg-white/5 text-white/60 text-sm">
-                  <tr>
-                    <th className="p-4 font-medium">Tên sự kiện</th>
-                    <th className="p-4 font-medium">Trạng thái</th>
-                    <th className="p-4 font-medium">Nguồn</th>
-                    <th className="p-4 font-medium">Thời gian</th>
-                    <th className="p-4 font-medium text-right">Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {events.map(event => (
-                    <tr key={event.id} className="hover:bg-white/[0.02] transition-colors">
-                      <td className="p-4 font-medium">{event.title}</td>
-                      <td className="p-4">
-                        <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-yellow-500/20 text-yellow-500 uppercase">
-                          {event.status}
-                        </span>
-                      </td>
-                      <td className="p-4 text-white/60 text-sm uppercase">{event.sourceType}</td>
-                      <td className="p-4 text-white/60 text-sm">{new Date(event.time).toLocaleString()}</td>
-                      <td className="p-4 text-right">
-                        <div className="flex justify-end gap-2">
-                          <button 
-                            onClick={() => { setEditingEvent(event); setShowEventModal(true); }}
-                            className="p-2 hover:bg-blue-500/20 text-blue-500 rounded-lg transition-colors"
-                          >
-                            <Edit2 size={16} />
-                          </button>
-                          <button 
-                            onClick={async () => {
-                              if (confirm('Xóa sự kiện này?')) {
-                                await fetch(`/api/admin/events/${event.id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
-                                fetchData();
-                              }
-                            }}
-                            className="p-2 hover:bg-red-500/20 text-red-500 rounded-lg transition-colors"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {events.length === 0 && (
-                    <tr>
-                      <td colSpan="5" className="p-8 text-center text-white/40">Chưa có sự kiện nào</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* M3U Sources Tab */}
-        {activeTab === 'm3u' && (
-          <div className="space-y-6">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-[#121212] p-4 rounded-xl border border-white/5">
-              <div>
-                <h3 className="font-bold text-lg text-white">Quản lý Nguồn M3U</h3>
-                <p className="text-sm text-white/50 mt-1">Thêm các đường link M3U để hệ thống tự động tải và tổng hợp kênh IPTV.</p>
-              </div>
-              <button onClick={refreshM3uSources} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
-                <RefreshCw size={18} />
-                Làm mới tất cả Kênh
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-1">
-                <div className="bg-[#121212] rounded-xl border border-white/5 p-6">
-                  <h3 className="font-bold text-lg text-white mb-4">Thêm nguồn mới</h3>
-                  <form onSubmit={addM3uSource} className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-white/70 mb-1">Tên Nguồn</label>
-                      <input 
-                        required 
-                        value={newSource.name} 
-                        onChange={e => setNewSource({...newSource, name: e.target.value})} 
-                        className="w-full bg-[#1A1A1A] border border-white/10 rounded-lg p-2.5 text-white text-sm" 
-                        placeholder="VD: TV360 VIP" 
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-white/70 mb-1">URL M3U</label>
-                      <input 
-                        required 
-                        type="url"
-                        value={newSource.url} 
-                        onChange={e => setNewSource({...newSource, url: e.target.value})} 
-                        className="w-full bg-[#1A1A1A] border border-white/10 rounded-lg p-2.5 text-white text-sm" 
-                        placeholder="https://..." 
-                      />
-                    </div>
-                    <button type="submit" className="w-full flex justify-center items-center gap-2 bg-[#ED2C25] hover:bg-[#d02520] text-white px-4 py-2.5 rounded-lg font-medium transition-colors">
-                      <Plus size={18} />
-                      Thêm M3U
-                    </button>
-                  </form>
-                </div>
-              </div>
-
-              <div className="lg:col-span-2">
-                <div className="bg-[#121212] rounded-xl border border-white/5 overflow-hidden">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-[#1A1A1A] text-white/70 text-xs uppercase border-b border-white/10">
-                      <tr>
-                        <th className="px-4 py-3">Tên</th>
-                        <th className="px-4 py-3">URL</th>
-                        <th className="px-4 py-3">Trạng thái</th>
-                        <th className="px-4 py-3 text-right">Thao tác</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {m3uSources.map(src => (
-                        <tr key={src.id} className="hover:bg-white/5 transition-colors">
-                          <td className="px-4 py-3 font-medium text-white">{src.name}</td>
-                          <td className="px-4 py-3 text-white/60 truncate max-w-[200px]" title={src.url}>{src.url}</td>
-                          <td className="px-4 py-3">
-                            <span className="px-2 py-0.5 bg-green-500/20 text-green-400 text-xs rounded border border-green-500/20">Hoạt động</span>
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <button onClick={() => deleteM3uSource(src.id)} className="text-white/40 hover:text-red-500 transition-colors p-1">
-                              <Trash2 size={16} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                      {m3uSources.length === 0 && (
-                        <tr>
-                          <td colSpan="4" className="px-4 py-8 text-center text-white/40">Chưa có nguồn M3U nào</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'streams' && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <h1 className="text-3xl font-bold">Streams đang chạy</h1>
-            {/* Stream logic here */}
-          </div>
-        )}
-        {activeTab === 'settings' && (() => {
-          const uniqueGroups = Array.from(new Set(allChannels.map(c => c.group))).sort();
-          const sortedGroups = iptvSettings.groupOrder?.length > 0 
-            ? [...new Set([...iptvSettings.groupOrder, ...uniqueGroups])] 
-            : uniqueGroups;
-
-          const moveGroup = (index, direction) => {
-            let newOrder = [...sortedGroups];
-            if (direction === -1 && index > 0) {
-              const temp = newOrder[index - 1];
-              newOrder[index - 1] = newOrder[index];
-              newOrder[index] = temp;
-            } else if (direction === 1 && index < newOrder.length - 1) {
-              const temp = newOrder[index + 1];
-              newOrder[index + 1] = newOrder[index];
-              newOrder[index] = temp;
-            }
-            setIptvSettings({ ...iptvSettings, groupOrder: newOrder });
-          };
-
-          return (
-            <div className="relative">
-              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-6xl mx-auto">
-                <div className="flex justify-between items-end">
-                  <div>
-                    <h1 className="text-3xl font-bold mb-2">Cài đặt Kênh & Thể loại</h1>
-                  <p className="text-white/60">Quản lý hiển thị và độ ưu tiên của danh sách IPTV</p>
-                </div>
-                <button 
-                  onClick={async () => {
-                    try {
-                      // Ensure groupOrder contains all current groups before saving
-                      const finalOrder = [...new Set([...(iptvSettings.groupOrder || []), ...uniqueGroups])];
-                      const dataToSave = { ...iptvSettings, groupOrder: finalOrder };
-                      
-                      const res = await fetch(`${API_BASE}/admin/iptv-settings`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                        body: JSON.stringify(dataToSave)
-                      });
-                      if (res.ok) alert('Đã lưu cấu hình thành công!');
-                    } catch (e) { alert('Lỗi lưu cấu hình'); }
-                  }}
-                  className="bg-[#ED2C25] text-white px-6 py-2.5 rounded-xl font-bold hover:bg-red-700 transition-colors shadow-lg shadow-red-500/20"
-                >
-                  Lưu Thay Đổi
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Cột 1: Quản lý Thể loại */}
-                <div className="bg-[#121212] p-6 rounded-2xl border border-white/5 flex flex-col h-[700px]">
-                  <h3 className="text-xl font-bold mb-4 flex items-center gap-2"><LayoutList size={20} className="text-[#ED2C25]"/> Quản lý Thể loại</h3>
-                  <p className="text-sm text-white/50 mb-4">Sử dụng nút mũi tên để thay đổi thứ tự ưu tiên. Bật/Tắt để điều khiển hiển thị trên trang chủ.</p>
-                  <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
-                    {sortedGroups.map((g, index) => (
-                      <div key={g} className="flex items-center justify-between p-2 bg-[#1A1A1A] rounded-xl border border-white/5">
-                        <div className="flex items-center gap-3">
-                          <div className="flex flex-col">
-                            <button disabled={index === 0} onClick={() => moveGroup(index, -1)} className="p-0.5 rounded text-white/30 hover:bg-white/10 hover:text-white disabled:opacity-30">
-                              <ChevronUp size={16} />
-                            </button>
-                            <button disabled={index === sortedGroups.length - 1} onClick={() => moveGroup(index, 1)} className="p-0.5 rounded text-white/30 hover:bg-white/10 hover:text-white disabled:opacity-30">
-                              <ChevronDown size={16} />
-                            </button>
-                          </div>
-                          <div className={`font-bold text-sm ${iptvSettings.hiddenGroups?.includes(g) ? 'text-white/40 line-through' : 'text-white/90'}`}>{g}</div>
-                        </div>
-                        <label className="relative inline-flex items-center cursor-pointer mr-2">
-                          <input 
-                            type="checkbox" 
-                            className="sr-only peer"
-                            checked={!(iptvSettings.hiddenGroups?.includes(g) || false)}
-                            onChange={(e) => {
-                              const cur = iptvSettings.hiddenGroups || [];
-                              if (!e.target.checked) setIptvSettings({...iptvSettings, hiddenGroups: [...cur, g]});
-                              else setIptvSettings({...iptvSettings, hiddenGroups: cur.filter(x => x !== g)});
-                            }}
-                          />
-                          <div className="w-11 h-6 bg-red-500/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-              {/* Cột 2: Kênh */}
-              <div className="bg-[#121212] p-6 rounded-2xl border border-white/5 flex flex-col h-[700px]">
-                <h3 className="text-xl font-bold mb-4 flex items-center gap-2"><EyeOff size={20} className="text-[#ED2C25]"/> Bật / Tắt Kênh cụ thể</h3>
-                <p className="text-sm text-white/50 mb-4">Tắt các kênh bạn không muốn hiển thị. Những kênh thuộc Thể loại bị ẩn sẽ luôn bị ẩn bất kể cài đặt này.</p>
-                <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
-                  {allChannels.map(ch => (
-                    <div key={ch.id} className="flex items-center justify-between p-3 bg-[#1A1A1A] rounded-xl border border-white/5">
-                      <div className="flex items-center gap-3">
-                        <img src={ch.logo || '/poster.jpg'} alt={ch.name} className="w-10 h-10 object-contain bg-black rounded" onError={(e) => { if(!e.currentTarget.src.includes('/poster.jpg')) { e.currentTarget.src = '/poster.jpg'; } }} />
-                        <div>
-                          <div className="font-medium text-sm">{ch.name}</div>
-                          <div className="text-xs text-white/40">{ch.group}</div>
-                        </div>
-                      </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input 
-                          type="checkbox" 
-                          className="sr-only peer"
-                          checked={!(iptvSettings.hiddenChannels?.includes(ch.id) || false)}
-                          onChange={(e) => {
-                            const cur = iptvSettings.hiddenChannels || [];
-                            if (!e.target.checked) setIptvSettings({...iptvSettings, hiddenChannels: [...cur, ch.id]});
-                            else setIptvSettings({...iptvSettings, hiddenChannels: cur.filter(x => x !== ch.id)});
-                          }}
-                        />
-                        <div className="w-11 h-6 bg-red-500/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
-                      </label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-          );
-        })()}
-      </main>
-
-      {showEventModal && (
-        <EventModal 
-          event={editingEvent}
-          token={token}
-          onClose={() => { setShowEventModal(false); setEditingEvent(null); }}
-          onSave={async (savedEvent) => {
-            fetchData();
-            setShowEventModal(false);
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-function MetricCard({ title, value, icon: Icon, color, bg }) {
-  return (
-    <div className="bg-[#121212] rounded-2xl p-6 border border-white/5 hover:border-white/10 transition-colors relative overflow-hidden">
-      <div className={`absolute -right-4 -top-4 w-24 h-24 ${bg} rounded-full blur-2xl opacity-50`}></div>
-      <div className="flex justify-between items-start mb-4 relative z-10">
-        <h3 className="text-white/60 font-medium">{title}</h3>
-        <div className={`p-3 rounded-xl ${bg} ${color}`}>
-          <Icon size={24} />
-        </div>
+        <main className="min-w-0 flex-1 p-4 md:p-6">
+          {notice && <div className={`mb-4 rounded-md border px-4 py-3 text-sm ${notice.startsWith('Lỗi:') ? 'border-red-500/30 bg-red-500/10 text-red-300' : 'border-green-500/30 bg-green-500/10 text-green-300'}`}>{notice}</div>}
+          {activeTab === 'dashboard' && <DashboardTab health={health} status={status} sources={sources} events={events} streams={streams} busy={busy} onRefresh={() => runAction(() => adminRequest('/admin/m3u-sources/refresh', { method: 'POST' }), 'Đã cập nhật danh sách M3U.')} onRestart={() => {
+            if (window.confirm('Khởi động lại dịch vụ backend và reload Nginx?')) runAction(() => adminRequest('/admin/system/restart', { method: 'POST' }), 'Đã gửi lệnh khởi động lại.');
+          }} />}
+          {activeTab === 'events' && <EventsTab events={events} onAdd={() => setEventModal({ mode: 'create', event: null })} onEdit={event => setEventModal({ mode: 'edit', event })} onDelete={event => {
+            if (window.confirm(`Xóa sự kiện "${event.title}"?`)) runAction(() => adminRequest(`/admin/events/${event.id}`, { method: 'DELETE' }), 'Đã xóa sự kiện.');
+          }} />}
+          {activeTab === 'm3u' && <M3uTab sources={sources} sourceForm={sourceForm} setSourceForm={setSourceForm} busy={busy} onAdd={event => {
+            event.preventDefault();
+            runAction(async () => {
+              await adminRequest('/admin/m3u-sources', { method: 'POST', body: JSON.stringify(sourceForm) });
+              setSourceForm({ name: '', url: '', type: 'url' });
+            }, 'Đã thêm nguồn M3U.');
+          }} onToggle={source => runAction(() => adminRequest(`/admin/m3u-sources/${source.id}`, { method: 'PUT', body: JSON.stringify({ active: !source.active }) }), 'Đã cập nhật trạng thái nguồn.')} onDelete={source => {
+            if (window.confirm(`Xóa nguồn "${source.name}"?`)) runAction(() => adminRequest(`/admin/m3u-sources/${source.id}`, { method: 'DELETE' }), 'Đã xóa nguồn M3U.');
+          }} onRefresh={() => runAction(() => adminRequest('/admin/m3u-sources/refresh', { method: 'POST' }), 'Đã cập nhật danh sách M3U.')} />}
+          {activeTab === 'channels' && <ChannelsTab channels={channels} settings={settings} setSettings={setSettings} search={channelSearch} setSearch={setChannelSearch} busy={busy} onSave={() => runAction(() => adminRequest('/admin/iptv-settings', { method: 'POST', body: JSON.stringify(settings) }), 'Đã lưu cấu hình IPTV.')} />}
+          {activeTab === 'streams' && <StreamsTab streams={streams} onStop={stream => runAction(() => fetch(`${API_BASE}/stream/stop/${encodeURIComponent(stream.channelId)}`, { method: 'POST' }).then(response => response.json()), 'Đã dừng luồng phát.')} />}
+        </main>
       </div>
-      <div className="text-3xl font-black relative z-10">{value}</div>
+
+      {eventModal && <EventModal event={eventModal.event} channels={channels} token={token} onClose={() => setEventModal(null)} onSaved={() => { setEventModal(null); loadData(); setNotice('Đã lưu sự kiện.'); }} />}
     </div>
   );
 }
 
-function EventModal({ event, token, onClose, onSave }) {
-  const [formData, setFormData] = useState(event || {
-    title: '',
-    description: '',
-    time: new Date().toISOString().slice(0, 16),
-    status: 'upcoming',
-    sourceType: 'iptv',
-    sourceChannelId: '',
-    streamKey: '',
-    thumbnailBase64: '',
-    isPinned: false
-  });
+function DashboardTab({ health, status, sources, events, streams, busy, onRefresh, onRestart }) {
+  const cards = [
+    ['Kênh IPTV', status?.channelsCount ?? 0, ListVideo], ['Nguồn đang bật', sources.filter(source => source.active).length, Server],
+    ['Sự kiện', events.length, CalendarDays], ['Luồng FFmpeg', streams.length, Activity],
+  ];
+  return (
+    <section>
+      <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-bold">Tổng quan</h1><p className="text-sm text-white/45">Trạng thái backend và dữ liệu IPTV.</p></div><div className="flex gap-2"><button disabled={busy} onClick={onRefresh} className="flex items-center gap-2 rounded-md bg-white/10 px-3 py-2 text-sm hover:bg-white/15"><RefreshCw size={16} className={busy ? 'animate-spin' : ''} /> Cập nhật M3U</button><button onClick={onRestart} className="flex items-center gap-2 rounded-md border border-red-500/30 px-3 py-2 text-sm text-red-300 hover:bg-red-500/10"><RotateCcw size={16} /> Khởi động lại</button></div></div>
+      <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">{cards.map(([label, value, Icon]) => <div key={label} className="rounded-lg border border-white/8 bg-[#151515] p-4"><Icon size={19} className="mb-3 text-[#ED2C25]" /><div className="text-2xl font-black">{value}</div><div className="text-xs text-white/45">{label}</div></div>)}</div>
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        <Panel title="Tài nguyên máy chủ"><InfoRow label="CPU" value={`${Number(health?.cpuLoad?.currentLoad || 0).toFixed(1)}%`} /><InfoRow label="Bộ nhớ trống" value={formatBytes(health?.memory?.free)} /><InfoRow label="Chế độ" value={health?.mode || '--'} /><InfoRow label="FFmpeg" value={health?.ffmpegAvailable ? 'Sẵn sàng' : 'Không tìm thấy'} /></Panel>
+        <Panel title="Cập nhật M3U"><InfoRow label="Lần cập nhật" value={status?.lastRefreshAt ? new Date(status.lastRefreshAt).toLocaleString('vi-VN') : 'Chưa có'} /><InfoRow label="Trạng thái" value={status?.isRefreshing ? 'Đang cập nhật' : 'Sẵn sàng'} /><InfoRow label="Chu kỳ" value="1 giờ/lần" />{status?.lastError && <div className="mt-3 rounded bg-red-500/10 p-2 text-xs text-red-300">{status.lastError}</div>}</Panel>
+      </div>
+    </section>
+  );
+}
 
-  const [loading, setLoading] = useState(false);
-  const [channels, setChannels] = useState([]);
+function EventsTab({ events, onAdd, onEdit, onDelete }) {
+  return <section><SectionHeader title="Sự kiện" subtitle="Quản lý nguồn phát và Cbox trên trang sự kiện" action={<button onClick={onAdd} className="flex items-center gap-2 rounded-md bg-[#ED2C25] px-3 py-2 text-sm font-bold"><Plus size={16} /> Thêm sự kiện</button>} />
+    <div className="mt-5 overflow-hidden rounded-lg border border-white/10 bg-[#151515]">{events.length ? events.map(event => <div key={event.id} className="flex flex-col gap-3 border-b border-white/5 p-4 last:border-0 sm:flex-row sm:items-center"><div className="min-w-0 flex-1"><div className="truncate font-bold">{event.title}</div><div className="mt-1 text-xs text-white/45">{event.time ? new Date(event.time).toLocaleString('vi-VN') : 'Chưa đặt thời gian'} · {event.sourceType || 'iptv'} · {event.status || 'upcoming'}</div></div><div className="flex gap-2"><button onClick={() => onEdit(event)} className="rounded-md bg-white/5 p-2 hover:bg-white/10" title="Sửa"><Pencil size={16} /></button><button onClick={() => onDelete(event)} className="rounded-md bg-red-500/10 p-2 text-red-300 hover:bg-red-500/20" title="Xóa"><Trash2 size={16} /></button></div></div>) : <Empty text="Chưa có sự kiện." />}</div>
+  </section>;
+}
 
-  useEffect(() => {
-    fetch('/api/iptv/channels')
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          setChannels(data.data);
-        }
-      })
-      .catch(console.error);
-  }, []);
+function M3uTab({ sources, sourceForm, setSourceForm, busy, onAdd, onToggle, onDelete, onRefresh }) {
+  return <section><SectionHeader title="Nguồn M3U" subtitle="Danh sách được tải lại tự động mỗi giờ" action={<button disabled={busy} onClick={onRefresh} className="flex items-center gap-2 rounded-md bg-white/10 px-3 py-2 text-sm"><RefreshCw size={16} className={busy ? 'animate-spin' : ''} /> Tải lại</button>} />
+    <form onSubmit={onAdd} className="mt-5 grid gap-3 rounded-lg border border-white/10 bg-[#151515] p-4 md:grid-cols-[1fr_2fr_auto]"><input required value={sourceForm.name} onChange={event => setSourceForm({ ...sourceForm, name: event.target.value })} placeholder="Tên nguồn" className="rounded-md border border-white/10 bg-black/25 px-3 py-2 outline-none focus:border-[#ED2C25]" /><input required value={sourceForm.url} onChange={event => setSourceForm({ ...sourceForm, url: event.target.value })} placeholder="https://.../list.m3u" className="rounded-md border border-white/10 bg-black/25 px-3 py-2 outline-none focus:border-[#ED2C25]" /><button disabled={busy} className="flex items-center justify-center gap-2 rounded-md bg-[#ED2C25] px-4 py-2 font-bold"><Plus size={16} /> Thêm</button></form>
+    <div className="mt-4 overflow-hidden rounded-lg border border-white/10 bg-[#151515]">{sources.length ? sources.map(source => <div key={source.id} className="flex flex-col gap-3 border-b border-white/5 p-4 last:border-0 sm:flex-row sm:items-center"><div className="min-w-0 flex-1"><div className="flex items-center gap-2 font-bold"><span className={`h-2 w-2 rounded-full ${source.active ? 'bg-green-400' : 'bg-white/25'}`} />{source.name}</div><div className="mt-1 truncate text-xs text-white/40">{source.url}</div></div><button onClick={() => onToggle(source)} className="flex items-center gap-2 rounded-md bg-white/5 px-3 py-2 text-sm">{source.active ? <Eye size={16} /> : <EyeOff size={16} />}{source.active ? 'Đang bật' : 'Đang tắt'}</button><button onClick={() => onDelete(source)} className="rounded-md bg-red-500/10 p-2 text-red-300" title="Xóa"><Trash2 size={16} /></button></div>) : <Empty text="Chưa có nguồn M3U." />}</div>
+  </section>;
+}
 
-  const getLocalDatetimeString = (isoString) => {
-    if (!isoString) return '';
-    const d = new Date(isoString);
-    if (isNaN(d.getTime())) return '';
-    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-    return d.toISOString().slice(0, 16);
+function ChannelsTab({ channels, settings, setSettings, search, setSearch, busy, onSave }) {
+  const groups = [...new Set(channels.map(channel => channel.group).filter(Boolean))];
+  const orderedGroups = [...settings.groupOrder.filter(group => groups.includes(group)), ...groups.filter(group => !settings.groupOrder.includes(group))];
+  const visibleChannels = channels.filter(channel => `${channel.name} ${channel.group}`.toLowerCase().includes(search.toLowerCase())).slice(0, 300);
+  const toggle = (key, value) => setSettings(current => ({ ...current, [key]: current[key].includes(value) ? current[key].filter(item => item !== value) : [...current[key], value] }));
+  const moveGroup = (index, direction) => {
+    const next = [...orderedGroups];
+    const target = index + direction;
+    if (target < 0 || target >= next.length) return;
+    [next[index], next[target]] = [next[target], next[index]];
+    setSettings(current => ({ ...current, groupOrder: next }));
   };
+  return <section><SectionHeader title="Kênh IPTV" subtitle={`${channels.length} kênh đã nạp`} action={<button disabled={busy} onClick={onSave} className="flex items-center gap-2 rounded-md bg-[#ED2C25] px-3 py-2 text-sm font-bold"><Save size={16} /> Lưu cấu hình</button>} />
+    <div className="mt-5 grid gap-4 xl:grid-cols-[360px_1fr]"><Panel title="Nhóm kênh">{orderedGroups.map((group, index) => <div key={group} className="flex items-center gap-2 border-b border-white/5 py-2 last:border-0"><button onClick={() => toggle('hiddenGroups', group)} className={`rounded p-1 ${settings.hiddenGroups.includes(group) ? 'text-white/30' : 'text-green-400'}`}>{settings.hiddenGroups.includes(group) ? <EyeOff size={16} /> : <Eye size={16} />}</button><span className="min-w-0 flex-1 truncate text-sm">{group}</span><button disabled={index === 0} onClick={() => moveGroup(index, -1)} className="p-1 disabled:opacity-20"><ChevronUp size={15} /></button><button disabled={index === orderedGroups.length - 1} onClick={() => moveGroup(index, 1)} className="p-1 disabled:opacity-20"><ChevronDown size={15} /></button></div>)}</Panel>
+      <Panel title="Kênh"><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Tìm kênh..." className="mb-3 w-full rounded-md border border-white/10 bg-black/25 px-3 py-2 text-sm outline-none focus:border-[#ED2C25]" /><div className="max-h-[560px] overflow-y-auto">{visibleChannels.map(channel => <label key={channel.id} className="flex cursor-pointer items-center gap-3 border-b border-white/5 py-2 text-sm"><input type="checkbox" checked={!settings.hiddenChannels.includes(channel.id)} onChange={() => toggle('hiddenChannels', channel.id)} /><img src={channel.logo || '/poster.jpg'} className="h-7 w-10 object-contain" alt="" /><span className="min-w-0 flex-1 truncate">{channel.name}</span><span className="text-xs text-white/35">{channel.group}</span></label>)}</div></Panel></div>
+  </section>;
+}
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
+function StreamsTab({ streams, onStop }) {
+  return <section><SectionHeader title="Luồng phát" subtitle="Các tiến trình FFmpeg đang hoạt động" />
+    <div className="mt-5 overflow-hidden rounded-lg border border-white/10 bg-[#151515]">{streams.length ? streams.map(stream => <div key={stream.channelId} className="flex items-center gap-3 border-b border-white/5 p-4 last:border-0"><Activity size={18} className="text-green-400" /><div className="min-w-0 flex-1"><div className="truncate font-bold">{stream.channelId}</div><div className="text-xs text-white/40">PID {stream.pid || '--'}</div></div><button onClick={() => onStop(stream)} className="flex items-center gap-2 rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-300"><CircleStop size={16} /> Dừng</button></div>) : <Empty text="Không có luồng FFmpeg đang chạy. Các kênh phát trực tiếp/proxy không tạo tiến trình FFmpeg." />}</div>
+  </section>;
+}
 
-    const submitData = { ...formData };
-    if (submitData.sourceType === 'obs' && !submitData.streamKey) {
-      submitData.streamKey = 'stream_' + Math.random().toString(36).substring(2, 10);
-    }
-
+function EventModal({ event, channels, token, onClose, onSaved }) {
+  const [form, setForm] = useState(() => ({ title: '', description: '', time: new Date().toISOString(), status: 'upcoming', sourceType: 'iptv', sourceChannelId: '', stream: '', streamKey: '', thumbnailBase64: '', isPinned: false, ...(event || {}) }));
+  const [saving, setSaving] = useState(false);
+  const localTime = value => { const date = new Date(value); if (Number.isNaN(date.getTime())) return ''; date.setMinutes(date.getMinutes() - date.getTimezoneOffset()); return date.toISOString().slice(0, 16); };
+  const submit = async submitEvent => {
+    submitEvent.preventDefault();
+    setSaving(true);
     try {
-      const url = event ? `/api/admin/events/${event.id}` : '/api/admin/events';
-      const method = event ? 'PUT' : 'POST';
-      const res = await fetch(url, {
-        method,
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(submitData)
-      });
-      const data = await res.json();
-      if (data.success) {
-        onSave(data.data);
-      } else {
-        alert('Lỗi: ' + data.error);
-      }
-    } catch(err) {
-      alert('Lỗi mạng');
-    }
-    setLoading(false);
+      const response = await fetch(event ? `${API_BASE}/admin/events/${event.id}` : `${API_BASE}/admin/events`, { method: event ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(form) });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || `HTTP ${response.status}`);
+      onSaved();
+    } catch (err) { alert(`Không thể lưu sự kiện: ${err.message}`); } finally { setSaving(false); }
   };
-
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData({ ...formData, thumbnailBase64: reader.result });
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4">
-      <div className="bg-[#121212] w-full max-w-2xl rounded-2xl border border-white/5 overflow-hidden flex flex-col max-h-[90vh]">
-        <div className="p-6 border-b border-white/5 flex justify-between items-center bg-[#1A1A1A]">
-          <h2 className="text-xl font-bold">{event ? 'Sửa sự kiện' : 'Thêm sự kiện mới'}</h2>
-          <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-lg transition-colors">
-            <Square size={20} className="rotate-45" />
-          </button>
-        </div>
-        
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-white/60 mb-2">Tên sự kiện</label>
-                <input required value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} className="w-full bg-[#1A1A1A] border border-white/5 rounded-xl px-4 py-3 focus:outline-none focus:border-[#ED2C25] transition-colors" />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-white/60 mb-2">Thời gian diễn ra</label>
-                <input required type="datetime-local" value={getLocalDatetimeString(formData.time)} onChange={e => setFormData({...formData, time: new Date(e.target.value).toISOString()})} className="w-full bg-[#1A1A1A] border border-white/5 rounded-xl px-4 py-3 focus:outline-none focus:border-[#ED2C25] transition-colors [color-scheme:dark]" />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-white/60 mb-2">Trạng thái</label>
-                <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})} className="w-full bg-[#1A1A1A] border border-white/5 rounded-xl px-4 py-3 focus:outline-none focus:border-[#ED2C25] transition-colors appearance-none">
-                  <option value="upcoming">Sắp diễn ra</option>
-                  <option value="live">Đang Live</option>
-                  <option value="ended">Đã kết thúc</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="flex items-center gap-3 cursor-pointer p-4 bg-[#1A1A1A] rounded-xl border border-white/5">
-                  <input type="checkbox" checked={formData.isPinned} onChange={e => setFormData({...formData, isPinned: e.target.checked})} className="w-5 h-5 rounded border-white/20 text-[#ED2C25] focus:ring-[#ED2C25]" />
-                  <span className="font-medium">Ghim lên Banner Trang chủ</span>
-                </label>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-white/60 mb-2">Nguồn phát (Source)</label>
-                <select value={formData.sourceType} onChange={e => setFormData({...formData, sourceType: e.target.value})} className="w-full bg-[#1A1A1A] border border-white/5 rounded-xl px-4 py-3 focus:outline-none focus:border-[#ED2C25] transition-colors appearance-none">
-                  <option value="iptv">Kênh IPTV (M3U)</option>
-                  <option value="obs">Phần mềm ngoài (OBS/vMix)</option>
-                  <option value="custom">URL Tự chọn</option>
-                </select>
-              </div>
-
-              {formData.sourceType === 'iptv' && (
-                <div>
-                  <label className="block text-sm font-medium text-white/60 mb-2">Chọn kênh IPTV</label>
-                  <select required value={formData.sourceChannelId} onChange={e => setFormData({...formData, sourceChannelId: e.target.value})} className="w-full bg-[#1A1A1A] border border-white/5 rounded-xl px-4 py-3 focus:outline-none focus:border-[#ED2C25] transition-colors appearance-none">
-                    <option value="">-- Chọn một kênh --</option>
-                    {channels.map(ch => (
-                      <option key={ch.id} value={ch.id}>{ch.name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {formData.sourceType === 'obs' && (
-                <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-xl">
-                  <p className="text-sm text-blue-400 font-medium mb-2">Thông số cấu hình OBS:</p>
-                  <div className="space-y-2 text-sm text-white/80">
-                    <p><strong>Server:</strong> rtmp://your-server-ip/live</p>
-                    <p><strong>Stream Key:</strong> {formData.streamKey || '(Sẽ tạo ngẫu nhiên)'}</p>
-                  </div>
-                </div>
-              )}
-
-              {formData.sourceType === 'custom' && (
-                <div>
-                  <label className="block text-sm font-medium text-white/60 mb-2">URL M3U8/MPD</label>
-                  <input required value={formData.stream} onChange={e => setFormData({...formData, stream: e.target.value})} className="w-full bg-[#1A1A1A] border border-white/5 rounded-xl px-4 py-3 focus:outline-none focus:border-[#ED2C25] transition-colors" placeholder="https://..." />
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium text-white/60 mb-2">Ảnh Thumbnail (Tỷ lệ 16:9)</label>
-                <input type="file" accept="image/*" onChange={handleImageUpload} className="w-full text-sm text-white/60 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-[#ED2C25]/10 file:text-[#ED2C25] hover:file:bg-[#ED2C25]/20 cursor-pointer" />
-                {(formData.thumbnailBase64 || formData.thumbnailUrl) && (
-                  <img src={formData.thumbnailBase64 || formData.thumbnailUrl} alt="Preview" className="mt-4 rounded-xl border border-white/10 w-full aspect-video object-cover" />
-                )}
-              </div>
-            </div>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-white/60 mb-2">Mô tả sự kiện</label>
-            <textarea value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} rows="3" className="w-full bg-[#1A1A1A] border border-white/5 rounded-xl px-4 py-3 focus:outline-none focus:border-[#ED2C25] transition-colors resize-none"></textarea>
-          </div>
-        </form>
-
-        <div className="p-6 border-t border-white/5 bg-[#1A1A1A] flex justify-end gap-4">
-          <button type="button" onClick={onClose} className="px-6 py-2.5 rounded-xl font-bold hover:bg-white/10 transition-colors">Hủy</button>
-          <button onClick={handleSubmit} disabled={loading} className="px-8 py-2.5 bg-[#ED2C25] hover:bg-red-700 disabled:opacity-50 text-white rounded-xl font-bold transition-colors shadow-lg shadow-[#ED2C25]/20 flex items-center gap-2">
-            {loading ? 'Đang lưu...' : (event ? 'Cập nhật' : 'Thêm mới')}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+  const upload = uploadEvent => { const file = uploadEvent.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => setForm(current => ({ ...current, thumbnailBase64: reader.result })); reader.readAsDataURL(file); };
+  return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4"><form onSubmit={submit} className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-white/10 bg-[#151515]"><div className="flex items-center justify-between border-b border-white/10 px-5 py-4"><h2 className="font-bold">{event ? 'Sửa sự kiện' : 'Thêm sự kiện'}</h2><button type="button" onClick={onClose} className="rounded p-1 hover:bg-white/10"><X size={19} /></button></div><div className="grid flex-1 gap-4 overflow-y-auto p-5 md:grid-cols-2">
+    <Field label="Tên sự kiện"><input required value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="input-admin" /></Field>
+    <Field label="Thời gian"><input required type="datetime-local" value={localTime(form.time)} onChange={e => setForm({ ...form, time: new Date(e.target.value).toISOString() })} className="input-admin [color-scheme:dark]" /></Field>
+    <Field label="Trạng thái"><select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} className="input-admin"><option value="upcoming">Sắp diễn ra</option><option value="live">Đang trực tiếp</option><option value="ended">Đã kết thúc</option></select></Field>
+    <Field label="Loại nguồn"><select value={form.sourceType} onChange={e => setForm({ ...form, sourceType: e.target.value })} className="input-admin"><option value="iptv">Kênh IPTV</option><option value="obs">OBS / vMix</option><option value="custom">URL tùy chọn</option></select></Field>
+    {form.sourceType === 'iptv' && <Field label="Kênh IPTV"><select required value={form.sourceChannelId || ''} onChange={e => setForm({ ...form, sourceChannelId: e.target.value })} className="input-admin"><option value="">Chọn kênh</option>{channels.map(channel => <option key={channel.id} value={channel.id}>{channel.name}</option>)}</select></Field>}
+    {form.sourceType === 'custom' && <Field label="URL M3U8 / MPD"><input required value={form.stream || ''} onChange={e => setForm({ ...form, stream: e.target.value })} className="input-admin" placeholder="https://..." /></Field>}
+    {form.sourceType === 'obs' && <Field label="Stream key"><input value={form.streamKey || ''} onChange={e => setForm({ ...form, streamKey: e.target.value })} className="input-admin" placeholder="Tự tạo nếu để trống" /></Field>}
+    <Field label="Ảnh 16:9"><input type="file" accept="image/*" onChange={upload} className="block w-full text-sm text-white/55" /></Field>
+    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={Boolean(form.isPinned)} onChange={e => setForm({ ...form, isPinned: e.target.checked })} /> Ghim sự kiện</label>
+    <div className="md:col-span-2"><Field label="Mô tả"><textarea rows="3" value={form.description || ''} onChange={e => setForm({ ...form, description: e.target.value })} className="input-admin resize-none" /></Field></div>
+    {(form.thumbnailBase64 || form.thumbnailUrl) && <img src={form.thumbnailBase64 || form.thumbnailUrl} alt="Xem trước" className="aspect-video w-full rounded-md object-cover md:col-span-2" />}
+  </div><div className="flex justify-end gap-2 border-t border-white/10 px-5 py-4"><button type="button" onClick={onClose} className="rounded-md px-4 py-2 hover:bg-white/5">Hủy</button><button disabled={saving} className="rounded-md bg-[#ED2C25] px-5 py-2 font-bold disabled:opacity-50">{saving ? 'Đang lưu...' : 'Lưu sự kiện'}</button></div></form></div>;
 }
+
+function SectionHeader({ title, subtitle, action }) { return <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-bold">{title}</h1><p className="text-sm text-white/45">{subtitle}</p></div>{action}</div>; }
+function Panel({ title, children }) { return <div className="rounded-lg border border-white/10 bg-[#151515] p-4"><h2 className="mb-3 font-bold">{title}</h2>{children}</div>; }
+function InfoRow({ label, value }) { return <div className="flex justify-between border-b border-white/5 py-2 text-sm last:border-0"><span className="text-white/45">{label}</span><span>{value}</span></div>; }
+function Empty({ text }) { return <div className="p-10 text-center text-sm text-white/45">{text}</div>; }
+function Field({ label, children }) { return <label className="block text-sm"><span className="mb-1.5 block text-white/55">{label}</span>{children}</label>; }
+function formatBytes(value) { const bytes = Number(value || 0); if (!bytes) return '--'; return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`; }

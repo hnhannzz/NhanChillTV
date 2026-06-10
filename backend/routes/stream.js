@@ -87,8 +87,10 @@ router.post('/start/:channelId', async (req, res) => {
           status: 'direct',
           isDirect: true,
           hlsUrl: finalTarget,
+          proxyUrl: finalTarget,
           isMpd: isMpd,
-          rawUrl: isMpd ? channel.url : undefined,
+          rawUrl: channel.url,
+          userAgent: channel.userAgent || null,
           clearKey: channel.clearKey
         }
       });

@@ -1,11 +1,30 @@
-import React, { useState, useEffect, useRef } from 'react';
-import VideoPlayerReact from './VideoPlayerReact';
-import JWPlayerReact from './JWPlayerReact';
+import React, { useEffect, useRef, useState } from 'react';
 import { Loader2, Users } from 'lucide-react';
 import { io } from 'socket.io-client';
+import VideoPlayerReact from './VideoPlayerReact';
+import JWPlayerReact from './JWPlayerReact';
 import { resolveProxyPlaybackUrl } from '../lib/playbackUrl';
 
 const API_BASE = '/api';
+
+function canUseDirectUrl(url) {
+  if (!url || typeof window === 'undefined') return false;
+  try {
+    const parsed = new URL(url, window.location.href);
+    return window.location.protocol !== 'https:' || parsed.protocol === 'https:' || parsed.origin === window.location.origin;
+  } catch {
+    return false;
+  }
+}
+
+function isUnsupportedAppleDrmBrowser() {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  const isIOS = /iPad|iPhone|iPod/i.test(ua)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isSafari = /Safari/i.test(ua) && !/Chrome|CriOS|Edg|OPR|Firefox|FxiOS/i.test(ua);
+  return isIOS || isSafari;
+}
 
 export default function LivePlayerView({ channelId, streamParam }) {
   const [streamUrl, setStreamUrl] = useState(null);
@@ -21,78 +40,82 @@ export default function LivePlayerView({ channelId, streamParam }) {
     let isMounted = true;
     let loadingTimeoutId = null;
 
+    const startHeartbeat = () => {
+      if (!channelId) return;
+      if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
+      heartbeatIntervalRef.current = setInterval(() => {
+        fetch(`${API_BASE}/stream/heartbeat/${channelId}`, { method: 'POST' }).catch(() => {});
+      }, 30000);
+    };
+
+    const useDirectWithProxyFallback = (rawUrl, proxyUrl) => {
+      if (canUseDirectUrl(rawUrl)) {
+        setStreamUrl(rawUrl);
+        setFallbackUrls(proxyUrl && proxyUrl !== rawUrl ? [proxyUrl] : []);
+      } else {
+        setStreamUrl(proxyUrl || rawUrl);
+        setFallbackUrls([]);
+      }
+    };
+
     const startStream = async () => {
       try {
         setLoading(true);
         setError(null);
-        
-        // If an explicit stream URL is passed via query (like custom HLS event), use it directly
+        setClearKey(null);
+
         if (streamParam && !channelId) {
-          const resolvedStreamUrl = await resolveProxyPlaybackUrl(streamParam);
-          setStreamUrl(resolvedStreamUrl);
-          setFallbackUrls(resolvedStreamUrl !== streamParam ? [streamParam] : []);
-          setIsMpd(streamParam.toLowerCase().includes('.mpd'));
+          const proxyUrl = await resolveProxyPlaybackUrl(streamParam);
+          const mpd = streamParam.toLowerCase().includes('.mpd');
+          useDirectWithProxyFallback(streamParam, proxyUrl);
+          setIsMpd(mpd);
           setLoading(false);
           return;
         }
 
-        // 1. Call start API
-        const res = await fetch(`${API_BASE}/stream/start/${channelId}`, { method: 'POST' });
+        const res = await fetch(`${API_BASE}/stream/start/${encodeURIComponent(channelId)}`, { method: 'POST' });
         const data = await res.json();
-        
-        if (!data.success) {
-          throw new Error(data.error || 'Failed to start stream');
-        }
+        if (!res.ok || !data.success) throw new Error(data.error || 'Không thể khởi tạo luồng phát');
 
-        const hlsUrl = data.data.hlsUrl;
+        const proxyUrl = data.data.proxyUrl || data.data.hlsUrl;
         const rawUrl = data.data.rawUrl;
         const cKey = data.data.clearKey;
-        const mpdFlag = data.data.isMpd || false;
+        const mpdFlag = Boolean(data.data.isMpd);
 
-        // Nếu chế độ Direct (phát trực tiếp link m3u), route qua RAM Proxy để lách CORS
+        if (mpdFlag && cKey && isUnsupportedAppleDrmBrowser()) {
+          throw new Error('Kênh DRM MPD này chưa hỗ trợ iOS, iPadOS hoặc Safari. Vui lòng dùng Chrome/Edge trên Windows hoặc Android.');
+        }
+
         if (data.data.isDirect) {
-          const proxyUrl = hlsUrl.startsWith('/api/proxy') ? hlsUrl : `/api/proxy/${hlsUrl}`;
-          if (mpdFlag && rawUrl && rawUrl.startsWith('http')) {
-            setStreamUrl(rawUrl);
-            setFallbackUrls([proxyUrl]);
-          } else {
-            setStreamUrl(proxyUrl);
-            setFallbackUrls([]);
-          }
+          useDirectWithProxyFallback(rawUrl, proxyUrl);
           setIsMpd(mpdFlag);
-          if (cKey) setClearKey(cKey);
+          setClearKey(cKey || null);
           setLoading(false);
           startHeartbeat();
           return;
         }
 
-        // 2. Poll for status (cho chế độ FFmpeg)
         const checkStatus = async () => {
           if (!isMounted) return;
           try {
-            const statusRes = await fetch(`${API_BASE}/stream/status/${channelId}`);
+            const statusRes = await fetch(`${API_BASE}/stream/status/${encodeURIComponent(channelId)}`);
             const statusData = await statusRes.json();
-            
             if (statusData.ready) {
-              setStreamUrl(hlsUrl);
+              setStreamUrl(data.data.hlsUrl);
               setFallbackUrls([]);
-              setIsMpd(false); // FFmpeg mode always produces HLS m3u8
-              if (cKey) setClearKey(cKey);
+              setIsMpd(false);
+              setClearKey(cKey || null);
               setLoading(false);
               startHeartbeat();
             } else {
               loadingTimeoutId = setTimeout(checkStatus, 2000);
             }
-          } catch (e) {
-            console.error('Polling error:', e);
+          } catch {
             loadingTimeoutId = setTimeout(checkStatus, 2000);
           }
         };
-
         checkStatus();
-
       } catch (err) {
-        console.error('Stream init error:', err);
         if (isMounted) {
           setError(err.message);
           setLoading(false);
@@ -100,15 +123,7 @@ export default function LivePlayerView({ channelId, streamParam }) {
       }
     };
 
-    const startHeartbeat = () => {
-      if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
-      heartbeatIntervalRef.current = setInterval(() => {
-        fetch(`${API_BASE}/stream/heartbeat/${channelId}`, { method: 'POST' }).catch(console.error);
-      }, 30000);
-    };
-
     startStream();
-
     return () => {
       isMounted = false;
       if (loadingTimeoutId) clearTimeout(loadingTimeoutId);
@@ -117,18 +132,13 @@ export default function LivePlayerView({ channelId, streamParam }) {
   }, [channelId, streamParam]);
 
   useEffect(() => {
-    if (!channelId && !streamParam) return;
+    if (!channelId && !streamParam) return undefined;
     const currentId = channelId || streamParam;
     const socket = io({ path: '/socket.io' });
-    
     socket.emit('join_channel', currentId);
-    
-    socket.on('viewer_count', (data) => {
-      if (data.channelId === currentId) {
-        setViewers(data.count);
-      }
+    socket.on('viewer_count', data => {
+      if (data.channelId === currentId) setViewers(data.count);
     });
-
     return () => {
       socket.emit('leave_channel', currentId);
       socket.disconnect();
@@ -137,30 +147,30 @@ export default function LivePlayerView({ channelId, streamParam }) {
 
   if (error) {
     return (
-      <div className="w-full aspect-video bg-black rounded-xl border border-white/10 flex flex-col items-center justify-center text-white p-6 text-center">
-        <p className="text-red-500 font-bold mb-2">Lỗi Khởi Tạo Luồng</p>
-        <p className="text-white/60 text-sm">{error}</p>
+      <div className="flex aspect-video w-full flex-col items-center justify-center rounded-lg border border-white/10 bg-black p-6 text-center text-white">
+        <p className="mb-2 font-bold text-red-500">Lỗi phát kênh</p>
+        <p className="max-w-xl text-sm text-white/65">{error}</p>
       </div>
     );
   }
 
   if (loading || !streamUrl) {
     return (
-      <div className="w-full aspect-video bg-black rounded-xl border border-white/10 flex flex-col items-center justify-center text-white relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent z-10" />
-        <Loader2 className="w-12 h-12 text-[#ED2C25] animate-spin mb-4 relative z-20" />
-        <h3 className="text-xl font-bold text-[#ED2C25] relative z-20">Khởi tạo luồng phát</h3>
-        <p className="text-white/60 mt-2 text-sm relative z-20">Hệ thống đang khởi tạo kênh, vui lòng chờ trong giây lát...</p>
+      <div className="relative flex aspect-video w-full flex-col items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-black text-white">
+        <Loader2 className="relative z-20 mb-4 h-10 w-10 animate-spin text-[#ED2C25]" />
+        <h3 className="relative z-20 text-lg font-bold">Đang khởi tạo luồng phát</h3>
+        <p className="relative z-20 mt-2 text-sm text-white/60">Vui lòng chờ trong giây lát...</p>
       </div>
     );
   }
 
   return (
-    <div className="w-full aspect-video rounded-xl overflow-hidden shadow-2xl bg-black relative group">
+    <div className="group relative aspect-video w-full overflow-hidden rounded-lg bg-black shadow-2xl">
       {!isMpd ? (
         <VideoPlayerReact
-          key={streamUrl}
+          key={`${streamUrl}-${fallbackUrls.join('|')}`}
           url={streamUrl}
+          fallbackUrls={fallbackUrls}
           type="hls"
           style={{ width: '100%', height: '100%' }}
         />
@@ -174,13 +184,13 @@ export default function LivePlayerView({ channelId, streamParam }) {
           style={{ width: '100%', height: '100%' }}
         />
       )}
-      <div className="absolute top-4 right-4 flex gap-2 z-50 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-        <div className="bg-black/60 backdrop-blur-sm text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-2 shadow-lg border border-white/10">
+      <div className="pointer-events-none absolute right-4 top-4 z-50 flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+        <div className="flex items-center gap-2 rounded-md border border-white/10 bg-black/65 px-3 py-1.5 text-xs font-bold text-white backdrop-blur-sm">
           <Users size={14} className="text-blue-400" />
           <span>{viewers} <span className="font-normal text-white/60">đang xem</span></span>
         </div>
-        <div className="bg-red-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg tracking-wider flex items-center gap-2 shadow-lg shadow-red-600/20">
-          <span className="w-2 h-2 rounded-full bg-white animate-pulse"></span>
+        <div className="flex items-center gap-2 rounded-md bg-red-600 px-3 py-1.5 text-xs font-bold tracking-wide text-white">
+          <span className="h-2 w-2 animate-pulse rounded-full bg-white" />
           TRỰC TIẾP
         </div>
       </div>

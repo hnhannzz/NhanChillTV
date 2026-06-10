@@ -1,253 +1,162 @@
-import React, { useState, useEffect } from 'react';
-import { Search, ChevronLeft, ChevronRight, Play } from 'lucide-react';
-import { fetchNguoncJson, getNguoncItems, isNguoncSuccess } from '../lib/nguoncApi';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ChevronLeft, ChevronRight, Play, Search } from 'lucide-react';
+import { fetchNguoncJson, getNguoncItems, getNguoncPagination, isNguoncSuccess } from '../lib/nguoncApi';
+
+const GENRES = [
+  ['Hành Động', 'hanh-dong'], ['Phiêu Lưu', 'phieu-luu'], ['Hoạt Hình', 'hoat-hinh'], ['Hài', 'hai'],
+  ['Hình Sự', 'hinh-su'], ['Tài Liệu', 'tai-lieu'], ['Chính Kịch', 'chinh-kich'], ['Gia Đình', 'gia-dinh'],
+  ['Giả Tưởng', 'gia-tuong'], ['Lịch Sử', 'lich-su'], ['Kinh Dị', 'kinh-di'], ['Nhạc', 'nhac'], ['Bí Ẩn', 'bi-an'],
+  ['Lãng Mạn', 'lang-man'], ['Khoa Học Viễn Tưởng', 'khoa-hoc-vien-tuong'], ['Gây Cấn', 'gay-can'],
+  ['Chiến Tranh', 'chien-tranh'], ['Tâm Lý', 'tam-ly'], ['Tình Cảm', 'tinh-cam'], ['Cổ Trang', 'co-trang'], ['Miền Tây', 'mien-tay'],
+];
+
+const COUNTRIES = [
+  ['Âu Mỹ', 'au-my'], ['Anh', 'anh'], ['Trung Quốc', 'trung-quoc'], ['Indonesia', 'indonesia'], ['Việt Nam', 'viet-nam'],
+  ['Pháp', 'phap'], ['Hồng Kông', 'hong-kong'], ['Hàn Quốc', 'han-quoc'], ['Nhật Bản', 'nhat-ban'],
+  ['Thái Lan', 'thai-lan'], ['Đài Loan', 'dai-loan'], ['Nga', 'nga'], ['Hà Lan', 'ha-lan'],
+  ['Philippines', 'philippines'], ['Ấn Độ', 'an-do'], ['Quốc gia khác', 'quoc-gia-khac'],
+];
+
+const YEARS = Array.from({ length: 23 }, (_, index) => String(2026 - index));
 
 export default function MoviesContainer() {
+  const initialSearch = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('search') || '' : '';
   const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('/films/phim-moi-cap-nhat');
-  const [title, setTitle] = useState('Phim Mới Cập Nhật');
+  const [endpoint, setEndpoint] = useState(initialSearch ? `/films/search?keyword=${encodeURIComponent(initialSearch)}` : '/films/phim-moi-cap-nhat');
+  const [title, setTitle] = useState(initialSearch ? `Kết quả tìm kiếm: ${initialSearch}` : 'Phim mới cập nhật');
+  const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState(null);
-  
-  const initialSearch = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('search') : '';
-  const [search, setSearch] = useState(initialSearch || '');
-  const [filterGenre, setFilterGenre] = useState('');
-  const [filterCountry, setFilterCountry] = useState('');
-  const [filterYear, setFilterYear] = useState('');
+  const [search, setSearch] = useState(initialSearch);
+  const [genre, setGenre] = useState('');
+  const [country, setCountry] = useState('');
+  const [year, setYear] = useState('');
+  const [favoritesMode, setFavoritesMode] = useState(false);
 
-  const fetchMovies = async (endpoint, page = 1, customTitle) => {
-    setLoading(true);
-    try {
-      let url = endpoint;
-      url = url.includes('?') ? `${url}&page=${page}` : `${url}?page=${page}`;
-      
-      const data = await fetchNguoncJson(url);
-      
-      if (isNguoncSuccess(data)) {
+  useEffect(() => {
+    if (favoritesMode) return undefined;
+    const controller = new AbortController();
+    const load = async () => {
+      setLoading(true);
+      try {
+        const separator = endpoint.includes('?') ? '&' : '?';
+        const data = await fetchNguoncJson(`${endpoint}${separator}page=${page}`, { signal: controller.signal });
+        if (!isNguoncSuccess(data)) throw new Error('Nguonc returned no data');
         setMovies(getNguoncItems(data));
-        setPagination(data.paginate);
-        if (customTitle) setTitle(customTitle);
-      } else {
-        setMovies([]);
-        setPagination(null);
+        setPagination(getNguoncPagination(data));
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          setMovies([]);
+          setPagination(null);
+        }
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
       }
-    } catch (e) {
-      console.error(e);
-      setMovies([]);
-    }
-    setLoading(false);
+    };
+    load();
+    return () => controller.abort();
+  }, [endpoint, favoritesMode, page]);
+
+  const selectEndpoint = (nextEndpoint, nextTitle) => {
+    setFavoritesMode(false);
+    setEndpoint(nextEndpoint);
+    setTitle(nextTitle);
+    setPage(1);
   };
 
-  useEffect(() => {
-    if (initialSearch) {
-      const endpoint = `/films/search?keyword=${encodeURIComponent(initialSearch)}`;
-      setActiveTab(endpoint);
-      setTitle(`Kết quả tìm kiếm: ${initialSearch}`);
-      fetchMovies(endpoint, 1, `Kết quả tìm kiếm: ${initialSearch}`);
-    } else {
-      fetchMovies(activeTab);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!initialSearch || activeTab !== `/films/search?keyword=${encodeURIComponent(initialSearch)}`) {
-      fetchMovies(activeTab);
-    }
-  }, [activeTab]);
-
-  const handleSearch = () => {
+  const submitSearch = () => {
     const query = search.trim();
     if (!query) return;
-    setFilterGenre('');
-    setFilterCountry('');
-    setFilterYear('');
-    const endpoint = `/films/search?keyword=${encodeURIComponent(query)}`;
-    setTitle(`Kết quả tìm kiếm: ${query}`);
-    if (endpoint !== activeTab) {
-      setActiveTab(endpoint);
-      return;
-    }
-    setActiveTab(endpoint);
-    fetchMovies(endpoint, 1, `Kết quả tìm kiếm: ${query}`);
-    setTitle(`Kết quả tìm kiếm: ${search}`);
+    setGenre(''); setCountry(''); setYear('');
+    selectEndpoint(`/films/search?keyword=${encodeURIComponent(query)}`, `Kết quả tìm kiếm: ${query}`);
   };
 
   const loadFavorites = async () => {
+    setFavoritesMode(true);
+    setTitle('Phim yêu thích');
     setLoading(true);
-    setActiveTab('favorites');
-    setTitle('Phim Yêu Thích');
+    setPagination(null);
     const token = localStorage.getItem('userToken');
     if (!token) {
       setMovies([]);
-      setPagination(null);
       setLoading(false);
       return;
     }
-
     try {
-      const res = await fetch('/api/user/favorites', {
-        headers: { 'x-user-id': token }
-      });
-      const data = await res.json();
-      if (data.success) {
-        setMovies(data.data.movies || []);
-        setPagination(null);
-      }
-    } catch (e) {
+      const response = await fetch('/api/user/favorites', { headers: { 'x-user-id': token } });
+      const data = await response.json();
+      setMovies(data.success ? data.data.movies || [] : []);
+    } catch {
       setMovies([]);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
+  const changeGenre = value => {
+    setGenre(value); setCountry(''); setYear('');
+    if (!value) return selectEndpoint('/films/phim-moi-cap-nhat', 'Phim mới cập nhật');
+    const label = GENRES.find(item => item[1] === value)?.[0] || value;
+    selectEndpoint(`/films/the-loai/${value}`, `Thể loại: ${label}`);
+  };
+
+  const changeCountry = value => {
+    setCountry(value); setGenre(''); setYear('');
+    if (!value) return selectEndpoint('/films/phim-moi-cap-nhat', 'Phim mới cập nhật');
+    const label = COUNTRIES.find(item => item[1] === value)?.[0] || value;
+    selectEndpoint(`/films/quoc-gia/${value}`, `Quốc gia: ${label}`);
+  };
+
+  const changeYear = value => {
+    setYear(value); setGenre(''); setCountry('');
+    if (!value) return selectEndpoint('/films/phim-moi-cap-nhat', 'Phim mới cập nhật');
+    selectEndpoint(`/films/nam-phat-hanh/${value}`, `Năm phát hành ${value}`);
+  };
+
+  const pageLabel = useMemo(() => pagination ? `Trang ${pagination.currentPage} / ${pagination.totalPages}` : '', [pagination]);
+
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#121212] p-4 rounded-xl border border-white/5">
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-col justify-between gap-4 border-b border-white/10 pb-5 md:flex-row md:items-center">
         <h1 className="text-2xl font-bold text-white">{title}</h1>
-        
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <input 
-              type="text" 
-              placeholder="Tìm tên phim..." 
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSearch()}
-              className="bg-[#1A1A1A] border border-white/10 rounded-lg py-2 pl-3 pr-10 text-sm focus:outline-none focus:border-[#ED2C25] text-white w-[200px]"
-            />
-            <button onClick={handleSearch} className="absolute right-2 top-1/2 -translate-y-1/2 text-white/50 hover:text-white">
-              <Search size={16} />
-            </button>
-          </div>
+        <div className="relative w-full md:w-72">
+          <input value={search} onChange={event => setSearch(event.target.value)} onKeyDown={event => event.key === 'Enter' && submitSearch()} placeholder="Tìm tên phim..." className="w-full rounded-md border border-white/10 bg-[#171717] py-2 pl-3 pr-10 text-sm text-white outline-none focus:border-[#ED2C25]" />
+          <button onClick={submitSearch} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-white/50 hover:text-white" title="Tìm kiếm"><Search size={17} /></button>
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2 mb-2">
-        <button onClick={() => { setActiveTab('/films/phim-moi-cap-nhat'); setTitle('Phim Mới Cập Nhật'); }} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === '/films/phim-moi-cap-nhat' ? 'bg-[#ED2C25] text-white' : 'bg-[#1A1A1A] hover:bg-white/10 text-white/70'}`}>Mới Cập Nhật</button>
-        <button onClick={() => { setActiveTab('/films/danh-sach/phim-bo'); setTitle('Phim Bộ'); }} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === '/films/danh-sach/phim-bo' ? 'bg-[#ED2C25] text-white' : 'bg-[#1A1A1A] hover:bg-white/10 text-white/70'}`}>Phim Bộ</button>
-        <button onClick={() => { setActiveTab('/films/danh-sach/phim-le'); setTitle('Phim Lẻ'); }} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === '/films/danh-sach/phim-le' ? 'bg-[#ED2C25] text-white' : 'bg-[#1A1A1A] hover:bg-white/10 text-white/70'}`}>Phim Lẻ</button>
-        <button onClick={loadFavorites} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'favorites' ? 'bg-[#ED2C25] text-white' : 'bg-[#1A1A1A] hover:bg-white/10 text-white/70'}`}>Yêu Thích</button>
-        
-        <select 
-          value={filterGenre} 
-          onChange={e => {
-            setFilterGenre(e.target.value);
-            if(e.target.value) {
-              setFilterCountry('');
-              setFilterYear('');
-              setActiveTab(`/films/danh-sach/${e.target.value}`);
-              setTitle('Lọc danh mục');
-            } else {
-              setActiveTab('/films/phim-moi-cap-nhat');
-            }
-          }}
-          className="bg-[#1A1A1A] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#ED2C25] ml-auto"
-        >
-          <option value="">-- Thể Loại --</option>
-          <option value="hanh-dong">Hành Động</option>
-          <option value="tinh-cam">Tình Cảm</option>
-          <option value="hai-huoc">Hài Hước</option>
-          <option value="co-trang">Cổ Trang</option>
-          <option value="kinh-di">Kinh Dị</option>
-          <option value="hoat-hinh">Hoạt Hình</option>
-        </select>
-
-        <select
-          value={filterCountry}
-          onChange={e => {
-            setFilterCountry(e.target.value);
-            if (e.target.value) {
-              setFilterGenre('');
-              setFilterYear('');
-              setActiveTab(`/films/quoc-gia/${e.target.value}`);
-              setTitle('Lọc quốc gia');
-            } else {
-              setActiveTab('/films/phim-moi-cap-nhat');
-            }
-          }}
-          className="bg-[#1A1A1A] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#ED2C25]"
-        >
-          <option value="">-- Quốc Gia --</option>
-          <option value="viet-nam">Việt Nam</option>
-          <option value="han-quoc">Hàn Quốc</option>
-          <option value="trung-quoc">Trung Quốc</option>
-          <option value="thai-lan">Thái Lan</option>
-          <option value="au-my">Âu Mỹ</option>
-          <option value="nhat-ban">Nhật Bản</option>
-        </select>
-
-        <select
-          value={filterYear}
-          onChange={e => {
-            setFilterYear(e.target.value);
-            if (e.target.value) {
-              setFilterGenre('');
-              setFilterCountry('');
-              setActiveTab(`/films/nam-phat-hanh/${e.target.value}`);
-              setTitle(`Năm phát hành ${e.target.value}`);
-            } else {
-              setActiveTab('/films/phim-moi-cap-nhat');
-            }
-          }}
-          className="bg-[#1A1A1A] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#ED2C25]"
-        >
-          <option value="">-- Năm --</option>
-          {Array.from({ length: 12 }, (_, idx) => new Date().getFullYear() - idx).map(year => (
-            <option key={year} value={year}>{year}</option>
-          ))}
-        </select>
+      <div className="flex flex-wrap items-center gap-2">
+        <button onClick={() => { setGenre(''); setCountry(''); setYear(''); selectEndpoint('/films/phim-moi-cap-nhat', 'Phim mới cập nhật'); }} className="rounded-md bg-[#ED2C25] px-3 py-2 text-sm font-medium text-white">Mới cập nhật</button>
+        <button onClick={() => selectEndpoint('/films/danh-sach/phim-bo', 'Phim bộ')} className="rounded-md bg-[#1A1A1A] px-3 py-2 text-sm text-white/75 hover:bg-white/10">Phim bộ</button>
+        <button onClick={() => selectEndpoint('/films/danh-sach/phim-le', 'Phim lẻ')} className="rounded-md bg-[#1A1A1A] px-3 py-2 text-sm text-white/75 hover:bg-white/10">Phim lẻ</button>
+        <button onClick={loadFavorites} className="rounded-md bg-[#1A1A1A] px-3 py-2 text-sm text-white/75 hover:bg-white/10">Yêu thích</button>
+        <select value={genre} onChange={event => changeGenre(event.target.value)} className="min-w-[150px] rounded-md border border-white/10 bg-[#171717] px-3 py-2 text-sm text-white outline-none focus:border-[#ED2C25]"><option value="">Thể loại</option>{GENRES.map(([label, value]) => <option key={value} value={value}>{label}</option>)}</select>
+        <select value={country} onChange={event => changeCountry(event.target.value)} className="min-w-[150px] rounded-md border border-white/10 bg-[#171717] px-3 py-2 text-sm text-white outline-none focus:border-[#ED2C25]"><option value="">Quốc gia</option>{COUNTRIES.map(([label, value]) => <option key={value} value={value}>{label}</option>)}</select>
+        <select value={year} onChange={event => changeYear(event.target.value)} className="min-w-[105px] rounded-md border border-white/10 bg-[#171717] px-3 py-2 text-sm text-white outline-none focus:border-[#ED2C25]"><option value="">Năm</option>{YEARS.map(value => <option key={value} value={value}>{value}</option>)}</select>
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-          {[1,2,3,4,5,6,7,8,9,10,11,12].map(i => (
-            <div key={i} className="aspect-[2/3] bg-white/5 rounded-xl animate-pulse" />
-          ))}
-        </div>
-      ) : movies.length === 0 ? (
-        <div className="text-center py-20 text-white/50">Không tìm thấy dữ liệu.</div>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">{Array.from({ length: 12 }, (_, index) => <div key={index} className="aspect-[2/3] animate-pulse rounded-lg bg-white/5" />)}</div>
+      ) : !movies.length ? (
+        <div className="rounded-lg border border-white/5 bg-[#151515] py-16 text-center text-white/50">Không tìm thấy dữ liệu.</div>
       ) : (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            {movies.map(m => (
-              <a key={m.slug} href={`/movie-detail/?slug=${m.slug}`} className="group relative rounded-xl overflow-hidden aspect-[2/3] bg-[#1A1A1A] border border-white/5 hover:border-[#ED2C25]/50 transition-all cursor-pointer">
-                <img src={m.thumb_url} alt={m.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-80" />
-                <div className="absolute top-2 right-2 bg-[#ED2C25] text-white text-[10px] font-bold px-2 py-1 rounded shadow-lg">
-                  {m.quality || m.time || 'HD'}
-                </div>
-                <div className="absolute bottom-0 left-0 right-0 p-3">
-                  <h3 className="font-bold text-white text-sm line-clamp-1 group-hover:text-[#ED2C25] transition-colors">{m.name}</h3>
-                  <p className="text-xs text-white/60">{m.original_name || m.year}</p>
-                </div>
-                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                  <div className="w-12 h-12 rounded-full bg-[#ED2C25] flex items-center justify-center shadow-xl shadow-red-500/50">
-                    <Play size={20} className="text-white ml-1" fill="currentColor" />
-                  </div>
-                </div>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+            {movies.map(movie => (
+              <a key={movie.slug || movie.id} href={`/movie-detail/?slug=${encodeURIComponent(movie.slug)}`} className="group relative aspect-[2/3] overflow-hidden rounded-lg border border-white/5 bg-[#1A1A1A] hover:border-[#ED2C25]/50">
+                <img src={movie.thumb_url || movie.poster_url || '/poster.jpg'} alt={movie.name} className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" onError={event => { event.currentTarget.src = '/poster.jpg'; }} />
+                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/10 to-transparent" />
+                <span className="absolute right-2 top-2 rounded bg-[#ED2C25] px-2 py-1 text-[10px] font-bold text-white">{movie.quality || movie.current_episode || 'HD'}</span>
+                <div className="absolute bottom-0 left-0 right-0 p-3"><h3 className="line-clamp-1 text-sm font-bold text-white group-hover:text-[#ED2C25]">{movie.name}</h3><p className="truncate text-xs text-white/55">{movie.original_name || movie.year}</p></div>
+                <span className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100"><span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#ED2C25]"><Play size={19} fill="currentColor" className="ml-0.5" /></span></span>
               </a>
             ))}
           </div>
-
-          {/* Pagination */}
-          {pagination && pagination.totalItems > 0 && pagination.totalPages > 1 && (
-            <div className="flex items-center justify-center gap-4 mt-8">
-              <button 
-                onClick={() => fetchMovies(activeTab, pagination.currentPage - 1)}
-                disabled={pagination.currentPage <= 1}
-                className="p-2 rounded-lg bg-white/10 hover:bg-[#ED2C25] disabled:opacity-50 disabled:hover:bg-white/10 transition-colors"
-              >
-                <ChevronLeft size={20} />
-              </button>
-              <span className="font-medium">
-                Trang {pagination.currentPage} / {pagination.totalPages}
-              </span>
-              <button 
-                onClick={() => fetchMovies(activeTab, pagination.currentPage + 1)}
-                disabled={pagination.currentPage >= pagination.totalPages}
-                className="p-2 rounded-lg bg-white/10 hover:bg-[#ED2C25] disabled:opacity-50 disabled:hover:bg-white/10 transition-colors"
-              >
-                <ChevronRight size={20} />
-              </button>
+          {pagination?.totalPages > 1 && (
+            <div className="mt-5 flex items-center justify-center gap-4">
+              <button onClick={() => setPage(value => Math.max(1, value - 1))} disabled={pagination.currentPage <= 1} className="rounded-md bg-white/10 p-2 disabled:opacity-35" title="Trang trước"><ChevronLeft size={20} /></button>
+              <span className="text-sm font-medium text-white/70">{pageLabel}</span>
+              <button onClick={() => setPage(value => Math.min(pagination.totalPages, value + 1))} disabled={pagination.currentPage >= pagination.totalPages} className="rounded-md bg-white/10 p-2 disabled:opacity-35" title="Trang sau"><ChevronRight size={20} /></button>
             </div>
           )}
         </>

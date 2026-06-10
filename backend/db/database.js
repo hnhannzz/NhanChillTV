@@ -14,7 +14,7 @@ class Database {
     if (!fs.existsSync(this.dbPath)) {
       this.write({
         users: [],
-        favorites: {},
+        favorites: [],
         events: [],
         m3uSources: [
           {
@@ -56,6 +56,10 @@ class Database {
         };
         this.write(data);
       }
+      if (!Array.isArray(data.favorites)) {
+        data.favorites = [];
+        this.write(data);
+      }
     }
   }
 
@@ -64,7 +68,9 @@ class Database {
   }
 
   write(data) {
-    fs.writeFileSync(this.dbPath, JSON.stringify(data, null, 2));
+    const tempPath = `${this.dbPath}.${process.pid}.tmp`;
+    fs.writeFileSync(tempPath, JSON.stringify(data, null, 2));
+    fs.renameSync(tempPath, this.dbPath);
   }
 
   getEvents() {

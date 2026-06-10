@@ -9,6 +9,15 @@ export default defineConfig({
   integrations: [react()],
 
   vite: {
-    plugins: [tailwindcss()]
+    plugins: [tailwindcss()],
+    server: {
+      proxy: {
+        '/api': process.env.API_PROXY_TARGET || 'http://127.0.0.1:3000',
+        '/socket.io': {
+          target: process.env.API_PROXY_TARGET || 'http://127.0.0.1:3000',
+          ws: true,
+        },
+      },
+    },
   }
 });

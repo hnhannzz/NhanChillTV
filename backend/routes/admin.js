@@ -57,7 +57,7 @@ function processEventPayload(data, id) {
     eventData.stream = `/hls/${streamKey}/index.m3u8`;
     eventData.sourceChannelId = null;
   } else if (data.sourceType === 'iptv') {
-    eventData.stream = `/hls/${data.sourceChannelId}/index.m3u8`;
+    eventData.stream = null;
   } else if (data.sourceType === 'custom') {
     eventData.sourceChannelId = null;
   }
@@ -115,14 +115,30 @@ router.post('/m3u-sources', auth, (req, res) => {
   res.json({ success: true, data: source });
 });
 
+router.put('/m3u-sources/:id', auth, (req, res) => {
+  const updates = {
+    ...(req.body.name !== undefined ? { name: String(req.body.name).trim() } : {}),
+    ...(req.body.type !== undefined ? { type: req.body.type } : {}),
+    ...(req.body.url !== undefined ? { url: String(req.body.url).trim() } : {}),
+    ...(req.body.active !== undefined ? { active: Boolean(req.body.active) } : {})
+  };
+  const source = db.updateM3uSource(req.params.id, updates);
+  if (!source) return res.status(404).json({ success: false, error: 'M3U source not found' });
+  return res.json({ success: true, data: source });
+});
+
 router.delete('/m3u-sources/:id', auth, (req, res) => {
   db.deleteM3uSource(req.params.id);
   res.json({ success: true });
 });
 
 router.post('/m3u-sources/refresh', auth, async (req, res) => {
-  await m3uManager.refreshAll();
-  res.json({ success: true, message: 'Refreshed successfully', channelsCount: m3uManager.getChannels().length });
+  const status = await m3uManager.refreshAll();
+  res.json({ success: true, message: 'Refreshed successfully', data: status });
+});
+
+router.get('/status', auth, (req, res) => {
+  res.json({ success: true, data: m3uManager.getStatus() });
 });
 
 // IPTV Settings

@@ -9,3 +9,9 @@
     scrollbar-width: none;
   }
 }
+
+@layer components {
+  .input-admin {
+    @apply w-full rounded-md border border-white/10 bg-black/25 px-3 py-2 text-white outline-none focus:border-[#ED2C25];
+  }
+}

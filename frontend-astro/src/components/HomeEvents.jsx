@@ -1,117 +1,73 @@
-import React, { useState, useEffect } from 'react';
-import { Video, ChevronRight, Play } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { CalendarDays, Play, Video } from 'lucide-react';
 
-export default function HomeEvents() {
+export default function HomeEvents({ showEmpty = false }) {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const fetchEvents = () => {
+  const fetchEvents = async () => {
     setLoading(true);
     setError(null);
-    let isMounted = true;
-    fetch('/api/admin/events')
-      .then(res => {
-        if (!res.ok) throw new Error('Network error');
-        return res.json();
-      })
-      .then(data => {
-        if (isMounted && data.success) {
-          const activeEvents = data.data
-            .filter(e => e.status !== 'ended')
-            .sort((a, b) => new Date(a.time) - new Date(b.time));
-          setEvents(activeEvents);
-        }
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error(err);
-        if (isMounted) {
-          setError('Không thể tải sự kiện');
-          setLoading(false);
-        }
-      });
-    return () => { isMounted = false; };
+    try {
+      const response = await fetch('/api/admin/events');
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || `HTTP ${response.status}`);
+      setEvents((data.data || [])
+        .filter(event => event.status !== 'ended')
+        .sort((a, b) => new Date(a.time || 0) - new Date(b.time || 0)));
+    } catch (err) {
+      setError('Không thể tải danh sách sự kiện.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(fetchEvents, []);
+  useEffect(() => { fetchEvents(); }, []);
 
   if (loading) {
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {[1,2,3,4].map(i => (
-          <div key={i} className="aspect-video bg-white/5 rounded-2xl animate-pulse" />
-        ))}
-      </div>
-    );
+    return <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4">{[1, 2, 3, 4].map(item => <div key={item} className="aspect-video animate-pulse rounded-lg bg-white/5" />)}</div>;
   }
 
   if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center py-8 bg-[#1A1A1A] rounded-xl border border-white/5">
-        <p className="text-white/50 text-sm mb-3">{error}</p>
-        <button onClick={fetchEvents} className="px-4 py-2 bg-[#ED2C25] text-white text-sm font-bold rounded-lg hover:bg-red-700 transition-colors">
-          Thử lại
-        </button>
-      </div>
-    );
+    return <div className="rounded-lg border border-white/5 bg-[#151515] p-8 text-center text-sm text-white/55"><p>{error}</p><button onClick={fetchEvents} className="mt-3 rounded-md bg-[#ED2C25] px-4 py-2 font-bold text-white">Thử lại</button></div>;
   }
 
-  if (events.length === 0) return null;
+  if (!events.length) {
+    return showEmpty ? (
+      <div className="rounded-lg border border-white/5 bg-[#151515] px-6 py-16 text-center">
+        <CalendarDays className="mx-auto mb-4 text-white/25" size={42} />
+        <h2 className="font-bold text-white">Chưa có sự kiện sắp diễn ra</h2>
+        <p className="mt-2 text-sm text-white/50">Lịch phát trực tiếp sẽ xuất hiện tại đây khi được cập nhật.</p>
+      </div>
+    ) : null;
+  }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-      {events.map((event) => (
-        <a 
-          key={event.id}
-          href={`/tv?channel=${event.sourceChannelId || 'custom'}&event=${event.id}`}
-          className="group block relative bg-[#121212] rounded-2xl overflow-hidden border border-white/5 hover:border-[#ED2C25]/50 transition-all duration-300"
-        >
-          <div className="aspect-video relative overflow-hidden bg-black/50">
-            {event.thumbnailUrl || event.thumbnailBase64 ? (
-              <img 
-                src={event.thumbnailUrl || event.thumbnailBase64} 
-                alt={event.title}
-                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <Video size={48} className="text-white/20" />
-              </div>
-            )}
-            
-            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent"></div>
-            
-            <div className="absolute top-3 left-3 flex gap-2">
-              {event.status === 'live' ? (
-                <span className="bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded tracking-wider flex items-center gap-1.5 shadow-lg shadow-red-600/30">
-                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
-                  TRỰC TIẾP
-                </span>
+    <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4">
+      {events.map(event => {
+        const channelQuery = event.sourceType === 'iptv' && event.sourceChannelId
+          ? `&channel=${encodeURIComponent(event.sourceChannelId)}`
+          : '';
+        return (
+          <a key={event.id} href={`/tv/?event=${encodeURIComponent(event.id)}${channelQuery}`} className="group overflow-hidden rounded-lg border border-white/5 bg-[#121212] transition-colors hover:border-[#ED2C25]/55">
+            <div className="relative aspect-video overflow-hidden bg-black/50">
+              {event.thumbnailUrl || event.thumbnailBase64 ? (
+                <img src={event.thumbnailUrl || event.thumbnailBase64} alt={event.title} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
               ) : (
-                <span className="bg-blue-600 text-white text-[10px] font-bold px-2 py-1 rounded tracking-wider">
-                  SẮP DIỄN RA
-                </span>
+                <div className="flex h-full items-center justify-center"><Video size={42} className="text-white/20" /></div>
               )}
+              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
+              <span className={`absolute left-3 top-3 rounded px-2 py-1 text-[10px] font-bold tracking-wide text-white ${event.status === 'live' ? 'bg-red-600' : 'bg-blue-600'}`}>{event.status === 'live' ? 'TRỰC TIẾP' : 'SẮP DIỄN RA'}</span>
+              <span className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100"><span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#ED2C25]"><Play size={21} fill="currentColor" className="ml-0.5 text-white" /></span></span>
             </div>
-
-            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-              <div className="w-12 h-12 rounded-full bg-[#ED2C25] flex items-center justify-center shadow-[0_0_20px_rgba(237,44,37,0.5)] transform scale-75 group-hover:scale-100 transition-transform duration-300">
-                <Play className="text-white ml-1" size={24} fill="currentColor" />
-              </div>
+            <div className="p-4">
+              <h3 className="line-clamp-2 font-bold text-white group-hover:text-[#ED2C25]">{event.title}</h3>
+              <div className="mt-2 text-xs text-white/50">{event.time ? new Date(event.time).toLocaleString('vi-VN') : 'Chưa xác định thời gian'}</div>
             </div>
-          </div>
-          
-          <div className="p-4">
-            <h3 className="text-white font-bold text-lg leading-tight mb-2 group-hover:text-[#ED2C25] transition-colors line-clamp-2">
-              {event.title}
-            </h3>
-            <div className="flex items-center text-sm text-white/50">
-              <span>{new Date(event.time).toLocaleString('vi-VN')}</span>
-            </div>
-          </div>
-        </a>
-      ))}
+          </a>
+        );
+      })}
     </div>
   );
 }
