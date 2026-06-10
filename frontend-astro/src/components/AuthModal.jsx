@@ -26,6 +26,7 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
         // Save user session
         localStorage.setItem('userToken', data.user.id);
         localStorage.setItem('userName', data.user.username);
+        if (data.user.avatar) localStorage.setItem('userAvatar', data.user.avatar);
         onLoginSuccess(data.user);
         onClose();
       } else {

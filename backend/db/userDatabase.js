@@ -25,7 +25,9 @@ class UserDatabase {
   }
 
   writeUsers(data) {
-    fs.writeFileSync(this.usersPath, JSON.stringify(data, null, 2));
+    const tempPath = `${this.usersPath}.${process.pid}.tmp`;
+    fs.writeFileSync(tempPath, JSON.stringify(data, null, 2));
+    fs.renameSync(tempPath, this.usersPath);
   }
 
   readComments() {
@@ -46,6 +48,7 @@ class UserDatabase {
       id: Date.now().toString(),
       username,
       password, // Simple plaintext for beta
+      avatar: '/avatar-packs/animals/panda-svgrepo-com.svg',
       favorites: {
         channels: [],
         movies: []
@@ -54,14 +57,14 @@ class UserDatabase {
     };
     data.users.push(newUser);
     this.writeUsers(data);
-    return { success: true, user: { id: newUser.id, username: newUser.username } };
+    return { success: true, user: { id: newUser.id, username: newUser.username, avatar: newUser.avatar } };
   }
 
   login(username, password) {
     const data = this.readUsers();
     const user = data.users.find(u => u.username === username && u.password === password);
     if (user) {
-      return { success: true, user: { id: user.id, username: user.username } };
+      return { success: true, user: { id: user.id, username: user.username, avatar: user.avatar || '/avatar-packs/animals/panda-svgrepo-com.svg' } };
     }
     return { success: false, error: 'Invalid username or password' };
   }
@@ -70,6 +73,20 @@ class UserDatabase {
     const data = this.readUsers();
     const user = data.users.find(u => u.id === userId);
     return user ? user.favorites : null;
+  }
+
+  getProfile(userId) {
+    const user = this.readUsers().users.find(item => item.id === userId);
+    return user ? { id: user.id, username: user.username, avatar: user.avatar || '/avatar-packs/animals/panda-svgrepo-com.svg' } : null;
+  }
+
+  updateAvatar(userId, avatar) {
+    const data = this.readUsers();
+    const user = data.users.find(item => item.id === userId);
+    if (!user) return null;
+    user.avatar = avatar;
+    this.writeUsers(data);
+    return { id: user.id, username: user.username, avatar: user.avatar };
   }
 
   toggleFavorite(userId, type, itemId, itemData = null) {

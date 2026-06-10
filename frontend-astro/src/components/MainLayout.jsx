@@ -3,6 +3,7 @@ import Header from './Header';
 import Sidebar from './Sidebar';
 import { useUIStore } from '../store/uiStore';
 import classNames from 'classnames';
+import Footer from './Footer';
 
 export default function MainLayout({ children }) {
   const { isSidebarOpen, toggleSidebar } = useUIStore();
@@ -18,6 +19,7 @@ export default function MainLayout({ children }) {
         
         <main id="main-scroll-container" className="flex-1 overflow-y-auto overflow-x-hidden pt-[70px] md:pt-[80px]">
           {children}
+          <Footer />
         </main>
       </div>
     </div>

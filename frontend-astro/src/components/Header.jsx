@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { LogOut, Menu, Search, User } from 'lucide-react';
+import { LogOut, Menu, Search, User, X } from 'lucide-react';
 import classNames from 'classnames';
 import AuthModal from './AuthModal';
 import { fetchNguoncJson, getNguoncItems } from '../lib/nguoncApi';
+import AvatarPicker from './AvatarPicker';
 
 export default function Header({ toggleSidebar }) {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -14,6 +15,7 @@ export default function Header({ toggleSidebar }) {
   const [isSearching, setIsSearching] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
+  const [isAvatarPickerOpen, setIsAvatarPickerOpen] = useState(false);
   const lastScrollY = useRef(0);
   const searchRef = useRef(null);
   const searchRequestRef = useRef(0);
@@ -35,7 +37,18 @@ export default function Header({ toggleSidebar }) {
 
     const token = localStorage.getItem('userToken');
     const name = localStorage.getItem('userName');
-    if (token && name) setUser({ id: token, username: name });
+    if (token && name) {
+      const cachedAvatar = localStorage.getItem('userAvatar');
+      setUser({ id: token, username: name, avatar: cachedAvatar });
+      fetch('/api/user/profile', { headers: { 'x-user-id': token } })
+        .then(response => response.ok ? response.json() : null)
+        .then(data => {
+          if (!data?.success) return;
+          setUser(data.data);
+          if (data.data.avatar) localStorage.setItem('userAvatar', data.data.avatar);
+        })
+        .catch(() => {});
+    }
 
     return () => {
       mainContainer?.removeEventListener('scroll', handleScroll);
@@ -106,6 +119,7 @@ export default function Header({ toggleSidebar }) {
   const handleLogout = () => {
     localStorage.removeItem('userToken');
     localStorage.removeItem('userName');
+    localStorage.removeItem('userAvatar');
     setUser(null);
   };
 
@@ -113,7 +127,7 @@ export default function Header({ toggleSidebar }) {
     <header className={classNames('fixed left-0 right-0 top-0 z-50 flex h-[64px] items-center justify-between px-4 transition-all duration-300 md:px-8', {
       'border-b border-white/10 bg-black/85 backdrop-blur-md': isScrolled,
       'bg-black/60': !isScrolled,
-      '-translate-y-full': scrollDirection === 'down',
+      '-translate-y-full': scrollDirection === 'down' && !isMobileSearchOpen,
     })}>
       <div className="flex items-center gap-4">
         <button onClick={toggleSidebar} className="rounded-full p-2 hover:bg-white/10 md:hidden" title="Mở menu"><Menu size={24} /></button>
@@ -127,19 +141,21 @@ export default function Header({ toggleSidebar }) {
       </div>
 
       <div className="flex items-center gap-3">
-        <div ref={searchRef} className={classNames('relative', isMobileSearchOpen ? 'fixed left-0 right-0 top-[64px] block border-b border-white/10 bg-[#121212] p-4 shadow-xl md:relative md:top-0 md:border-0 md:bg-transparent md:p-0 md:shadow-none' : 'hidden md:block')}>
+        <div ref={searchRef} className={classNames('relative', isMobileSearchOpen ? 'fixed inset-x-0 top-0 z-[70] block min-h-[100dvh] bg-black/95 p-4 pt-5 backdrop-blur-xl md:relative md:min-h-0 md:bg-transparent md:p-0 md:backdrop-blur-none' : 'hidden md:block')}>
+          {isMobileSearchOpen && <div className="mb-4 flex items-center justify-between md:hidden"><span className="font-bold">Tìm kiếm</span><button onClick={() => { setIsMobileSearchOpen(false); setSearchOpen(false); }} className="rounded-full p-2 hover:bg-white/10" title="Đóng"><X size={22} /></button></div>}
           <input
             value={searchQuery}
             onChange={event => setSearchQuery(event.target.value)}
             onFocus={() => searchQuery.trim().length > 1 && setSearchOpen(true)}
             onKeyDown={event => event.key === 'Enter' && submitSearch()}
             placeholder="Tìm phim, kênh TV..."
-            className="w-full rounded-full border border-white/20 bg-[#1A1A1A] py-2 pl-4 pr-10 text-sm text-white outline-none focus:border-[#ED2C25] md:w-[280px]"
+            autoFocus={isMobileSearchOpen}
+            className="w-full rounded-md border border-white/20 bg-[#1A1A1A] py-3 pl-4 pr-11 text-base text-white outline-none focus:border-[#ED2C25] md:w-[280px] md:rounded-full md:py-2 md:text-sm"
           />
-          <Search size={18} className="absolute right-7 top-1/2 -translate-y-1/2 text-white/45 md:right-3" />
+          <Search size={18} className={`absolute right-7 text-white/45 md:right-3 ${isMobileSearchOpen ? 'top-[86px]' : 'top-1/2 -translate-y-1/2'}`} />
 
           {searchOpen && searchQuery.trim().length > 1 && (
-            <div className="absolute left-4 right-4 top-full z-50 mt-2 overflow-hidden rounded-lg border border-white/10 bg-[#171717] shadow-2xl md:left-0 md:right-auto md:w-[360px]">
+            <div className="mt-3 max-h-[calc(100dvh-150px)] overflow-y-auto rounded-lg border border-white/10 bg-[#171717] shadow-2xl md:absolute md:left-0 md:top-full md:mt-2 md:w-[360px]">
               {isSearching && <div className="p-4 text-sm text-white/50">Đang tìm kiếm...</div>}
               {!isSearching && !searchResults.length && <div className="p-4 text-sm text-white/50">Không có kết quả phù hợp.</div>}
               {!isSearching && searchResults.map(result => (
@@ -160,7 +176,9 @@ export default function Header({ toggleSidebar }) {
         {user ? (
           <div className="flex items-center gap-2">
             <span className="hidden text-sm font-medium md:block">{user.username}</span>
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#ED2C25]"><User size={17} /></span>
+            <button onClick={() => setIsAvatarPickerOpen(true)} className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-white/15 bg-white" title="Đổi avatar">
+              {user.avatar ? <img src={user.avatar} alt={user.username} className="h-full w-full object-contain p-1" /> : <User size={17} className="text-[#ED2C25]" />}
+            </button>
             <button onClick={handleLogout} className="rounded-full p-2 text-white/65 hover:bg-white/10 hover:text-white" title="Đăng xuất"><LogOut size={18} /></button>
           </div>
         ) : (
@@ -169,6 +187,7 @@ export default function Header({ toggleSidebar }) {
       </div>
 
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} onLoginSuccess={setUser} />
+      {isAvatarPickerOpen && user && <AvatarPicker user={user} onClose={() => setIsAvatarPickerOpen(false)} onSaved={setUser} />}
     </header>
   );
 }

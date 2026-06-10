@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const Database = require('../db/database');
 const config = require('../config');
 const pidusage = require('pidusage');
@@ -11,6 +12,7 @@ const ffmpegWrapper = require('../../ffmpeg-core/wrapper');
 const m3uManager = require('../services/m3uManager');
 
 const db = new Database(config.dbPath);
+const adminSessions = new Set();
 
 const eventTempPath = config.eventTempPath;
 if (!fs.existsSync(eventTempPath)) {
@@ -20,7 +22,8 @@ if (!fs.existsSync(eventTempPath)) {
 // Simple auth middleware
 const auth = (req, res, next) => {
   const token = req.headers.authorization;
-  if (token === `Bearer ${config.adminPassword}`) {
+  const sessionToken = String(token || '').replace(/^Bearer\s+/i, '');
+  if (adminSessions.has(sessionToken)) {
     next();
   } else {
     res.status(401).json({ success: false, error: 'Unauthorized' });
@@ -30,11 +33,29 @@ const auth = (req, res, next) => {
 // Login
 router.post('/login', (req, res) => {
   const { password } = req.body;
-  if (password === config.adminPassword) {
-    res.json({ success: true, token: config.adminPassword });
+  if (db.verifyAdminPassword(password, config.adminPassword)) {
+    const token = crypto.randomBytes(32).toString('hex');
+    adminSessions.add(token);
+    res.json({ success: true, token });
   } else {
     res.status(401).json({ success: false, error: 'Invalid password' });
   }
+});
+
+router.post('/change-password', auth, (req, res) => {
+  const { currentPassword, newPassword } = req.body || {};
+  if (!db.verifyAdminPassword(currentPassword, config.adminPassword)) {
+    return res.status(400).json({ success: false, error: 'Current password is incorrect' });
+  }
+  if (String(newPassword || '').length < 8) {
+    return res.status(400).json({ success: false, error: 'New password must contain at least 8 characters' });
+  }
+
+  db.setAdminPassword(newPassword);
+  adminSessions.clear();
+  const token = crypto.randomBytes(32).toString('hex');
+  adminSessions.add(token);
+  return res.json({ success: true, token });
 });
 
 function processEventPayload(data, id) {

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Activity, CalendarDays, ChevronDown, ChevronUp, CircleStop, Eye, EyeOff,
   Gauge, ListVideo, LogOut, Pencil, Plus, Radio, RefreshCw, RotateCcw,
-  Save, Server, Settings, Trash2, X,
+  KeyRound, Save, Server, Settings, Trash2, X,
 } from 'lucide-react';
 
 const API_BASE = '/api';
@@ -24,6 +24,7 @@ export default function AdminDashboard() {
   const [eventModal, setEventModal] = useState(null);
   const [sourceForm, setSourceForm] = useState({ name: '', url: '', type: 'url' });
   const [channelSearch, setChannelSearch] = useState('');
+  const [settingsDirty, setSettingsDirty] = useState(false);
 
   const logout = useCallback(() => {
     localStorage.removeItem('adminToken');
@@ -61,12 +62,12 @@ export default function AdminDashboard() {
     ]);
     if (requests[0].status === 'fulfilled') setEvents(requests[0].value.data || []);
     if (requests[1].status === 'fulfilled') setSources(requests[1].value.data || []);
-    if (requests[2].status === 'fulfilled') setSettings(requests[2].value.data || { hiddenGroups: [], hiddenChannels: [], groupOrder: [] });
+    if (requests[2].status === 'fulfilled' && !settingsDirty) setSettings(requests[2].value.data || { hiddenGroups: [], hiddenChannels: [], groupOrder: [] });
     if (requests[3].status === 'fulfilled') setChannels(requests[3].value.data || []);
     if (requests[4].status === 'fulfilled') setStatus(requests[4].value.data || null);
     if (requests[5].status === 'fulfilled') setStreams(requests[5].value.data || []);
     if (requests[6].status === 'fulfilled') setHealth(requests[6].value || null);
-  }, [adminRequest, token]);
+  }, [adminRequest, settingsDirty, token]);
 
   useEffect(() => { loadData(); }, [loadData]);
   useEffect(() => {
@@ -106,6 +107,21 @@ export default function AdminDashboard() {
     }
   };
 
+  const changeAdminPassword = async (currentPassword, newPassword) => {
+    setBusy(true);
+    setNotice('');
+    try {
+      const data = await adminRequest('/admin/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) });
+      localStorage.setItem('adminToken', data.token);
+      setToken(data.token);
+      setNotice('Đã đổi mật khẩu quản trị.');
+    } catch (err) {
+      setNotice(`Lỗi: ${err.message}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (!token) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#090909] p-4 text-white">
@@ -122,7 +138,7 @@ export default function AdminDashboard() {
 
   const tabs = [
     ['dashboard', 'Tổng quan', Gauge], ['events', 'Sự kiện', CalendarDays], ['m3u', 'Nguồn M3U', Radio],
-    ['channels', 'Kênh IPTV', ListVideo], ['streams', 'Luồng phát', Activity],
+    ['channels', 'Kênh IPTV', ListVideo], ['streams', 'Luồng phát', Activity], ['security', 'Mật khẩu', KeyRound],
   ];
 
   return (
@@ -154,8 +170,9 @@ export default function AdminDashboard() {
           }} onToggle={source => runAction(() => adminRequest(`/admin/m3u-sources/${source.id}`, { method: 'PUT', body: JSON.stringify({ active: !source.active }) }), 'Đã cập nhật trạng thái nguồn.')} onDelete={source => {
             if (window.confirm(`Xóa nguồn "${source.name}"?`)) runAction(() => adminRequest(`/admin/m3u-sources/${source.id}`, { method: 'DELETE' }), 'Đã xóa nguồn M3U.');
           }} onRefresh={() => runAction(() => adminRequest('/admin/m3u-sources/refresh', { method: 'POST' }), 'Đã cập nhật danh sách M3U.')} />}
-          {activeTab === 'channels' && <ChannelsTab channels={channels} settings={settings} setSettings={setSettings} search={channelSearch} setSearch={setChannelSearch} busy={busy} onSave={() => runAction(() => adminRequest('/admin/iptv-settings', { method: 'POST', body: JSON.stringify(settings) }), 'Đã lưu cấu hình IPTV.')} />}
+          {activeTab === 'channels' && <ChannelsTab channels={channels} settings={settings} setSettings={updater => { setSettings(updater); setSettingsDirty(true); }} search={channelSearch} setSearch={setChannelSearch} busy={busy} onSave={() => runAction(async () => { await adminRequest('/admin/iptv-settings', { method: 'POST', body: JSON.stringify(settings) }); setSettingsDirty(false); }, 'Đã lưu cấu hình IPTV.')} />}
           {activeTab === 'streams' && <StreamsTab streams={streams} onStop={stream => runAction(() => fetch(`${API_BASE}/stream/stop/${encodeURIComponent(stream.channelId)}`, { method: 'POST' }).then(response => response.json()), 'Đã dừng luồng phát.')} />}
+          {activeTab === 'security' && <PasswordTab busy={busy} onChange={changeAdminPassword} />}
         </main>
       </div>
 
@@ -207,7 +224,7 @@ function ChannelsTab({ channels, settings, setSettings, search, setSearch, busy,
     setSettings(current => ({ ...current, groupOrder: next }));
   };
   return <section><SectionHeader title="Kênh IPTV" subtitle={`${channels.length} kênh đã nạp`} action={<button disabled={busy} onClick={onSave} className="flex items-center gap-2 rounded-md bg-[#ED2C25] px-3 py-2 text-sm font-bold"><Save size={16} /> Lưu cấu hình</button>} />
-    <div className="mt-5 grid gap-4 xl:grid-cols-[360px_1fr]"><Panel title="Nhóm kênh">{orderedGroups.map((group, index) => <div key={group} className="flex items-center gap-2 border-b border-white/5 py-2 last:border-0"><button onClick={() => toggle('hiddenGroups', group)} className={`rounded p-1 ${settings.hiddenGroups.includes(group) ? 'text-white/30' : 'text-green-400'}`}>{settings.hiddenGroups.includes(group) ? <EyeOff size={16} /> : <Eye size={16} />}</button><span className="min-w-0 flex-1 truncate text-sm">{group}</span><button disabled={index === 0} onClick={() => moveGroup(index, -1)} className="p-1 disabled:opacity-20"><ChevronUp size={15} /></button><button disabled={index === orderedGroups.length - 1} onClick={() => moveGroup(index, 1)} className="p-1 disabled:opacity-20"><ChevronDown size={15} /></button></div>)}</Panel>
+    <div className="mt-5 grid gap-4 xl:grid-cols-[310px_1fr]"><Panel title="Thứ tự nhóm"><div className="max-h-[460px] overflow-y-auto pr-1">{orderedGroups.map((group, index) => <div key={group} className="flex h-9 items-center gap-1 border-b border-white/5 last:border-0"><span className="w-6 text-center text-[10px] text-white/30">{index + 1}</span><button onClick={() => toggle('hiddenGroups', group)} className={`rounded p-1 ${settings.hiddenGroups.includes(group) ? 'text-white/30' : 'text-green-400'}`}>{settings.hiddenGroups.includes(group) ? <EyeOff size={15} /> : <Eye size={15} />}</button><span className="min-w-0 flex-1 truncate text-xs">{group}</span><button disabled={index === 0} onClick={() => moveGroup(index, -1)} className="rounded p-1 hover:bg-white/5 disabled:opacity-20"><ChevronUp size={14} /></button><button disabled={index === orderedGroups.length - 1} onClick={() => moveGroup(index, 1)} className="rounded p-1 hover:bg-white/5 disabled:opacity-20"><ChevronDown size={14} /></button></div>)}</div></Panel>
       <Panel title="Kênh"><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Tìm kênh..." className="mb-3 w-full rounded-md border border-white/10 bg-black/25 px-3 py-2 text-sm outline-none focus:border-[#ED2C25]" /><div className="max-h-[560px] overflow-y-auto">{visibleChannels.map(channel => <label key={channel.id} className="flex cursor-pointer items-center gap-3 border-b border-white/5 py-2 text-sm"><input type="checkbox" checked={!settings.hiddenChannels.includes(channel.id)} onChange={() => toggle('hiddenChannels', channel.id)} /><img src={channel.logo || '/poster.jpg'} className="h-7 w-10 object-contain" alt="" /><span className="min-w-0 flex-1 truncate">{channel.name}</span><span className="text-xs text-white/35">{channel.group}</span></label>)}</div></Panel></div>
   </section>;
 }
@@ -215,6 +232,29 @@ function ChannelsTab({ channels, settings, setSettings, search, setSearch, busy,
 function StreamsTab({ streams, onStop }) {
   return <section><SectionHeader title="Luồng phát" subtitle="Các tiến trình FFmpeg đang hoạt động" />
     <div className="mt-5 overflow-hidden rounded-lg border border-white/10 bg-[#151515]">{streams.length ? streams.map(stream => <div key={stream.channelId} className="flex items-center gap-3 border-b border-white/5 p-4 last:border-0"><Activity size={18} className="text-green-400" /><div className="min-w-0 flex-1"><div className="truncate font-bold">{stream.channelId}</div><div className="text-xs text-white/40">PID {stream.pid || '--'}</div></div><button onClick={() => onStop(stream)} className="flex items-center gap-2 rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-300"><CircleStop size={16} /> Dừng</button></div>) : <Empty text="Không có luồng FFmpeg đang chạy. Các kênh phát trực tiếp/proxy không tạo tiến trình FFmpeg." />}</div>
+  </section>;
+}
+
+function PasswordTab({ busy, onChange }) {
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const submit = event => {
+    event.preventDefault();
+    if (newPassword !== confirmPassword) return alert('Mật khẩu xác nhận không khớp.');
+    if (newPassword.length < 8) return alert('Mật khẩu mới phải có ít nhất 8 ký tự.');
+    onChange(currentPassword, newPassword);
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+  };
+  return <section><SectionHeader title="Đổi mật khẩu admin" subtitle="Phiên đăng nhập cũ sẽ bị vô hiệu hóa sau khi đổi mật khẩu" />
+    <form onSubmit={submit} className="mt-5 max-w-lg space-y-4 rounded-lg border border-white/10 bg-[#151515] p-5">
+      <Field label="Mật khẩu hiện tại"><input required type="password" value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} className="input-admin" /></Field>
+      <Field label="Mật khẩu mới"><input required minLength="8" type="password" value={newPassword} onChange={event => setNewPassword(event.target.value)} className="input-admin" /></Field>
+      <Field label="Nhập lại mật khẩu mới"><input required minLength="8" type="password" value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} className="input-admin" /></Field>
+      <button disabled={busy} className="flex items-center gap-2 rounded-md bg-[#ED2C25] px-4 py-2 font-bold disabled:opacity-50"><KeyRound size={16} /> Đổi mật khẩu</button>
+    </form>
   </section>;
 }
 

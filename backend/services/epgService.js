@@ -180,6 +180,8 @@ class EpgService {
       if (this.programs[candidate]) return candidate;
       const lower = String(candidate).toLowerCase();
       if (this.programs[lower]) return lower;
+      const exactId = Object.keys(this.programs).find(id => id.toLowerCase() === lower);
+      if (exactId) return exactId;
       for (const key of getAliasKeys(candidate)) {
         const alias = this.aliases[key];
         if (alias && this.programs[alias]) return alias;

@@ -1,6 +1,7 @@
 // Simple JSON Database for NhanChillTV Beta v1.3
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 class Database {
   constructor(dbPath) {
@@ -156,6 +157,27 @@ class Database {
     data.iptvSettings = { ...data.iptvSettings, ...settings };
     this.write(data);
     return data.iptvSettings;
+  }
+
+  verifyAdminPassword(password, fallbackPassword) {
+    const settings = this.read().adminSettings;
+    if (!settings?.passwordHash || !settings?.passwordSalt) {
+      return String(password || '') === String(fallbackPassword || '');
+    }
+    const actual = crypto.scryptSync(String(password || ''), settings.passwordSalt, 64);
+    const expected = Buffer.from(settings.passwordHash, 'hex');
+    return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+  }
+
+  setAdminPassword(password) {
+    const data = this.read();
+    const passwordSalt = crypto.randomBytes(16).toString('hex');
+    data.adminSettings = {
+      passwordSalt,
+      passwordHash: crypto.scryptSync(String(password), passwordSalt, 64).toString('hex'),
+      updatedAt: new Date().toISOString()
+    };
+    this.write(data);
   }
 }
 

@@ -14,6 +14,7 @@ export const VideoPlayerReact = (props) => {
   const sourceIndexRef = useRef(0);
   const retryCountRef = useRef(0);
   const sourcesRef = useRef([]);
+  const wasPlayingBeforeFullscreenRef = useRef(false);
   const [error, setError] = useState(null);
   const {
     url,
@@ -45,6 +46,7 @@ export const VideoPlayerReact = (props) => {
     autoplay: autoplay ? 'muted' : false,
     muted,
     preload: 'auto',
+    playsinline: true,
     liveui: true,
     responsive: true,
     fill: true,
@@ -124,13 +126,34 @@ export const VideoPlayerReact = (props) => {
     if (!playerRef.current) {
       const videoElement = document.createElement('video-js');
       videoElement.classList.add('vjs-big-play-centered');
+      videoElement.setAttribute('playsinline', '');
+      videoElement.setAttribute('webkit-playsinline', '');
       videoElement.style.width = '100%';
       videoElement.style.height = '100%';
       videoRef.current.appendChild(videoElement);
 
       const player = playerRef.current = videojs(videoElement, playerOptions, () => {
+        const techElement = player.tech(true)?.el();
+        techElement?.setAttribute('playsinline', '');
+        techElement?.setAttribute('webkit-playsinline', '');
+        techElement?.addEventListener('webkitbeginfullscreen', () => {
+          wasPlayingBeforeFullscreenRef.current = !player.paused();
+        });
+        techElement?.addEventListener('webkitendfullscreen', () => {
+          if (wasPlayingBeforeFullscreenRef.current && !player.isDisposed()) {
+            player.play()?.catch(() => {});
+          }
+        });
         onReady?.(player);
         play(player);
+      });
+
+      player.on('fullscreenchange', () => {
+        if (player.isFullscreen()) {
+          wasPlayingBeforeFullscreenRef.current = !player.paused();
+        } else if (wasPlayingBeforeFullscreenRef.current && !player.isDisposed()) {
+          player.play()?.catch(() => {});
+        }
       });
 
       player.on('playing', () => {
