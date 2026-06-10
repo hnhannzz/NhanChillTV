@@ -6,7 +6,6 @@ const { XMLParser } = require('fast-xml-parser');
 const config = require('../config');
 
 const DEFAULT_EPG_URL = 'https://vnepg.site/epg.xml';
-const DEFAULT_MIRROR_EPG_URL = 'https://raw.githubusercontent.com/hnhannzz/NhanChillTV/epg-mirror/epg.xml.gz';
 const DEFAULT_FALLBACK_EPG_URL = 'https://epgshare01.online/epgshare01/epg_ripper_VN1.xml.gz';
 const EPG_STALE_GRACE_MS = 2 * 60 * 60 * 1000;
 
@@ -57,7 +56,7 @@ function parseEpgTime(timeStr) {
 class EpgService {
   constructor() {
     this.epgUrl = process.env.EPG_URL || DEFAULT_EPG_URL;
-    const configuredFallbacks = String(process.env.EPG_FALLBACK_URLS || `${DEFAULT_MIRROR_EPG_URL},${DEFAULT_FALLBACK_EPG_URL}`)
+    const configuredFallbacks = String(process.env.EPG_FALLBACK_URLS || DEFAULT_FALLBACK_EPG_URL)
       .split(',')
       .map(url => url.trim())
       .filter(Boolean);
