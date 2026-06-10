@@ -1,4 +1,0 @@
-#EXTM3U
-# Add legally accessible IPTV entries here.
-#EXTINF:-1 tvg-id="sample" group-title="Demo",Sample Stream
-https://example.com/live/sample.m3u8

@@ -1,0 +1,24 @@
+---
+import '../styles/global.css';
+
+interface Props {
+	title: string;
+}
+
+const { title } = Astro.props;
+---
+
+<!doctype html>
+<html lang="vi" class="dark">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="description" content="NhanChillTV - Xem phim và truyền hình trực tuyến" />
+		<meta name="viewport" content="width=device-width" />
+		<link rel="icon" type="image/x-icon" href="/favicon.ico?v=1.65" />
+		<meta name="generator" content={Astro.generator} />
+		<title>{title}</title>
+	</head>
+	<body class="bg-[#050505] text-white min-h-screen overflow-x-hidden flex flex-col">
+		<slot />
+	</body>
+</html>
