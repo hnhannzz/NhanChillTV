@@ -95,7 +95,7 @@ export default function TvPageContainer() {
       return;
     }
     const currentChannel = channels.find(channel => channel.id === currentChannelId);
-    const params = new URLSearchParams({ limit: '36' });
+    const params = new URLSearchParams({ limit: '18' });
     if (currentChannel?.name) params.set('name', currentChannel.name);
     setEpgData(null);
     fetch(`${API_BASE}/epg/${encodeURIComponent(currentChannelId)}?${params}`)
@@ -155,16 +155,34 @@ export default function TvPageContainer() {
   const formatTime = value => value
     ? new Date(value).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
     : '--:--';
+  const epgSourceLabel = useMemo(() => {
+    try {
+      return epgData?.source ? new URL(epgData.source).hostname.replace(/^www\./, '') : 'EPG server';
+    } catch {
+      return 'EPG server';
+    }
+  }, [epgData?.source]);
+  const eventHeading = eventData && (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase text-[#ED2C25]"><Radio size={14} /> {eventData.status === 'live' ? 'Đang trực tiếp' : 'Sắp diễn ra'}</div>
+        <h1 className="mt-1 truncate text-xl font-black text-white md:text-2xl">{eventData.title}</h1>
+      </div>
+      {eventData.streams.length > 1 && <div className="hide-scrollbar flex max-w-full gap-2 overflow-x-auto pb-1">{eventData.streams.map((stream, index) => <button key={stream.id || index} onClick={() => selectEventStream(index)} className={`shrink-0 rounded-md px-3 py-2 text-sm font-semibold ${activeEventStream === index ? 'bg-[#ED2C25] text-white' : 'bg-white/8 text-white/65 hover:bg-white/12'}`}>{stream.name || `Luồng ${index + 1}`}</button>)}</div>}
+    </div>
+  );
 
   if (eventId) {
     return (
       <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-0 pb-8 pt-0 lg:px-8 lg:pt-6">
-        {eventData && <div className="px-4 lg:px-0"><div className="flex flex-wrap items-end justify-between gap-3"><div><div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-[#ED2C25]"><Radio size={14} /> {eventData.status === 'live' ? 'Đang trực tiếp' : eventData.status === 'ended' ? 'Đã kết thúc' : 'Sắp diễn ra'}</div><h1 className="mt-1 text-xl font-black text-white md:text-2xl">{eventData.title}</h1></div>{eventData.streams.length > 1 && <div className="flex max-w-full gap-2 overflow-x-auto pb-1">{eventData.streams.map((stream, index) => <button key={stream.id || index} onClick={() => selectEventStream(index)} className={`shrink-0 rounded-md px-3 py-2 text-sm font-semibold ${activeEventStream === index ? 'bg-[#ED2C25] text-white' : 'bg-white/8 text-white/65 hover:bg-white/12'}`}>{stream.name || `Luồng ${index + 1}`}</button>)}</div>}</div></div>}
-        <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,68fr)_minmax(340px,32fr)]">
-          <div className="w-full overflow-hidden bg-black shadow-2xl lg:rounded-lg lg:border lg:border-white/10">
+        <div className="hidden lg:block">{eventHeading}</div>
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,68fr)_minmax(340px,32fr)]">
+          <div className={`fixed left-0 right-0 z-50 w-full overflow-hidden bg-black shadow-2xl transition-[top] duration-200 lg:static lg:z-auto lg:rounded-lg lg:border lg:border-white/10 ${isHeaderHidden ? 'top-0' : 'top-[64px]'}`}>
             {(currentChannelId || streamParam) ? <LivePlayerView key={`${currentChannelId || streamParam}-${activeEventStream}`} channelId={currentChannelId} streamParam={streamParam} /> : <div className="flex aspect-video items-center justify-center text-sm text-white/45">Đang chờ nguồn phát sự kiện...</div>}
           </div>
-          <aside className="flex h-[480px] min-h-0 w-full flex-col overflow-hidden border-y border-white/10 bg-[#151515] lg:h-full lg:rounded-lg lg:border">
+          <div className="aspect-video w-full lg:hidden" />
+          <div className="px-4 lg:hidden">{eventHeading}</div>
+          <aside className="flex h-[430px] min-h-0 w-full flex-col overflow-hidden border-y border-white/10 bg-[#151515] lg:h-[480px] lg:rounded-lg lg:border">
             <div className="border-b border-white/10 bg-[#101010] px-4 py-3"><div className="font-bold text-white">Trò chuyện trực tiếp</div><div className="text-xs text-white/45">Cbox sự kiện</div></div>
             <iframe title="Trò chuyện sự kiện NhanChillTV" src={CBOX_URL} width="100%" height="450" allow="autoplay" frameBorder="0" marginHeight="0" marginWidth="0" scrolling="auto" className="min-h-0 flex-1 bg-white" />
           </aside>
@@ -175,7 +193,7 @@ export default function TvPageContainer() {
 
   return (
     <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-6 px-4 pb-8 pt-4 md:px-8 md:pt-8">
-      <div className="grid items-stretch gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] xl:grid-cols-[minmax(0,68fr)_minmax(340px,32fr)]">
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] xl:grid-cols-[minmax(0,68fr)_minmax(340px,32fr)]">
         <div className={`fixed left-0 right-0 z-50 w-full overflow-hidden bg-black shadow-2xl transition-all duration-300 lg:static lg:z-auto lg:rounded-lg lg:border lg:border-white/10 ${isHeaderHidden ? 'top-0' : 'top-[64px]'}`}>
           {(currentChannelId || streamParam) ? (
             <LivePlayerView key={currentChannelId || streamParam} channelId={currentChannelId} streamParam={streamParam} />
@@ -186,10 +204,10 @@ export default function TvPageContainer() {
 
         <div className="block aspect-video w-full lg:hidden" />
 
-        <aside className="flex h-[420px] min-h-0 w-full flex-col overflow-hidden rounded-lg border border-white/10 bg-[#151515] lg:h-full">
+        <aside className="flex h-[330px] min-h-0 w-full flex-col overflow-hidden rounded-lg border border-white/10 bg-[#151515] lg:h-[420px] xl:h-[460px]">
           {eventId ? (
             <>
-              <div className="border-b border-white/10 bg-[#101010] px-4 py-3">
+              <div className="border-b border-white/10 bg-[#101010] px-3 py-2.5">
                 <div className="font-bold text-white">Trò chuyện sự kiện</div>
                 <div className="text-xs text-white/45">Cbox trực tiếp</div>
               </div>
@@ -212,19 +230,19 @@ export default function TvPageContainer() {
                 <div className="truncate font-bold text-white">Lịch phát sóng</div>
                 <div className="truncate text-xs text-white/45">{currentChannel?.name || epgData?.channel?.name || 'Đang chọn kênh'}</div>
               </div>
-              <div className="flex items-center justify-between border-b border-white/10 bg-[#ED2C25]/10 px-4 py-2 text-sm font-bold text-[#ED2C25]">
+              <div className="flex items-center justify-between border-b border-white/10 bg-[#ED2C25]/10 px-3 py-1.5 text-xs font-bold text-[#ED2C25]">
                 <span>Hôm nay</span>
-                <span className="text-xs font-normal text-white/45">vnepg.site</span>
+                <span className="max-w-[150px] truncate font-normal text-white/45">{epgSourceLabel}</span>
               </div>
-              <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto p-3">
+              <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto px-2 py-1.5">
                 {epgPrograms.length ? epgPrograms.map((program, index) => {
                   const active = isCurrentProgram(program);
                   return (
-                    <div key={`${program.start}-${index}`} className={`mb-2 flex gap-3 rounded-md border p-3 ${active ? 'border-[#ED2C25]/50 bg-[#ED2C25]/15 text-white' : 'border-white/5 bg-white/[0.03] text-white/60'}`}>
-                      <div className={`w-[52px] shrink-0 text-sm font-bold ${active ? 'text-[#ED2C25]' : 'text-white/50'}`}>{formatTime(program.start)}</div>
+                    <div key={`${program.start}-${index}`} className={`flex min-h-11 items-center gap-2.5 border-b border-white/5 px-2 py-2 last:border-0 ${active ? 'rounded-md bg-[#ED2C25]/15 text-white' : 'text-white/60'}`}>
+                      <div className={`w-[44px] shrink-0 text-xs font-bold ${active ? 'text-[#ED2C25]' : 'text-white/45'}`}>{formatTime(program.start)}</div>
                       <div className="min-w-0 flex-1">
-                        <div className={`truncate text-sm ${active ? 'font-bold text-white' : 'font-medium'}`}>{program.title}</div>
-                        {program.desc && <div className="mt-1 line-clamp-2 text-xs text-white/45">{program.desc}</div>}
+                        <div className={`truncate text-[13px] ${active ? 'font-bold text-white' : 'font-medium'}`}>{program.title}</div>
+                        {active && program.desc && <div className="mt-0.5 truncate text-[11px] text-white/40">{program.desc}</div>}
                       </div>
                     </div>
                   );

@@ -1,10 +1,14 @@
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
+const zlib = require('zlib');
 const { XMLParser } = require('fast-xml-parser');
 const config = require('../config');
 
 const DEFAULT_EPG_URL = 'https://vnepg.site/epg.xml';
+const DEFAULT_MIRROR_EPG_URL = 'https://raw.githubusercontent.com/hnhannzz/NhanChillTV/epg-mirror/epg.xml.gz';
+const DEFAULT_FALLBACK_EPG_URL = 'https://epgshare01.online/epgshare01/epg_ripper_VN1.xml.gz';
+const EPG_STALE_GRACE_MS = 2 * 60 * 60 * 1000;
 
 function normalizeKey(value) {
   return String(value || '')
@@ -53,6 +57,11 @@ function parseEpgTime(timeStr) {
 class EpgService {
   constructor() {
     this.epgUrl = process.env.EPG_URL || DEFAULT_EPG_URL;
+    const configuredFallbacks = String(process.env.EPG_FALLBACK_URLS || `${DEFAULT_MIRROR_EPG_URL},${DEFAULT_FALLBACK_EPG_URL}`)
+      .split(',')
+      .map(url => url.trim())
+      .filter(Boolean);
+    this.sourceUrls = [...new Set([this.epgUrl, ...configuredFallbacks])];
     this.channels = {};
     this.programs = {};
     this.aliases = {};
@@ -64,6 +73,7 @@ class EpgService {
     this.failureRetryInterval = Number(process.env.EPG_RETRY_MS || 5 * 60 * 1000);
     this.cachePath = config.epgCachePath;
     this.lastAttempt = 0;
+    this.activeSource = null;
 
     this.loadDiskCache();
     this.fetchData();
@@ -99,46 +109,66 @@ class EpgService {
     fs.renameSync(tempPath, this.cachePath);
   }
 
+  async fetchSource(sourceUrl) {
+    const response = await axios.get(sourceUrl, {
+      timeout: 60000,
+      responseType: 'arraybuffer',
+      maxContentLength: 25 * 1024 * 1024,
+      headers: {
+        Accept: 'application/xml,text/xml,application/gzip,application/octet-stream,*/*',
+        'Accept-Encoding': 'gzip, deflate, br',
+        Referer: new URL(sourceUrl).origin,
+        'User-Agent': 'NhanChillTV/1.6 EPG Fetcher',
+      },
+    });
+
+    let payload = Buffer.from(response.data);
+    const isGzip = sourceUrl.toLowerCase().endsWith('.gz') || (payload[0] === 0x1f && payload[1] === 0x8b);
+    if (isGzip) payload = zlib.gunzipSync(payload);
+
+    const xml = payload.toString('utf8').replace(/^\uFEFF/, '');
+    if (!/^\s*<\?xml|^\s*<tv[\s>]/i.test(xml)) {
+      throw new Error('source did not return XMLTV data');
+    }
+    return xml;
+  }
+
   async fetchData() {
     if (this.fetchPromise) return this.fetchPromise;
     this.lastAttempt = Date.now();
 
-    this.fetchPromise = axios
-      .get(this.epgUrl, {
-        timeout: 60000,
-        responseType: 'arraybuffer',
-        maxContentLength: 25 * 1024 * 1024,
-        headers: {
-          Accept: 'application/xml,text/xml,*/*',
-          'Accept-Encoding': 'gzip, deflate, br',
-          Referer: 'https://vnepg.site/',
-          'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36',
-        },
-      })
-      .then((response) => {
-        console.log('[EPG] Fetching EPG data from', this.epgUrl);
-        const xml = Buffer.from(response.data).toString('utf8').replace(/^\uFEFF/, '');
-        if (!/^\s*<\?xml|^\s*<tv[\s>]/i.test(xml)) {
-          throw new Error('EPG source did not return XMLTV data');
+    this.fetchPromise = (async () => {
+      const failures = [];
+      for (const sourceUrl of this.sourceUrls) {
+        try {
+          console.log('[EPG] Fetching EPG data from', sourceUrl);
+          const xml = await this.fetchSource(sourceUrl);
+          const parsed = this.parseEpg(xml, false);
+          if (parsed.latestProgramStop < Date.now() - EPG_STALE_GRACE_MS) {
+            throw new Error(`EPG data is stale (latest programme ended ${new Date(parsed.latestProgramStop).toISOString()})`);
+          }
+          this.applyParsedEpg(parsed);
+          this.saveDiskCache(xml);
+          this.lastFetch = new Date();
+          this.lastError = null;
+          this.activeSource = sourceUrl;
+          console.log(`[EPG] Parsed ${Object.keys(this.channels).length} channels and ${Object.keys(this.programs).length} schedules from ${sourceUrl}`);
+          return;
+        } catch (err) {
+          failures.push(`${sourceUrl}: ${err.message}`);
+          console.warn(`[EPG] Source failed (${sourceUrl}):`, err.message);
         }
-        this.parseEpg(xml);
-        this.saveDiskCache(xml);
-        this.lastFetch = new Date();
-        this.lastError = null;
-        console.log(`[EPG] Parsed ${Object.keys(this.channels).length} channels and ${Object.keys(this.programs).length} schedules`);
-      })
-      .catch((err) => {
-        this.lastError = err.message;
-        console.error('[EPG] Fetch error, retaining previous cache:', err.message);
-      })
-      .finally(() => {
-        this.fetchPromise = null;
-      });
+      }
+      this.lastError = failures.join(' | ');
+      console.error('[EPG] All sources failed, retaining previous cache:', this.lastError);
+    })().finally(() => {
+      this.fetchPromise = null;
+    });
 
     return this.fetchPromise;
   }
 
-  parseEpg(xmlData) {
+  parseEpg(xmlData, apply = true) {
     const parser = new XMLParser({
       ignoreAttributes: false,
       attributeNamePrefix: '@_',
@@ -152,6 +182,7 @@ class EpgService {
     const nextPrograms = {};
     const nextAliases = {};
     const nextChannelIds = {};
+    let latestProgramStop = 0;
 
     const addAlias = (alias, channelId) => {
       for (const key of getAliasKeys(alias)) {
@@ -184,6 +215,7 @@ class EpgService {
       const start = parseEpgTime(programme['@_start']);
       const stop = parseEpgTime(programme['@_stop']);
       if (!start || !stop || stop <= start) return;
+      latestProgramStop = Math.max(latestProgramStop, stop);
 
       nextPrograms[channelId].push({
         start,
@@ -202,10 +234,22 @@ class EpgService {
 
     if (!Object.keys(nextPrograms).length) throw new Error('XMLTV contains no valid programmes');
 
-    this.channels = nextChannels;
-    this.programs = nextPrograms;
-    this.aliases = nextAliases;
-    this.channelIds = nextChannelIds;
+    const parsed = {
+      channels: nextChannels,
+      programs: nextPrograms,
+      aliases: nextAliases,
+      channelIds: nextChannelIds,
+      latestProgramStop,
+    };
+    if (apply) this.applyParsedEpg(parsed);
+    return parsed;
+  }
+
+  applyParsedEpg(parsed) {
+    this.channels = parsed.channels;
+    this.programs = parsed.programs;
+    this.aliases = parsed.aliases;
+    this.channelIds = parsed.channelIds;
   }
 
   resolveChannelId(channelId, channelName) {
@@ -256,7 +300,7 @@ class EpgService {
       current,
       next,
       programs,
-      source: this.epgUrl,
+      source: this.activeSource || this.epgUrl,
       updatedAt: this.lastFetch ? this.lastFetch.toISOString() : null,
       error: this.lastError,
     };
