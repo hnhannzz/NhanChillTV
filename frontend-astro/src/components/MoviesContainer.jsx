@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Search, ChevronLeft, ChevronRight, Play } from 'lucide-react';
-import { fetchNguoncJson, getNguoncItems } from '../lib/nguoncApi';
+import { fetchNguoncJson, getNguoncItems, isNguoncSuccess } from '../lib/nguoncApi';
 
 export default function MoviesContainer() {
   const [movies, setMovies] = useState([]);
@@ -23,7 +23,7 @@ export default function MoviesContainer() {
       
       const data = await fetchNguoncJson(url);
       
-      if (data.status === 'success') {
+      if (isNguoncSuccess(data)) {
         setMovies(getNguoncItems(data));
         setPagination(data.paginate);
         if (customTitle) setTitle(customTitle);
@@ -56,12 +56,19 @@ export default function MoviesContainer() {
   }, [activeTab]);
 
   const handleSearch = () => {
-    if (!search) return;
+    const query = search.trim();
+    if (!query) return;
     setFilterGenre('');
     setFilterCountry('');
     setFilterYear('');
-    const endpoint = `/films/search?keyword=${encodeURIComponent(search)}`;
+    const endpoint = `/films/search?keyword=${encodeURIComponent(query)}`;
+    setTitle(`Kết quả tìm kiếm: ${query}`);
+    if (endpoint !== activeTab) {
+      setActiveTab(endpoint);
+      return;
+    }
     setActiveTab(endpoint);
+    fetchMovies(endpoint, 1, `Kết quả tìm kiếm: ${query}`);
     setTitle(`Kết quả tìm kiếm: ${search}`);
   };
 

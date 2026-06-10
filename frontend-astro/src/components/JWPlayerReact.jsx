@@ -44,27 +44,30 @@ export default function JWPlayerReact({ url, fallbackUrls = [], clearKey, isMpd,
     const buildConfig = (playbackUrl) => {
       const cleanUrl = playbackUrl.toLowerCase().split('?')[0];
       const type = isMpd || cleanUrl.endsWith('.mpd') ? 'dash' : 'hls';
-      const config = {
-        file: playbackUrl,
-        autostart: true,
-        stretching: 'uniform',
-        width: '100%',
-        height: '100%',
-        type,
-        cast: {},
-      };
+      const source = { file: playbackUrl, type };
 
       if (clearKey && Object.keys(clearKey).length > 0) {
         const [kid, key] = Object.entries(clearKey)[0];
-        config.drm = {
+        source.drm = {
           clearkey: {
-            keyId: base64urlToHex(kid),
-            key: base64urlToHex(key),
+            keyId: normalizeClearKeyValue(kid),
+            key: normalizeClearKeyValue(key),
           },
         };
       }
 
-      return config;
+      return {
+        autostart: true,
+        controls: true,
+        stretching: 'uniform',
+        width: '100%',
+        height: '100%',
+        primary: 'html5',
+        preload: 'auto',
+        liveTimeout: 60,
+        cast: {},
+        playlist: [{ sources: [source] }],
+      };
     };
 
     const setupPlayer = (index = 0) => {
@@ -84,7 +87,8 @@ export default function JWPlayerReact({ url, fallbackUrls = [], clearKey, isMpd,
 
       const config = buildConfig(playbackUrl);
       console.log('[JWPlayer] Loading:', playbackUrl.substring(0, 80) + '...');
-      console.log('[JWPlayer] Type:', config.type, '| DRM:', Boolean(config.drm));
+      const source = config.playlist?.[0]?.sources?.[0];
+      console.log('[JWPlayer] Type:', source?.type, '| DRM:', Boolean(source?.drm));
 
       const player = window.jwplayer(playerId).setup(config);
       playerRef.current = player;
@@ -141,16 +145,23 @@ export default function JWPlayerReact({ url, fallbackUrls = [], clearKey, isMpd,
   );
 }
 
-function base64urlToHex(value) {
-  if (/^[0-9a-fA-F]{32}$/.test(value)) return value.toLowerCase();
+function normalizeClearKeyValue(value) {
+  const text = String(value || '').trim();
+  const compactHex = text.replace(/-/g, '');
+  if (/^[0-9a-fA-F]{32}$/.test(compactHex)) return compactHex.toLowerCase();
 
-  let b64 = String(value).replace(/-/g, '+').replace(/_/g, '/');
-  while (b64.length % 4) b64 += '=';
+  try {
+    let b64 = text.replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4) b64 += '=';
 
-  const bytes = atob(b64);
-  let hex = '';
-  for (let i = 0; i < bytes.length; i += 1) {
-    hex += bytes.charCodeAt(i).toString(16).padStart(2, '0');
+    const bytes = atob(b64);
+    let hex = '';
+    for (let i = 0; i < bytes.length; i += 1) {
+      hex += bytes.charCodeAt(i).toString(16).padStart(2, '0');
+    }
+    return hex;
+  } catch (err) {
+    console.warn('[JWPlayer] ClearKey normalize failed:', err);
+    return text;
   }
-  return hex;
 }

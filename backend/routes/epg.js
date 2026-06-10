@@ -3,10 +3,14 @@ const router = express.Router();
 const epgService = require('../services/epgService');
 
 // Get EPG for a specific channel ID
-router.get('/:channelId', (req, res) => {
+router.get('/:channelId', async (req, res) => {
   try {
     const { channelId } = req.params;
-    const epgData = epgService.getCurrentAndNext(channelId);
+    await epgService.ensureData();
+    const epgData = epgService.getCurrentAndNext(channelId, {
+      name: req.query.name,
+      limit: req.query.limit,
+    });
     
     res.json({
       success: true,

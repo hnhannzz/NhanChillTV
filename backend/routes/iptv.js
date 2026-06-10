@@ -4,7 +4,6 @@ const router = express.Router();
 const m3uManager = require('../services/m3uManager');
 const Database = require('../db/database');
 const config = require('../config');
-const M3UParser = require('../controllers/m3u-parser');
 const db = new Database(config.dbPath);
 
 // Get all channels
@@ -48,7 +47,7 @@ router.get('/channels', (req, res) => {
 // Get channel by ID
 router.get('/channels/:id', (req, res) => {
   try {
-    const channel = M3UParser.getChannelById(config.m3uPath, req.params.id);
+    const channel = m3uManager.getChannelById(req.params.id);
     if (channel) {
       res.json({ success: true, data: channel });
     } else {
@@ -62,7 +61,7 @@ router.get('/channels/:id', (req, res) => {
 // Get all groups
 router.get('/groups', (req, res) => {
   try {
-    const groups = M3UParser.getAllGroups(config.m3uPath);
+    const groups = m3uManager.getAllGroups();
     res.json({ success: true, data: groups });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -72,7 +71,7 @@ router.get('/groups', (req, res) => {
 // Get channels by group
 router.get('/groups/:group/channels', (req, res) => {
   try {
-    const channels = M3UParser.getChannelsByGroup(config.m3uPath, req.params.group);
+    const channels = m3uManager.getChannelsByGroup(req.params.group);
     res.json({ success: true, data: channels });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

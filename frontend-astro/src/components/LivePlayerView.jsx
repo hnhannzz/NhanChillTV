@@ -51,11 +51,10 @@ export default function LivePlayerView({ channelId, streamParam }) {
 
         // Nếu chế độ Direct (phát trực tiếp link m3u), route qua RAM Proxy để lách CORS
         if (data.data.isDirect) {
-          const baseUrl = window.location.origin; // e.g. http://localhost:8050
-          const proxyUrl = hlsUrl.startsWith('/api/proxy') ? `${baseUrl}${hlsUrl}` : `${baseUrl}/api/proxy/${hlsUrl}`;
+          const proxyUrl = hlsUrl.startsWith('/api/proxy') ? hlsUrl : `/api/proxy/${hlsUrl}`;
           if (mpdFlag && rawUrl && rawUrl.startsWith('http')) {
-            setStreamUrl(proxyUrl);
-            setFallbackUrls([rawUrl]);
+            setStreamUrl(rawUrl);
+            setFallbackUrls([proxyUrl]);
           } else {
             setStreamUrl(proxyUrl);
             setFallbackUrls([]);

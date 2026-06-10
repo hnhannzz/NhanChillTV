@@ -36,7 +36,7 @@ export default function MovieDetailContainer() {
           if (m.episodes && m.episodes[0] && m.episodes[0].items[0]) {
             const firstEpisode = m.episodes[0].items[0];
             setCurrentEpisode(firstEpisode);
-            setCurrentEmbed(firstEpisode.embed || firstEpisode.m3u8 || '');
+            setCurrentEmbed(firstEpisode.embed || '');
             setCurrentEpName(firstEpisode.name);
           }
 
@@ -208,11 +208,11 @@ export default function MovieDetailContainer() {
                       key={eIdx}
                       onClick={() => {
                         setCurrentEpisode(ep);
-                        setCurrentEmbed(ep.embed || ep.m3u8 || '');
+                        setCurrentEmbed(ep.embed || '');
                         setCurrentEpName(ep.name);
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                       }}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${currentEmbed === (ep.embed || ep.m3u8 || '') ? 'bg-[#ED2C25] text-white shadow-lg' : 'bg-[#1A1A1A] text-white/70 hover:bg-white/20'}`}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${currentEmbed === (ep.embed || '') ? 'bg-[#ED2C25] text-white shadow-lg' : 'bg-[#1A1A1A] text-white/70 hover:bg-white/20'}`}
                     >
                       {ep.name}
                     </button>

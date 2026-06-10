@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Search, Menu, User, LogOut } from 'lucide-react';
 import classNames from 'classnames';
 import AuthModal from './AuthModal';
-import { fetchNguoncJson, getNguoncItems } from '../lib/nguoncApi';
+import { fetchNguoncJson, getNguoncItems, isNguoncSuccess } from '../lib/nguoncApi';
 
 export default function Header({ toggleSidebar }) {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -68,19 +68,20 @@ export default function Header({ toggleSidebar }) {
 
   const handleSearchChange = (e) => {
     const val = e.target.value;
+    const query = val.trim();
     setSearchQuery(val);
     
     if (debounceRef.current) clearTimeout(debounceRef.current);
     
-    if (val.trim().length > 1) {
+    if (query.length > 1) {
       debounceRef.current = setTimeout(async () => {
         setIsSearching(true);
         try {
           let items = [];
 
           try {
-            const moviesData = await fetchNguoncJson(`/films/search?keyword=${encodeURIComponent(val)}`);
-            if (moviesData.status === 'success') {
+            const moviesData = await fetchNguoncJson(`/films/search?keyword=${encodeURIComponent(query)}`);
+            if (isNguoncSuccess(moviesData)) {
               items = getNguoncItems(moviesData).map(m => ({
                 ...m,
                 type: 'movie',
@@ -93,10 +94,10 @@ export default function Header({ toggleSidebar }) {
 
           // Fetch TV Channels
           const tvRes = await fetch('/api/iptv/channels');
-          const tvData = await tvRes.json();
-          if (tvData.success) {
+          const tvData = tvRes.ok ? await tvRes.json() : { success: false };
+          if (tvData.success && Array.isArray(tvData.data)) {
             const tvItems = tvData.data
-              .filter(c => c.name.toLowerCase().includes(val.toLowerCase()) || (c.group && c.group.toLowerCase().includes(val.toLowerCase())))
+              .filter(c => c.name.toLowerCase().includes(query.toLowerCase()) || (c.group && c.group.toLowerCase().includes(query.toLowerCase())))
               .map(c => ({
                 name: c.name,
                 original_name: c.group || 'Kênh Truyền Hình',
@@ -111,11 +112,13 @@ export default function Header({ toggleSidebar }) {
           setSearchResults(items.slice(0, 8)); // Show top 8 mixed results
         } catch (e) {
           console.error(e);
+          setSearchResults([]);
         }
         setIsSearching(false);
       }, 500); // 500ms debounce to prevent IME interruption
     } else {
       setSearchResults([]);
+      setIsSearching(false);
     }
   };
 
@@ -170,8 +173,11 @@ export default function Header({ toggleSidebar }) {
           <Search size={18} className="absolute right-7 md:right-3 top-1/2 -translate-y-1/2 text-white/50" />
           
           {/* Search Preview Dropdown */}
-          {searchResults.length > 0 && (
+          {(isSearching || searchResults.length > 0) && searchQuery.trim().length > 1 && (
             <div className="absolute top-full left-4 right-4 md:left-0 md:right-auto md:w-full mt-2 bg-[#1A1A1A] border border-white/10 rounded-xl overflow-hidden shadow-2xl z-50">
+              {isSearching && searchResults.length === 0 && (
+                <div className="p-3 text-sm text-white/50">Đang tìm kiếm...</div>
+              )}
               {searchResults.map(m => (
                 <a key={`${m.type}-${m.slug}`} href={m.link} className="flex items-center gap-3 p-2 hover:bg-white/5 transition-colors border-b border-white/5 last:border-0">
                   <img src={m.thumb_url} alt={m.name} className="w-10 h-14 object-cover rounded" />
@@ -185,7 +191,7 @@ export default function Header({ toggleSidebar }) {
                 </a>
               ))}
               <button 
-                onClick={() => window.location.href = `/movies/?search=${encodeURIComponent(searchQuery)}`}
+                onClick={() => window.location.href = `/movies/?search=${encodeURIComponent(searchQuery.trim())}`}
                 className="w-full p-2 text-xs text-center text-[#ED2C25] hover:bg-[#ED2C25]/10 transition-colors font-semibold"
               >
                 Xem tất cả kết quả

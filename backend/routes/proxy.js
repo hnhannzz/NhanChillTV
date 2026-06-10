@@ -304,6 +304,7 @@ function resolveUrl(baseUrl, origin, url) {
     if (lastSlash > 8) { // Bỏ qua https://
       const basePath = absUrl.substring(0, lastSlash);
       const filePart = absUrl.substring(lastSlash + 1);
+      if (basePath.includes('$')) return absUrl;
       encrypted = encryptUrl(basePath) + '/' + filePart;
     } else {
       encrypted = encryptUrl(absUrl);
