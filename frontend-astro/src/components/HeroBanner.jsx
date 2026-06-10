@@ -52,7 +52,7 @@ export default function HeroBanner() {
       if (info.offset.x > 50) setCurrentIndex(index => (index - 1 + slides.length) % slides.length);
     }}>
       <AnimatePresence mode="wait">
-        <motion.div key={currentSlide.id || currentSlide.slug || currentIndex} initial={{ opacity: 0, scale: 1.03 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.8 }} className="absolute inset-0">
+        <motion.div key={currentSlide.id || currentSlide.slug || currentIndex} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.35 }} className="absolute inset-0">
           <img src={currentSlide.poster_url || currentSlide.thumb_url || '/poster.jpg'} alt={currentSlide.name} className="h-full w-full object-cover opacity-65" />
           <div className="absolute inset-0 bg-gradient-to-r from-black via-black/45 to-transparent" />
           <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-transparent to-transparent" />
@@ -60,7 +60,7 @@ export default function HeroBanner() {
       </AnimatePresence>
 
       <div className="absolute inset-0 z-20 flex w-full flex-col justify-end px-4 pb-16 md:w-2/3 md:px-12 md:pb-28">
-        <motion.div key={`content-${currentSlide.id || currentSlide.slug || currentIndex}`} initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+        <motion.div key={`content-${currentSlide.id || currentSlide.slug || currentIndex}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.25 }}>
           <span className="mb-3 inline-block rounded bg-[#ED2C25] px-2 py-1 text-[10px] font-bold tracking-wide text-white md:text-xs">{currentSlide.isEvent ? (currentSlide.status === 'live' ? 'SỰ KIỆN TRỰC TIẾP' : 'SỰ KIỆN ĐÃ GHIM') : 'PHIM PHỔ BIẾN'}</span>
           <h1 className="line-clamp-2 text-3xl font-black leading-tight text-white md:text-6xl">{currentSlide.name}</h1>
           <h2 className="mt-2 text-sm font-bold text-white/60 md:text-xl">{currentSlide.original_name}</h2>

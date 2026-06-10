@@ -19,14 +19,22 @@ export default function TvPageContainer() {
 
   useEffect(() => {
     const mainContainer = document.getElementById('main-scroll-container');
+    let frame = 0;
     const handleScroll = () => {
-      if (!mainContainer) return;
-      const currentScrollY = mainContainer.scrollTop;
-      setIsHeaderHidden(currentScrollY > 0 && currentScrollY > lastScrollY.current);
-      lastScrollY.current = currentScrollY;
+      if (!mainContainer || frame) return;
+      frame = requestAnimationFrame(() => {
+        const currentScrollY = mainContainer.scrollTop;
+        const hidden = currentScrollY > 0 && currentScrollY > lastScrollY.current;
+        setIsHeaderHidden(current => current === hidden ? current : hidden);
+        lastScrollY.current = currentScrollY;
+        frame = 0;
+      });
     };
     mainContainer?.addEventListener('scroll', handleScroll, { passive: true });
-    return () => mainContainer?.removeEventListener('scroll', handleScroll);
+    return () => {
+      mainContainer?.removeEventListener('scroll', handleScroll);
+      if (frame) cancelAnimationFrame(frame);
+    };
   }, []);
 
   useEffect(() => {
@@ -75,7 +83,7 @@ export default function TvPageContainer() {
   }, []);
 
   useEffect(() => {
-    if (!currentChannelId || eventId) {
+    if (!currentChannelId) {
       setEpgData(null);
       return;
     }
@@ -87,7 +95,7 @@ export default function TvPageContainer() {
       .then(response => response.ok ? response.json() : Promise.reject(new Error(`HTTP ${response.status}`)))
       .then(data => data.success && setEpgData(data.data))
       .catch(err => console.warn('[TV] EPG unavailable:', err.message));
-  }, [channels, currentChannelId, eventId]);
+  }, [channels, currentChannelId]);
 
   const playChannel = (id) => {
     setCurrentChannelId(id);

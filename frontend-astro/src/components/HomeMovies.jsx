@@ -68,7 +68,7 @@ export default function HomeMovies() {
 
       <div 
         ref={scrollRef}
-        className="flex gap-4 overflow-x-auto hide-scrollbar snap-x snap-mandatory cursor-grab py-2 select-none px-4 md:px-0"
+        className="mobile-horizontal-scroll flex touch-pan-x gap-4 overflow-x-auto hide-scrollbar snap-x snap-proximity cursor-grab py-2 select-none px-4 md:snap-mandatory md:px-0"
         onDragStart={(e) => e.preventDefault()}
       >
         {movies.map(movie => (

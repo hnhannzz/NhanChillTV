@@ -22,12 +22,18 @@ export default function Header({ toggleSidebar }) {
 
   useEffect(() => {
     const mainContainer = document.getElementById('main-scroll-container');
+    let frame = 0;
     const handleScroll = () => {
-      if (!mainContainer) return;
-      const current = mainContainer.scrollTop;
-      setIsScrolled(current > 0);
-      setScrollDirection(current > lastScrollY.current && current > 50 ? 'down' : 'up');
-      lastScrollY.current = current;
+      if (!mainContainer || frame) return;
+      frame = requestAnimationFrame(() => {
+        const current = mainContainer.scrollTop;
+        const scrolled = current > 0;
+        const direction = current > lastScrollY.current && current > 50 ? 'down' : 'up';
+        setIsScrolled(value => value === scrolled ? value : scrolled);
+        setScrollDirection(value => value === direction ? value : direction);
+        lastScrollY.current = current;
+        frame = 0;
+      });
     };
     const handleOutside = event => {
       if (searchRef.current && !searchRef.current.contains(event.target)) setSearchOpen(false);
@@ -53,8 +59,16 @@ export default function Header({ toggleSidebar }) {
     return () => {
       mainContainer?.removeEventListener('scroll', handleScroll);
       document.removeEventListener('mousedown', handleOutside);
+      if (frame) cancelAnimationFrame(frame);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isMobileSearchOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, [isMobileSearchOpen]);
 
   useEffect(() => {
     const query = searchQuery.trim();
@@ -124,8 +138,8 @@ export default function Header({ toggleSidebar }) {
   };
 
   return (
-    <header className={classNames('fixed left-0 right-0 top-0 z-50 flex h-[64px] items-center justify-between px-4 transition-all duration-300 md:px-8', {
-      'border-b border-white/10 bg-black/85 backdrop-blur-md': isScrolled,
+    <header className={classNames('fixed left-0 right-0 top-0 z-50 flex h-[64px] items-center justify-between px-4 transition-transform duration-200 md:px-8', {
+      'border-b border-white/10 bg-black/95 md:bg-black/85 md:backdrop-blur-md': isScrolled,
       'bg-black/60': !isScrolled,
       '-translate-y-full': scrollDirection === 'down' && !isMobileSearchOpen,
     })}>
@@ -141,7 +155,7 @@ export default function Header({ toggleSidebar }) {
       </div>
 
       <div className="flex items-center gap-3">
-        <div ref={searchRef} className={classNames('relative', isMobileSearchOpen ? 'fixed inset-x-0 top-0 z-[70] block min-h-[100dvh] bg-black/95 p-4 pt-5 backdrop-blur-xl md:relative md:min-h-0 md:bg-transparent md:p-0 md:backdrop-blur-none' : 'hidden md:block')}>
+        <div ref={searchRef} className={classNames('relative', isMobileSearchOpen ? 'mobile-search-panel fixed inset-x-0 top-0 z-[70] block bg-black md:relative md:min-h-0 md:bg-transparent md:p-0' : 'hidden md:block')}>
           {isMobileSearchOpen && <div className="mb-4 flex items-center justify-between md:hidden"><span className="font-bold">Tìm kiếm</span><button onClick={() => { setIsMobileSearchOpen(false); setSearchOpen(false); }} className="rounded-full p-2 hover:bg-white/10" title="Đóng"><X size={22} /></button></div>}
           <input
             value={searchQuery}
@@ -152,10 +166,10 @@ export default function Header({ toggleSidebar }) {
             autoFocus={isMobileSearchOpen}
             className="w-full rounded-md border border-white/20 bg-[#1A1A1A] py-3 pl-4 pr-11 text-base text-white outline-none focus:border-[#ED2C25] md:w-[280px] md:rounded-full md:py-2 md:text-sm"
           />
-          <Search size={18} className={`absolute right-7 text-white/45 md:right-3 ${isMobileSearchOpen ? 'top-[86px]' : 'top-1/2 -translate-y-1/2'}`} />
+          <Search size={18} className={`absolute right-7 text-white/45 md:right-3 ${isMobileSearchOpen ? 'mobile-search-icon' : 'top-1/2 -translate-y-1/2'}`} />
 
           {searchOpen && searchQuery.trim().length > 1 && (
-            <div className="mt-3 max-h-[calc(100dvh-150px)] overflow-y-auto rounded-lg border border-white/10 bg-[#171717] shadow-2xl md:absolute md:left-0 md:top-full md:mt-2 md:w-[360px]">
+            <div className="mobile-search-results mt-3 overflow-y-auto rounded-lg border border-white/10 bg-[#171717] shadow-2xl md:absolute md:left-0 md:top-full md:mt-2 md:max-h-none md:w-[360px]">
               {isSearching && <div className="p-4 text-sm text-white/50">Đang tìm kiếm...</div>}
               {!isSearching && !searchResults.length && <div className="p-4 text-sm text-white/50">Không có kết quả phù hợp.</div>}
               {!isSearching && searchResults.map(result => (

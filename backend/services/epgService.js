@@ -53,6 +53,7 @@ class EpgService {
     this.channels = {};
     this.programs = {};
     this.aliases = {};
+    this.channelIds = {};
     this.lastFetch = null;
     this.lastError = null;
     this.fetchPromise = null;
@@ -120,6 +121,7 @@ class EpgService {
     const nextChannels = {};
     const nextPrograms = {};
     const nextAliases = {};
+    const nextChannelIds = {};
 
     const addAlias = (alias, channelId) => {
       for (const key of getAliasKeys(alias)) {
@@ -138,6 +140,7 @@ class EpgService {
         name: displayName,
         icon: getIcon(channel.icon),
       };
+      nextChannelIds[String(id).trim().toLowerCase()] = id;
       addAlias(id, id);
       addAlias(displayName, id);
     });
@@ -172,15 +175,16 @@ class EpgService {
     this.channels = nextChannels;
     this.programs = nextPrograms;
     this.aliases = nextAliases;
+    this.channelIds = nextChannelIds;
   }
 
   resolveChannelId(channelId, channelName) {
     const candidates = [channelId, channelName].filter(Boolean);
     for (const candidate of candidates) {
       if (this.programs[candidate]) return candidate;
-      const lower = String(candidate).toLowerCase();
+      const lower = String(candidate).trim().toLowerCase();
       if (this.programs[lower]) return lower;
-      const exactId = Object.keys(this.programs).find(id => id.toLowerCase() === lower);
+      const exactId = this.channelIds[lower];
       if (exactId) return exactId;
       for (const key of getAliasKeys(candidate)) {
         const alias = this.aliases[key];

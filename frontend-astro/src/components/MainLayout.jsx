@@ -12,12 +12,10 @@ export default function MainLayout({ children }) {
     <div className="flex h-screen overflow-hidden bg-[#050505]">
       <Sidebar isOpen={isSidebarOpen} toggleSidebar={toggleSidebar} />
       
-      <div 
-        className="flex-1 flex flex-col transition-all duration-300 ease-in-out relative w-full"
-      >
+      <div className="relative flex w-full flex-1 flex-col md:transition-[margin] md:duration-300 md:ease-in-out">
         <Header toggleSidebar={toggleSidebar} />
         
-        <main id="main-scroll-container" className="flex-1 overflow-y-auto overflow-x-hidden pt-[70px] md:pt-[80px]">
+        <main id="main-scroll-container" className="mobile-scroll flex-1 overflow-y-auto overflow-x-hidden pt-[70px] md:pt-[80px]">
           {children}
           <Footer />
         </main>
