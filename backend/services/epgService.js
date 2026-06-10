@@ -11,6 +11,19 @@ function normalizeKey(value) {
     .replace(/[^a-z0-9]+/g, '');
 }
 
+function getAliasKeys(value) {
+  const key = normalizeKey(value);
+  if (!key) return [];
+
+  const keys = new Set([key]);
+  const withoutQuality = key.replace(/(?:fullhd|fhd|hd|sd)$/i, '');
+  if (withoutQuality) keys.add(withoutQuality);
+
+  const withoutChannel = withoutQuality.replace(/(?:channel|kenh)$/i, '');
+  if (withoutChannel) keys.add(withoutChannel);
+  return [...keys];
+}
+
 function getText(node) {
   if (!node) return '';
   if (Array.isArray(node)) return getText(node[0]);
@@ -41,6 +54,7 @@ class EpgService {
     this.programs = {};
     this.aliases = {};
     this.lastFetch = null;
+    this.lastError = null;
     this.fetchPromise = null;
     this.fetchInterval = Number(process.env.EPG_CACHE_TTL_MS || 60 * 60 * 1000);
 
@@ -58,23 +72,33 @@ class EpgService {
   async fetchData() {
     if (this.fetchPromise) return this.fetchPromise;
 
+    const requestUrl = new URL(this.epgUrl);
+    requestUrl.searchParams.set('_', Date.now());
+
     this.fetchPromise = axios
-      .get(this.epgUrl, {
-        timeout: 30000,
-        responseType: 'text',
+      .get(requestUrl.toString(), {
+        timeout: 60000,
+        responseType: 'arraybuffer',
+        maxContentLength: 25 * 1024 * 1024,
         headers: {
           Accept: 'application/xml,text/xml,*/*',
-          'User-Agent': 'NhanChillTV/1.0',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'Cache-Control': 'no-cache',
+          Pragma: 'no-cache',
+          'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36',
         },
       })
       .then((response) => {
         console.log('[EPG] Fetching EPG data from', this.epgUrl);
-        this.parseEpg(response.data);
+        const xml = Buffer.from(response.data).toString('utf8').replace(/^\uFEFF/, '');
+        this.parseEpg(xml);
         this.lastFetch = new Date();
-        console.log('[EPG] Data fetched and parsed successfully');
+        this.lastError = null;
+        console.log(`[EPG] Parsed ${Object.keys(this.channels).length} channels and ${Object.keys(this.programs).length} schedules`);
       })
       .catch((err) => {
-        console.error('[EPG] Fetch error:', err.message);
+        this.lastError = err.message;
+        console.error('[EPG] Fetch error, retaining previous cache:', err.message);
       })
       .finally(() => {
         this.fetchPromise = null;
@@ -90,7 +114,7 @@ class EpgService {
     });
 
     const result = parser.parse(xmlData);
-    if (!result || !result.tv) return;
+    if (!result || !result.tv) throw new Error('Invalid XMLTV document');
 
     const tv = result.tv;
     const nextChannels = {};
@@ -98,8 +122,9 @@ class EpgService {
     const nextAliases = {};
 
     const addAlias = (alias, channelId) => {
-      const key = normalizeKey(alias);
-      if (key && !nextAliases[key]) nextAliases[key] = channelId;
+      for (const key of getAliasKeys(alias)) {
+        if (!nextAliases[key]) nextAliases[key] = channelId;
+      }
     };
 
     const channelList = Array.isArray(tv.channel) ? tv.channel : tv.channel ? [tv.channel] : [];
@@ -123,9 +148,13 @@ class EpgService {
       if (!channelId) return;
 
       if (!nextPrograms[channelId]) nextPrograms[channelId] = [];
+      const start = parseEpgTime(programme['@_start']);
+      const stop = parseEpgTime(programme['@_stop']);
+      if (!start || !stop || stop <= start) return;
+
       nextPrograms[channelId].push({
-        start: parseEpgTime(programme['@_start']),
-        stop: parseEpgTime(programme['@_stop']),
+        start,
+        stop,
         title: getText(programme.title),
         desc: getText(programme.desc),
         icon: getIcon(programme.icon),
@@ -138,6 +167,8 @@ class EpgService {
       nextPrograms[channelId].sort((a, b) => a.start - b.start);
     }
 
+    if (!Object.keys(nextPrograms).length) throw new Error('XMLTV contains no valid programmes');
+
     this.channels = nextChannels;
     this.programs = nextPrograms;
     this.aliases = nextAliases;
@@ -149,8 +180,10 @@ class EpgService {
       if (this.programs[candidate]) return candidate;
       const lower = String(candidate).toLowerCase();
       if (this.programs[lower]) return lower;
-      const alias = this.aliases[normalizeKey(candidate)];
-      if (alias && this.programs[alias]) return alias;
+      for (const key of getAliasKeys(candidate)) {
+        const alias = this.aliases[key];
+        if (alias && this.programs[alias]) return alias;
+      }
     }
     return channelId;
   }
@@ -189,6 +222,7 @@ class EpgService {
       programs,
       source: this.epgUrl,
       updatedAt: this.lastFetch ? this.lastFetch.toISOString() : null,
+      error: this.lastError,
     };
   }
 
