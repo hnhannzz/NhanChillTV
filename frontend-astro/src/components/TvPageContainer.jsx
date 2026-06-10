@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Clock, Heart, Search } from 'lucide-react';
+import { Clock, Heart, Radio, Search } from 'lucide-react';
 import LivePlayerView from './LivePlayerView';
 
 const API_BASE = '/api';
@@ -10,7 +10,9 @@ export default function TvPageContainer() {
   const [favorites, setFavorites] = useState([]);
   const [currentChannelId, setCurrentChannelId] = useState(null);
   const [streamParam, setStreamParam] = useState(null);
-  const [eventId, setEventId] = useState(null);
+  const [eventId, setEventId] = useState(() => new URLSearchParams(window.location.search).get('event'));
+  const [eventData, setEventData] = useState(null);
+  const [activeEventStream, setActiveEventStream] = useState(0);
   const [epgData, setEpgData] = useState(null);
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
@@ -56,18 +58,23 @@ export default function TvPageContainer() {
           const eventsRes = await fetch(`${API_BASE}/admin/events`);
           const eventsData = await eventsRes.json();
           const event = eventsData.success ? eventsData.data.find(item => item.id === initialEventId) : null;
-          if (event?.sourceType === 'iptv' && event.sourceChannelId) {
-            initialChannelId = event.sourceChannelId;
-            initialStreamUrl = null;
-          } else if (event?.stream) {
-            initialStreamUrl = event.stream;
-            initialChannelId = null;
+          if (event) {
+            const streams = event.streams?.length ? event.streams : [{ id: 'primary', name: 'Luồng chính', sourceType: event.sourceType, sourceChannelId: event.sourceChannelId, stream: event.stream }];
+            setEventData({ ...event, streams });
+            const firstStream = streams[0];
+            if (firstStream?.sourceType === 'iptv' && firstStream.sourceChannelId) {
+              initialChannelId = firstStream.sourceChannelId;
+              initialStreamUrl = null;
+            } else if (firstStream?.stream) {
+              initialStreamUrl = firstStream.stream;
+              initialChannelId = null;
+            }
           }
         }
 
         if (initialChannelId) setCurrentChannelId(initialChannelId);
         if (initialStreamUrl) setStreamParam(initialStreamUrl);
-        if (!initialChannelId && !initialStreamUrl && loadedChannels.length) setCurrentChannelId(loadedChannels[0].id);
+        if (!initialEventId && !initialChannelId && !initialStreamUrl && loadedChannels.length) setCurrentChannelId(loadedChannels[0].id);
 
         const token = localStorage.getItem('userToken');
         if (token) {
@@ -83,7 +90,7 @@ export default function TvPageContainer() {
   }, []);
 
   useEffect(() => {
-    if (!currentChannelId) {
+    if (!currentChannelId || eventId) {
       setEpgData(null);
       return;
     }
@@ -95,7 +102,20 @@ export default function TvPageContainer() {
       .then(response => response.ok ? response.json() : Promise.reject(new Error(`HTTP ${response.status}`)))
       .then(data => data.success && setEpgData(data.data))
       .catch(err => console.warn('[TV] EPG unavailable:', err.message));
-  }, [channels, currentChannelId]);
+  }, [channels, currentChannelId, eventId]);
+
+  const selectEventStream = index => {
+    const stream = eventData?.streams?.[index];
+    if (!stream) return;
+    setActiveEventStream(index);
+    if (stream.sourceType === 'iptv') {
+      setCurrentChannelId(stream.sourceChannelId || null);
+      setStreamParam(null);
+    } else {
+      setCurrentChannelId(null);
+      setStreamParam(stream.stream || null);
+    }
+  };
 
   const playChannel = (id) => {
     setCurrentChannelId(id);
@@ -136,6 +156,23 @@ export default function TvPageContainer() {
     ? new Date(value).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
     : '--:--';
 
+  if (eventId) {
+    return (
+      <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-0 pb-8 pt-0 lg:px-8 lg:pt-6">
+        {eventData && <div className="px-4 lg:px-0"><div className="flex flex-wrap items-end justify-between gap-3"><div><div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-[#ED2C25]"><Radio size={14} /> {eventData.status === 'live' ? 'Đang trực tiếp' : eventData.status === 'ended' ? 'Đã kết thúc' : 'Sắp diễn ra'}</div><h1 className="mt-1 text-xl font-black text-white md:text-2xl">{eventData.title}</h1></div>{eventData.streams.length > 1 && <div className="flex max-w-full gap-2 overflow-x-auto pb-1">{eventData.streams.map((stream, index) => <button key={stream.id || index} onClick={() => selectEventStream(index)} className={`shrink-0 rounded-md px-3 py-2 text-sm font-semibold ${activeEventStream === index ? 'bg-[#ED2C25] text-white' : 'bg-white/8 text-white/65 hover:bg-white/12'}`}>{stream.name || `Luồng ${index + 1}`}</button>)}</div>}</div></div>}
+        <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,68fr)_minmax(340px,32fr)]">
+          <div className="w-full overflow-hidden bg-black shadow-2xl lg:rounded-lg lg:border lg:border-white/10">
+            {(currentChannelId || streamParam) ? <LivePlayerView key={`${currentChannelId || streamParam}-${activeEventStream}`} channelId={currentChannelId} streamParam={streamParam} /> : <div className="flex aspect-video items-center justify-center text-sm text-white/45">Đang chờ nguồn phát sự kiện...</div>}
+          </div>
+          <aside className="flex h-[480px] min-h-0 w-full flex-col overflow-hidden border-y border-white/10 bg-[#151515] lg:h-full lg:rounded-lg lg:border">
+            <div className="border-b border-white/10 bg-[#101010] px-4 py-3"><div className="font-bold text-white">Trò chuyện trực tiếp</div><div className="text-xs text-white/45">Cbox sự kiện</div></div>
+            <iframe title="Trò chuyện sự kiện NhanChillTV" src={CBOX_URL} width="100%" height="450" allow="autoplay" frameBorder="0" marginHeight="0" marginWidth="0" scrolling="auto" className="min-h-0 flex-1 bg-white" />
+          </aside>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-6 px-4 pb-8 pt-4 md:px-8 md:pt-8">
       <div className="grid items-stretch gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] xl:grid-cols-[minmax(0,68fr)_minmax(340px,32fr)]">
@@ -161,7 +198,6 @@ export default function TvPageContainer() {
                 src={CBOX_URL}
                 width="100%"
                 height="450"
-                allowTransparency="yes"
                 allow="autoplay"
                 frameBorder="0"
                 marginHeight="0"

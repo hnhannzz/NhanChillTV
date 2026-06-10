@@ -28,7 +28,9 @@ module.exports = {
   m3uPath: process.env.M3U_PATH || path.join(projectRoot, 'nginx/m3u_iptv/list.m3u'),
   hlsTempPath: process.env.HLS_TEMP_PATH || path.join(projectRoot, 'nginx/temp/hls_temp'),
   eventTempPath: process.env.EVENT_TEMP_PATH || path.join(projectRoot, 'nginx/temp/event_temp'),
+  epgCachePath: process.env.EPG_CACHE_PATH || path.join(projectRoot, 'nginx/temp/epg-cache.xml'),
   dbPath: process.env.DB_PATH || path.join(projectRoot, 'backend/db/data.json'),
+  rtmpControlUrl: process.env.RTMP_CONTROL_URL || 'http://127.0.0.1:8050/rtmp-control',
   
   // FFmpeg transcode settings
   ffmpeg: {

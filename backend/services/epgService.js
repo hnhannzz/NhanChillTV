@@ -1,5 +1,8 @@
 const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
 const { XMLParser } = require('fast-xml-parser');
+const config = require('../config');
 
 const DEFAULT_EPG_URL = 'https://vnepg.site/epg.xml';
 
@@ -58,41 +61,68 @@ class EpgService {
     this.lastError = null;
     this.fetchPromise = null;
     this.fetchInterval = Number(process.env.EPG_CACHE_TTL_MS || 60 * 60 * 1000);
+    this.failureRetryInterval = Number(process.env.EPG_RETRY_MS || 5 * 60 * 1000);
+    this.cachePath = config.epgCachePath;
+    this.lastAttempt = 0;
 
+    this.loadDiskCache();
     this.fetchData();
-    setInterval(() => this.fetchData(), this.fetchInterval);
+    const refreshTimer = setInterval(() => this.fetchData(), this.fetchInterval);
+    refreshTimer.unref?.();
   }
 
   async ensureData() {
     if (this.lastFetch && Date.now() - this.lastFetch.getTime() < this.fetchInterval && Object.keys(this.programs).length > 0) {
       return;
     }
+    if (this.lastError && Date.now() - this.lastAttempt < this.failureRetryInterval) return;
     await this.fetchData();
+  }
+
+  loadDiskCache() {
+    try {
+      if (!fs.existsSync(this.cachePath)) return;
+      const xml = fs.readFileSync(this.cachePath, 'utf8').replace(/^\uFEFF/, '');
+      this.parseEpg(xml);
+      this.lastFetch = fs.statSync(this.cachePath).mtime;
+      console.log(`[EPG] Loaded persistent cache from ${this.cachePath}`);
+    } catch (err) {
+      console.error('[EPG] Persistent cache error:', err.message);
+    }
+  }
+
+  saveDiskCache(xml) {
+    const dir = path.dirname(this.cachePath);
+    const tempPath = `${this.cachePath}.${process.pid}.tmp`;
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(tempPath, xml, 'utf8');
+    fs.renameSync(tempPath, this.cachePath);
   }
 
   async fetchData() {
     if (this.fetchPromise) return this.fetchPromise;
-
-    const requestUrl = new URL(this.epgUrl);
-    requestUrl.searchParams.set('_', Date.now());
+    this.lastAttempt = Date.now();
 
     this.fetchPromise = axios
-      .get(requestUrl.toString(), {
+      .get(this.epgUrl, {
         timeout: 60000,
         responseType: 'arraybuffer',
         maxContentLength: 25 * 1024 * 1024,
         headers: {
           Accept: 'application/xml,text/xml,*/*',
           'Accept-Encoding': 'gzip, deflate, br',
-          'Cache-Control': 'no-cache',
-          Pragma: 'no-cache',
+          Referer: 'https://vnepg.site/',
           'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36',
         },
       })
       .then((response) => {
         console.log('[EPG] Fetching EPG data from', this.epgUrl);
         const xml = Buffer.from(response.data).toString('utf8').replace(/^\uFEFF/, '');
+        if (!/^\s*<\?xml|^\s*<tv[\s>]/i.test(xml)) {
+          throw new Error('EPG source did not return XMLTV data');
+        }
         this.parseEpg(xml);
+        this.saveDiskCache(xml);
         this.lastFetch = new Date();
         this.lastError = null;
         console.log(`[EPG] Parsed ${Object.keys(this.channels).length} channels and ${Object.keys(this.programs).length} schedules`);

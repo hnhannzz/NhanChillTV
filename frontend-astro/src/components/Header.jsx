@@ -155,7 +155,7 @@ export default function Header({ toggleSidebar }) {
       </div>
 
       <div className="flex items-center gap-3">
-        <div ref={searchRef} className={classNames('relative', isMobileSearchOpen ? 'mobile-search-panel fixed inset-x-0 top-0 z-[70] block bg-black md:relative md:min-h-0 md:bg-transparent md:p-0' : 'hidden md:block')}>
+        <div ref={searchRef} className={classNames(isMobileSearchOpen ? 'mobile-search-panel fixed inset-0 z-[70] block bg-black md:relative md:inset-auto md:min-h-0 md:bg-transparent md:p-0' : 'relative hidden md:block')}>
           {isMobileSearchOpen && <div className="mb-4 flex items-center justify-between md:hidden"><span className="font-bold">Tìm kiếm</span><button onClick={() => { setIsMobileSearchOpen(false); setSearchOpen(false); }} className="rounded-full p-2 hover:bg-white/10" title="Đóng"><X size={22} /></button></div>}
           <input
             value={searchQuery}

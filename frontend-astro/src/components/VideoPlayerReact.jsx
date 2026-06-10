@@ -125,7 +125,7 @@ export const VideoPlayerReact = (props) => {
 
     if (!playerRef.current) {
       const videoElement = document.createElement('video-js');
-      videoElement.classList.add('vjs-big-play-centered');
+      videoElement.classList.add('vjs-big-play-centered', 'nhanchill-video-js');
       videoElement.setAttribute('playsinline', '');
       videoElement.setAttribute('webkit-playsinline', '');
       videoElement.style.width = '100%';

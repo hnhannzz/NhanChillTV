@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity, CalendarDays, ChevronDown, ChevronUp, CircleStop, Eye, EyeOff,
-  Gauge, ListVideo, LogOut, Pencil, Plus, Radio, RefreshCw, RotateCcw,
-  KeyRound, Save, Server, Settings, Trash2, X,
+  Copy, Gauge, ListVideo, LogOut, Pencil, Plus, Radio, RefreshCw, RotateCcw,
+  KeyRound, Save, Server, Settings, Trash2, UploadCloud, X,
 } from 'lucide-react';
 
 const API_BASE = '/api';
@@ -52,7 +52,7 @@ export default function AdminDashboard() {
   const loadData = useCallback(async () => {
     if (!token) return;
     const requests = await Promise.allSettled([
-      fetch(`${API_BASE}/admin/events`).then(response => response.json()),
+      adminRequest('/admin/events'),
       adminRequest('/admin/m3u-sources'),
       adminRequest('/admin/iptv-settings'),
       adminRequest('/admin/iptv-channels'),
@@ -200,7 +200,7 @@ function DashboardTab({ health, status, sources, events, streams, busy, onRefres
 
 function EventsTab({ events, onAdd, onEdit, onDelete }) {
   return <section><SectionHeader title="Sự kiện" subtitle="Quản lý nguồn phát và Cbox trên trang sự kiện" action={<button onClick={onAdd} className="flex items-center gap-2 rounded-md bg-[#ED2C25] px-3 py-2 text-sm font-bold"><Plus size={16} /> Thêm sự kiện</button>} />
-    <div className="mt-5 overflow-hidden rounded-lg border border-white/10 bg-[#151515]">{events.length ? events.map(event => <div key={event.id} className="flex flex-col gap-3 border-b border-white/5 p-4 last:border-0 sm:flex-row sm:items-center"><div className="min-w-0 flex-1"><div className="truncate font-bold">{event.title}</div><div className="mt-1 text-xs text-white/45">{event.time ? new Date(event.time).toLocaleString('vi-VN') : 'Chưa đặt thời gian'} · {event.sourceType || 'iptv'} · {event.status || 'upcoming'}</div></div><div className="flex gap-2"><button onClick={() => onEdit(event)} className="rounded-md bg-white/5 p-2 hover:bg-white/10" title="Sửa"><Pencil size={16} /></button><button onClick={() => onDelete(event)} className="rounded-md bg-red-500/10 p-2 text-red-300 hover:bg-red-500/20" title="Xóa"><Trash2 size={16} /></button></div></div>) : <Empty text="Chưa có sự kiện." />}</div>
+    <div className="mt-5 overflow-hidden rounded-lg border border-white/10 bg-[#151515]">{events.length ? events.map(event => <div key={event.id} className="flex flex-col gap-3 border-b border-white/5 p-4 last:border-0 sm:flex-row sm:items-center"><div className="min-w-0 flex-1"><div className="truncate font-bold">{event.title}</div><div className="mt-1 text-xs text-white/45">{event.startAt || event.time ? new Date(event.startAt || event.time).toLocaleString('vi-VN') : 'Chưa đặt thời gian'}{event.endAt ? ` → ${new Date(event.endAt).toLocaleString('vi-VN')}` : ''} · {(event.streams?.length || 1)} luồng · {event.status || 'upcoming'}</div></div><div className="flex gap-2"><button onClick={() => onEdit(event)} className="rounded-md bg-white/5 p-2 hover:bg-white/10" title="Sửa"><Pencil size={16} /></button><button onClick={() => onDelete(event)} className="rounded-md bg-red-500/10 p-2 text-red-300 hover:bg-red-500/20" title="Xóa"><Trash2 size={16} /></button></div></div>) : <Empty text="Chưa có sự kiện." />}</div>
   </section>;
 }
 
@@ -259,11 +259,58 @@ function PasswordTab({ busy, onChange }) {
 }
 
 function EventModal({ event, channels, token, onClose, onSaved }) {
-  const [form, setForm] = useState(() => ({ title: '', description: '', time: new Date().toISOString(), status: 'upcoming', sourceType: 'iptv', sourceChannelId: '', stream: '', streamKey: '', thumbnailBase64: '', isPinned: false, ...(event || {}) }));
+  const fileInputRef = useRef(null);
+  const [form, setForm] = useState(() => {
+    const startAt = event?.startAt || event?.time || new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const endAt = event?.endAt || new Date(new Date(startAt).getTime() + 2 * 60 * 60 * 1000).toISOString();
+    const legacyStream = {
+      id: 'primary', name: event?.streamName || 'Luồng chính', sourceType: event?.sourceType || 'iptv',
+      sourceChannelId: event?.sourceChannelId || '', stream: event?.stream || '', streamKey: event?.streamKey || '',
+    };
+    return {
+      title: '', description: '', startAt, endAt, thumbnailBase64: '', isPinned: false,
+      ...(event || {}), streams: event?.streams?.length ? event.streams : [legacyStream],
+    };
+  });
   const [saving, setSaving] = useState(false);
-  const localTime = value => { const date = new Date(value); if (Number.isNaN(date.getTime())) return ''; date.setMinutes(date.getMinutes() - date.getTimezoneOffset()); return date.toISOString().slice(0, 16); };
+  const [dragging, setDragging] = useState(false);
+
+  const readImage = useCallback(file => {
+    if (!file?.type?.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = () => setForm(current => ({ ...current, thumbnailBase64: reader.result }));
+    reader.readAsDataURL(file);
+  }, []);
+
+  useEffect(() => {
+    const paste = pasteEvent => {
+      const file = [...(pasteEvent.clipboardData?.files || [])].find(item => item.type.startsWith('image/'));
+      if (file) readImage(file);
+    };
+    document.addEventListener('paste', paste);
+    return () => document.removeEventListener('paste', paste);
+  }, [readImage]);
+
+  const localParts = value => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return { date: '', time: '' };
+    const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString();
+    return { date: local.slice(0, 10), time: local.slice(11, 16) };
+  };
+  const updateSchedule = (key, part, value) => {
+    const current = localParts(form[key]);
+    const nextDate = part === 'date' ? value : current.date;
+    const nextTime = part === 'time' ? value : current.time;
+    if (nextDate && nextTime) setForm(previous => ({ ...previous, [key]: new Date(`${nextDate}T${nextTime}:00`).toISOString() }));
+  };
+  const updateStream = (index, changes) => setForm(current => ({ ...current, streams: current.streams.map((stream, streamIndex) => streamIndex === index ? { ...stream, ...changes } : stream) }));
+  const addStream = () => setForm(current => ({ ...current, streams: [...current.streams, { id: `stream_${Date.now()}`, name: `Luồng ${current.streams.length + 1}`, sourceType: 'obs', sourceChannelId: '', stream: '', streamKey: '' }] }));
+  const removeStream = index => setForm(current => ({ ...current, streams: current.streams.filter((_, streamIndex) => streamIndex !== index) }));
+
   const submit = async submitEvent => {
     submitEvent.preventDefault();
+    if (!form.streams.length) return alert('Sự kiện phải có ít nhất một luồng.');
+    if (new Date(form.endAt).getTime() <= new Date(form.startAt).getTime()) return alert('Giờ kết thúc phải sau giờ bắt đầu.');
     setSaving(true);
     try {
       const response = await fetch(event ? `${API_BASE}/admin/events/${event.id}` : `${API_BASE}/admin/events`, { method: event ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(form) });
@@ -272,19 +319,16 @@ function EventModal({ event, channels, token, onClose, onSaved }) {
       onSaved();
     } catch (err) { alert(`Không thể lưu sự kiện: ${err.message}`); } finally { setSaving(false); }
   };
-  const upload = uploadEvent => { const file = uploadEvent.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => setForm(current => ({ ...current, thumbnailBase64: reader.result })); reader.readAsDataURL(file); };
-  return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4"><form onSubmit={submit} className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-white/10 bg-[#151515]"><div className="flex items-center justify-between border-b border-white/10 px-5 py-4"><h2 className="font-bold">{event ? 'Sửa sự kiện' : 'Thêm sự kiện'}</h2><button type="button" onClick={onClose} className="rounded p-1 hover:bg-white/10"><X size={19} /></button></div><div className="grid flex-1 gap-4 overflow-y-auto p-5 md:grid-cols-2">
+  const start = localParts(form.startAt);
+  const end = localParts(form.endAt);
+  return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-3 md:p-5"><form onSubmit={submit} className="flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-white/10 bg-[#151515]"><div className="flex items-center justify-between border-b border-white/10 px-5 py-4"><div><h2 className="font-bold">{event ? 'Sửa sự kiện' : 'Thêm sự kiện'}</h2><p className="text-xs text-white/40">Trạng thái tự chuyển theo giờ bắt đầu và kết thúc</p></div><button type="button" onClick={onClose} className="rounded p-1 hover:bg-white/10"><X size={19} /></button></div><div className="grid flex-1 gap-5 overflow-y-auto p-5 md:grid-cols-2">
     <Field label="Tên sự kiện"><input required value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="input-admin" /></Field>
-    <Field label="Thời gian"><input required type="datetime-local" value={localTime(form.time)} onChange={e => setForm({ ...form, time: new Date(e.target.value).toISOString() })} className="input-admin [color-scheme:dark]" /></Field>
-    <Field label="Trạng thái"><select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} className="input-admin"><option value="upcoming">Sắp diễn ra</option><option value="live">Đang trực tiếp</option><option value="ended">Đã kết thúc</option></select></Field>
-    <Field label="Loại nguồn"><select value={form.sourceType} onChange={e => setForm({ ...form, sourceType: e.target.value })} className="input-admin"><option value="iptv">Kênh IPTV</option><option value="obs">OBS / vMix</option><option value="custom">URL tùy chọn</option></select></Field>
-    {form.sourceType === 'iptv' && <Field label="Kênh IPTV"><select required value={form.sourceChannelId || ''} onChange={e => setForm({ ...form, sourceChannelId: e.target.value })} className="input-admin"><option value="">Chọn kênh</option>{channels.map(channel => <option key={channel.id} value={channel.id}>{channel.name}</option>)}</select></Field>}
-    {form.sourceType === 'custom' && <Field label="URL M3U8 / MPD"><input required value={form.stream || ''} onChange={e => setForm({ ...form, stream: e.target.value })} className="input-admin" placeholder="https://..." /></Field>}
-    {form.sourceType === 'obs' && <Field label="Stream key"><input value={form.streamKey || ''} onChange={e => setForm({ ...form, streamKey: e.target.value })} className="input-admin" placeholder="Tự tạo nếu để trống" /></Field>}
-    <Field label="Ảnh 16:9"><input type="file" accept="image/*" onChange={upload} className="block w-full text-sm text-white/55" /></Field>
-    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={Boolean(form.isPinned)} onChange={e => setForm({ ...form, isPinned: e.target.checked })} /> Ghim sự kiện</label>
+    <label className="flex items-center gap-2 self-end pb-2 text-sm"><input type="checkbox" checked={Boolean(form.isPinned)} onChange={e => setForm({ ...form, isPinned: e.target.checked })} /> Ghim sự kiện lên hero</label>
+    <div className="grid grid-cols-[1fr_120px] gap-2"><Field label="Ngày bắt đầu"><input required type="date" value={start.date} onChange={e => updateSchedule('startAt', 'date', e.target.value)} className="input-admin [color-scheme:dark]" /></Field><Field label="Giờ bắt đầu"><input required type="time" value={start.time} onChange={e => updateSchedule('startAt', 'time', e.target.value)} className="input-admin [color-scheme:dark]" /></Field></div>
+    <div className="grid grid-cols-[1fr_120px] gap-2"><Field label="Ngày kết thúc"><input required type="date" value={end.date} onChange={e => updateSchedule('endAt', 'date', e.target.value)} className="input-admin [color-scheme:dark]" /></Field><Field label="Giờ kết thúc"><input required type="time" value={end.time} onChange={e => updateSchedule('endAt', 'time', e.target.value)} className="input-admin [color-scheme:dark]" /></Field></div>
     <div className="md:col-span-2"><Field label="Mô tả"><textarea rows="3" value={form.description || ''} onChange={e => setForm({ ...form, description: e.target.value })} className="input-admin resize-none" /></Field></div>
-    {(form.thumbnailBase64 || form.thumbnailUrl) && <img src={form.thumbnailBase64 || form.thumbnailUrl} alt="Xem trước" className="aspect-video w-full rounded-md object-cover md:col-span-2" />}
+    <div className="md:col-span-2"><input ref={fileInputRef} type="file" accept="image/*" onChange={e => readImage(e.target.files?.[0])} className="hidden" /><button type="button" onClick={() => fileInputRef.current?.click()} onDragEnter={e => { e.preventDefault(); setDragging(true); }} onDragOver={e => e.preventDefault()} onDragLeave={() => setDragging(false)} onDrop={e => { e.preventDefault(); setDragging(false); readImage(e.dataTransfer.files?.[0]); }} className={`flex min-h-32 w-full items-center justify-center gap-4 rounded-lg border border-dashed p-4 text-left ${dragging ? 'border-[#ED2C25] bg-[#ED2C25]/10' : 'border-white/20 bg-black/20 hover:border-white/40'}`}>{form.thumbnailBase64 || form.thumbnailUrl ? <img src={form.thumbnailBase64 || form.thumbnailUrl} alt="Thumbnail" className="h-24 aspect-video rounded object-cover" /> : <UploadCloud size={30} className="text-[#ED2C25]" />}<span><strong className="block text-sm">Thumbnail sự kiện</strong><span className="text-xs text-white/45">Bấm chọn, kéo ảnh vào đây hoặc Ctrl + V</span></span></button></div>
+    <div className="md:col-span-2"><div className="mb-3 flex items-center justify-between"><div><h3 className="font-bold">Các luồng phát</h3><p className="text-xs text-white/45">Người xem có thể chuyển giữa các luồng này</p></div><button type="button" onClick={addStream} className="flex items-center gap-2 rounded-md bg-white/10 px-3 py-2 text-sm"><Plus size={15} /> Thêm luồng</button></div><div className="space-y-3">{form.streams.map((stream, index) => <div key={stream.id || index} className="rounded-lg border border-white/10 bg-black/20 p-4"><div className="grid gap-3 md:grid-cols-[1fr_170px_auto]"><Field label="Tên hiển thị"><input required value={stream.name || ''} onChange={e => updateStream(index, { name: e.target.value })} className="input-admin" placeholder="Luồng tiếng gốc" /></Field><Field label="Loại nguồn"><select value={stream.sourceType} onChange={e => updateStream(index, { sourceType: e.target.value })} className="input-admin"><option value="obs">OBS / vMix</option><option value="iptv">Kênh IPTV</option><option value="custom">URL tùy chọn</option></select></Field><button type="button" disabled={form.streams.length === 1} onClick={() => removeStream(index)} className="mt-6 rounded-md p-2 text-red-300 hover:bg-red-500/10 disabled:opacity-20" title="Xóa luồng"><Trash2 size={17} /></button></div>{stream.sourceType === 'iptv' && <div className="mt-3"><Field label="Kênh IPTV"><select required value={stream.sourceChannelId || ''} onChange={e => updateStream(index, { sourceChannelId: e.target.value })} className="input-admin"><option value="">Chọn kênh</option>{channels.map(channel => <option key={channel.id} value={channel.id}>{channel.name}</option>)}</select></Field></div>}{stream.sourceType === 'custom' && <div className="mt-3"><Field label="URL M3U8 / MPD"><input required value={stream.stream || ''} onChange={e => updateStream(index, { stream: e.target.value })} className="input-admin" placeholder="https://..." /></Field></div>}{stream.sourceType === 'obs' && <div className="mt-3 grid gap-2 md:grid-cols-[1fr_auto]"><Field label="Stream key"><input value={stream.streamKey || ''} onChange={e => updateStream(index, { streamKey: e.target.value.replace(/[^a-zA-Z0-9_-]/g, '') })} className="input-admin" placeholder="Để trống để server tự tạo" /></Field>{stream.streamKey && <button type="button" onClick={() => navigator.clipboard?.writeText(stream.streamKey)} className="mt-6 flex items-center gap-2 rounded-md bg-white/10 px-3 py-2 text-xs"><Copy size={14} /> Copy</button>}</div>}</div>)}</div></div>
   </div><div className="flex justify-end gap-2 border-t border-white/10 px-5 py-4"><button type="button" onClick={onClose} className="rounded-md px-4 py-2 hover:bg-white/5">Hủy</button><button disabled={saving} className="rounded-md bg-[#ED2C25] px-5 py-2 font-bold disabled:opacity-50">{saving ? 'Đang lưu...' : 'Lưu sự kiện'}</button></div></form></div>;
 }
 

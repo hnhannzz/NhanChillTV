@@ -4,6 +4,7 @@ const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const axios = require('axios');
 const Database = require('../db/database');
 const config = require('../config');
 const pidusage = require('pidusage');
@@ -59,7 +60,7 @@ router.post('/change-password', auth, (req, res) => {
 });
 
 function processEventPayload(data, id) {
-  let eventData = { ...data };
+  const eventData = { ...data };
   
   if (data.thumbnailBase64) {
     const base64Data = data.thumbnailBase64.replace(/^data:image\/\w+;base64,/, "");
@@ -69,26 +70,156 @@ function processEventPayload(data, id) {
   }
   delete eventData.thumbnailBase64;
 
-  if (data.sourceType === 'obs') {
-    const streamKey = data.streamKey || `event_${id}`;
-    const hlsDir = path.join(config.hlsTempPath, streamKey);
-    if (!fs.existsSync(hlsDir)) {
-      fs.mkdirSync(hlsDir, { recursive: true });
+  eventData.startAt = data.startAt || data.time || null;
+  eventData.endAt = data.endAt || null;
+  eventData.time = eventData.startAt;
+
+  const requestedStreams = Array.isArray(data.streams) && data.streams.length
+    ? data.streams
+    : [{
+      id: 'primary',
+      name: data.streamName || 'Luồng chính',
+      sourceType: data.sourceType || 'iptv',
+      sourceChannelId: data.sourceChannelId || null,
+      stream: data.stream || null,
+      streamKey: data.streamKey || null,
+    }];
+
+  eventData.streams = requestedStreams.map((source, index) => {
+    const sourceType = ['obs', 'iptv', 'custom'].includes(source.sourceType) ? source.sourceType : 'iptv';
+    const streamId = String(source.id || `stream_${index + 1}`).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const normalized = {
+      id: streamId,
+      name: String(source.name || `Luồng ${index + 1}`).trim(),
+      sourceType,
+      sourceChannelId: sourceType === 'iptv' ? source.sourceChannelId || null : null,
+      stream: sourceType === 'custom' ? String(source.stream || '').trim() : null,
+      streamKey: null,
+    };
+
+    if (sourceType === 'obs') {
+      const requestedKey = String(source.streamKey || '').trim().replace(/[^a-zA-Z0-9_-]/g, '');
+      normalized.streamKey = requestedKey || `event_${id}_${index + 1}_${crypto.randomBytes(3).toString('hex')}`;
+      normalized.stream = `/hls/${normalized.streamKey}/index.m3u8`;
+      fs.mkdirSync(path.join(config.hlsTempPath, normalized.streamKey), { recursive: true });
     }
-    eventData.stream = `/hls/${streamKey}/index.m3u8`;
-    eventData.sourceChannelId = null;
-  } else if (data.sourceType === 'iptv') {
-    eventData.stream = null;
-  } else if (data.sourceType === 'custom') {
-    eventData.sourceChannelId = null;
-  }
+    return normalized;
+  });
+
+  const primary = eventData.streams[0];
+  eventData.sourceType = primary?.sourceType || 'iptv';
+  eventData.sourceChannelId = primary?.sourceChannelId || null;
+  eventData.stream = primary?.stream || null;
+  eventData.streamKey = primary?.streamKey || null;
+  eventData.status = getEventStatus(eventData);
   
   return eventData;
 }
 
+function getEventStatus(event, now = Date.now()) {
+  const startValue = event.startAt || event.time;
+  const start = startValue ? new Date(startValue).getTime() : 0;
+  const end = event.endAt ? new Date(event.endAt).getTime() : 0;
+  if (end && now >= end) return 'ended';
+  if (start && now >= start) return 'live';
+  if (start && now < start) return 'upcoming';
+  return event.status || 'upcoming';
+}
+
+function getEventStreams(event) {
+  if (Array.isArray(event.streams)) return event.streams;
+  return event.sourceType === 'obs' ? [{ sourceType: 'obs', streamKey: event.streamKey }] : [];
+}
+
+async function disconnectRtmpPublisher(streamKey) {
+  const name = encodeURIComponent(streamKey);
+  await Promise.allSettled(['live', 'hls'].map(app => axios.get(
+    `${config.rtmpControlUrl}/drop/publisher?app=${app}&name=${name}`,
+    { timeout: 1500, validateStatus: status => status < 500 }
+  )));
+}
+
+async function cleanupEventObsStreams(event) {
+  const hlsRoot = path.resolve(config.hlsTempPath);
+  for (const stream of getEventStreams(event)) {
+    if (stream.sourceType !== 'obs' || !stream.streamKey) continue;
+    const key = String(stream.streamKey).replace(/[^a-zA-Z0-9_-]/g, '');
+    if (!key) continue;
+    const target = path.resolve(hlsRoot, key);
+    if (path.dirname(target) !== hlsRoot) continue;
+    await disconnectRtmpPublisher(key);
+    try {
+      if (fs.existsSync(target)) fs.rmSync(target, { recursive: true, force: true });
+      console.log(`[Event Cleanup] Removed OBS HLS data: ${key}`);
+    } catch (err) {
+      console.error(`[Event Cleanup] Failed for ${key}:`, err.message);
+    }
+  }
+}
+
+function cleanupEventThumbnail(event) {
+  const eventId = String(event.id || '').replace(/[^a-zA-Z0-9_-]/g, '');
+  if (!eventId) return;
+  const thumbnailPath = path.resolve(eventTempPath, `${eventId}.jpg`);
+  if (path.dirname(thumbnailPath) === path.resolve(eventTempPath) && fs.existsSync(thumbnailPath)) {
+    fs.rmSync(thumbnailPath, { force: true });
+  }
+}
+
+async function cleanupEventArtifacts(event) {
+  await cleanupEventObsStreams(event);
+  cleanupEventThumbnail(event);
+}
+
+async function getEventsWithCurrentStatus() {
+  const events = db.getEvents();
+  let changed = false;
+  const expired = [];
+  const normalized = [];
+  events.forEach(event => {
+    const status = getEventStatus(event);
+    if (status === 'ended') {
+      expired.push(event);
+      changed = true;
+      return;
+    }
+    if (status !== event.status) {
+      changed = true;
+    }
+    normalized.push(status === event.status ? event : { ...event, status });
+  });
+  if (changed) {
+    const data = db.read();
+    data.events = normalized;
+    db.write(data);
+  }
+  await Promise.allSettled(expired.map(cleanupEventArtifacts));
+  return normalized;
+}
+
 // Events CRUD
-router.get('/events', (req, res) => {
-  res.json({ success: true, data: db.getEvents() });
+router.post('/events/validate-stream', (req, res) => {
+  const streamKey = String(req.body?.name || req.query?.name || '').trim();
+  const now = Date.now();
+  const valid = streamKey && db.getEvents().some(event => {
+    const end = event.endAt ? new Date(event.endAt).getTime() : 0;
+    if (end && now >= end) return false;
+    return getEventStreams(event).some(stream => stream.sourceType === 'obs' && stream.streamKey === streamKey);
+  });
+  return valid ? res.status(204).end() : res.status(403).end();
+});
+
+router.get('/events', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  const isAdmin = adminSessions.has(token);
+  const currentEvents = await getEventsWithCurrentStatus();
+  const events = currentEvents.map(event => isAdmin ? event : {
+    ...event,
+    streamKey: undefined,
+    streams: event.streams?.map(stream => ({ ...stream, streamKey: undefined })),
+  });
+  res.json({ success: true, data: events });
 });
 
 router.post('/events', auth, (req, res) => {
@@ -103,8 +234,14 @@ router.post('/events', auth, (req, res) => {
   res.json({ success: true, data: processedData });
 });
 
-router.put('/events/:id', auth, (req, res) => {
+router.put('/events/:id', auth, async (req, res) => {
+  const previousEvent = db.getEvents().find(item => item.id === req.params.id);
   const processedData = processEventPayload(req.body, req.params.id);
+  if (previousEvent) {
+    const retainedKeys = new Set(getEventStreams(processedData).map(stream => stream.streamKey).filter(Boolean));
+    const removedStreams = getEventStreams(previousEvent).filter(stream => stream.streamKey && !retainedKeys.has(stream.streamKey));
+    if (removedStreams.length) await cleanupEventObsStreams({ streams: removedStreams });
+  }
   const event = db.updateEvent(req.params.id, processedData);
   if (event) {
     res.json({ success: true, data: event });
@@ -113,10 +250,18 @@ router.put('/events/:id', auth, (req, res) => {
   }
 });
 
-router.delete('/events/:id', auth, (req, res) => {
+router.delete('/events/:id', auth, async (req, res) => {
+  const event = db.getEvents().find(item => item.id === req.params.id);
   db.deleteEvent(req.params.id);
+  if (event) await cleanupEventArtifacts(event);
   res.json({ success: true });
 });
+
+const eventStatusTimer = setInterval(() => {
+  getEventsWithCurrentStatus().catch(err => console.error('[Event Cleanup] Sweep failed:', err.message));
+}, 10000);
+eventStatusTimer.unref?.();
+setImmediate(() => getEventsWithCurrentStatus().catch(err => console.error('[Event Cleanup] Initial sweep failed:', err.message)));
 
 // M3U Sources Management
 router.get('/m3u-sources', auth, (req, res) => {
