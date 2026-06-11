@@ -62,9 +62,9 @@ export const VideoPlayerReact = (props) => {
         maxPlaylistRetries: 6,
         playlistExclusionDuration: 30,
       },
-      nativeAudioTracks: false,
-      nativeVideoTracks: false,
-      nativeTextTracks: false,
+      nativeAudioTracks: videojs.browser.IS_SAFARI,
+      nativeVideoTracks: videojs.browser.IS_SAFARI,
+      nativeTextTracks: videojs.browser.IS_SAFARI,
     },
     ...(options || {}),
     sources: sources.slice(0, 1),
@@ -128,6 +128,8 @@ export const VideoPlayerReact = (props) => {
       videoElement.classList.add('vjs-big-play-centered', 'nhanchill-video-js');
       videoElement.setAttribute('playsinline', '');
       videoElement.setAttribute('webkit-playsinline', '');
+      videoElement.style.backfaceVisibility = 'hidden';
+      videoElement.style.transform = 'translate3d(0, 0, 0)';
       videoElement.style.width = '100%';
       videoElement.style.height = '100%';
       videoRef.current.appendChild(videoElement);

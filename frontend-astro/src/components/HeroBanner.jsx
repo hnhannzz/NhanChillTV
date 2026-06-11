@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Info, Play } from 'lucide-react';
 import MovieModal from './MovieModal';
 import { fetchNguoncJson, getNguoncItems } from '../lib/nguoncApi';
@@ -9,6 +9,7 @@ export default function HeroBanner() {
   const [slides, setSlides] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalSlug, setModalSlug] = useState(null);
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
     Promise.allSettled([
@@ -37,6 +38,13 @@ export default function HeroBanner() {
     return () => clearInterval(timer);
   }, [slides]);
 
+  useEffect(() => {
+    if (slides.length < 2) return;
+    const nextSlide = slides[(currentIndex + 1) % slides.length];
+    const nextImage = nextSlide?.poster_url || nextSlide?.thumb_url;
+    if (nextImage) new Image().src = nextImage;
+  }, [currentIndex, slides]);
+
   if (loading) return <div className="h-[60vh] w-full animate-pulse bg-[#0A0A0A] md:h-[80vh]" />;
   if (!slides.length) return null;
 
@@ -47,20 +55,32 @@ export default function HeroBanner() {
     : `/movie-detail/?slug=${encodeURIComponent(currentSlide.slug)}`;
 
   return (
-    <motion.section className="group relative h-[60vh] w-full select-none overflow-hidden bg-black md:h-[80vh]" onPanEnd={(event, info) => {
+    <motion.section style={{ touchAction: 'pan-y' }} className="group relative h-[60vh] w-full select-none overflow-hidden bg-black md:h-[80vh]" onPanEnd={(event, info) => {
       if (info.offset.x < -50) setCurrentIndex(index => (index + 1) % slides.length);
       if (info.offset.x > 50) setCurrentIndex(index => (index - 1 + slides.length) % slides.length);
     }}>
-      <AnimatePresence mode="wait">
-        <motion.div key={currentSlide.id || currentSlide.slug || currentIndex} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.35 }} className="absolute inset-0">
-          <img src={currentSlide.poster_url || currentSlide.thumb_url || '/poster.jpg'} alt={currentSlide.name} className="h-full w-full object-cover opacity-65" />
+      <AnimatePresence initial={false}>
+        <motion.div
+          key={currentSlide.id || currentSlide.slug || currentIndex}
+          initial={{ opacity: 0, scale: reduceMotion ? 1 : 1.025 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ opacity: { duration: reduceMotion ? 0.01 : 0.55 }, scale: { duration: reduceMotion ? 0.01 : 1.2, ease: 'easeOut' } }}
+          className="absolute inset-0 will-change-transform"
+        >
+          <img src={currentSlide.poster_url || currentSlide.thumb_url || '/poster.jpg'} alt={currentSlide.name} className="h-full w-full object-cover opacity-65" decoding="async" />
           <div className="absolute inset-0 bg-gradient-to-r from-black via-black/45 to-transparent" />
           <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-transparent to-transparent" />
         </motion.div>
       </AnimatePresence>
 
       <div className="absolute inset-0 z-20 flex w-full flex-col justify-end px-4 pb-16 md:w-2/3 md:px-12 md:pb-28">
-        <motion.div key={`content-${currentSlide.id || currentSlide.slug || currentIndex}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.25 }}>
+        <motion.div
+          key={`content-${currentSlide.id || currentSlide.slug || currentIndex}`}
+          initial={{ opacity: 0, y: reduceMotion ? 0 : 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: reduceMotion ? 0.01 : 0.45, ease: [0.22, 1, 0.36, 1], delay: reduceMotion ? 0 : 0.08 }}
+        >
           <span className="mb-3 inline-block rounded bg-[#ED2C25] px-2 py-1 text-[10px] font-bold tracking-wide text-white md:text-xs">{currentSlide.isEvent ? (currentSlide.status === 'live' ? 'SỰ KIỆN TRỰC TIẾP' : 'SỰ KIỆN ĐÃ GHIM') : 'PHIM PHỔ BIẾN'}</span>
           <h1 className="line-clamp-2 text-3xl font-black leading-tight text-white md:text-6xl">{currentSlide.name}</h1>
           <h2 className="mt-2 text-sm font-bold text-white/60 md:text-xl">{currentSlide.original_name}</h2>

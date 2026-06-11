@@ -12,7 +12,7 @@ export default function MovieStreamPlayer({ episode }) {
         allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
         allowFullScreen
         referrerPolicy="no-referrer-when-downgrade"
-        className="w-full h-full border-none bg-black"
+        className="movie-player-frame w-full h-full border-none bg-black"
       />
     );
   }

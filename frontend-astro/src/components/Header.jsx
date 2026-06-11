@@ -23,14 +23,24 @@ export default function Header({ toggleSidebar }) {
   useEffect(() => {
     const mainContainer = document.getElementById('main-scroll-container');
     let frame = 0;
+    let hidden = false;
     const handleScroll = () => {
       if (!mainContainer || frame) return;
       frame = requestAnimationFrame(() => {
         const current = mainContainer.scrollTop;
+        const delta = current - lastScrollY.current;
         const scrolled = current > 0;
-        const direction = current > lastScrollY.current && current > 50 ? 'down' : 'up';
+        let direction = hidden ? 'down' : 'up';
+        if (current <= 24) direction = 'up';
+        else if (delta > 8 && current > 72) direction = 'down';
+        else if (delta < -8) direction = 'up';
+
         setIsScrolled(value => value === scrolled ? value : scrolled);
-        setScrollDirection(value => value === direction ? value : direction);
+        if ((direction === 'down') !== hidden) {
+          hidden = direction === 'down';
+          setScrollDirection(direction);
+          window.dispatchEvent(new CustomEvent('app-header-visibility', { detail: { hidden } }));
+        }
         lastScrollY.current = current;
         frame = 0;
       });
@@ -57,6 +67,7 @@ export default function Header({ toggleSidebar }) {
     }
 
     return () => {
+      window.dispatchEvent(new CustomEvent('app-header-visibility', { detail: { hidden: false } }));
       mainContainer?.removeEventListener('scroll', handleScroll);
       document.removeEventListener('mousedown', handleOutside);
       if (frame) cancelAnimationFrame(frame);
@@ -69,6 +80,11 @@ export default function Header({ toggleSidebar }) {
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = previousOverflow; };
   }, [isMobileSearchOpen]);
+
+  useEffect(() => {
+    const hidden = scrollDirection === 'down' && !isMobileSearchOpen;
+    window.dispatchEvent(new CustomEvent('app-header-visibility', { detail: { hidden } }));
+  }, [isMobileSearchOpen, scrollDirection]);
 
   useEffect(() => {
     const query = searchQuery.trim();
@@ -138,10 +154,10 @@ export default function Header({ toggleSidebar }) {
   };
 
   return (
-    <header className={classNames('fixed left-0 right-0 top-0 z-50 flex h-[64px] items-center justify-between px-4 transition-transform duration-200 md:px-8', {
+    <header className={classNames('app-header fixed left-0 right-0 top-0 z-50 flex h-[64px] items-center justify-between px-4 transition-transform duration-200 ease-out md:px-8', {
       'border-b border-white/10 bg-black/95 md:bg-black/85 md:backdrop-blur-md': isScrolled,
       'bg-black/60': !isScrolled,
-      '-translate-y-full': scrollDirection === 'down' && !isMobileSearchOpen,
+      'is-hidden': scrollDirection === 'down' && !isMobileSearchOpen,
     })}>
       <div className="flex items-center gap-4">
         <button onClick={toggleSidebar} className="rounded-full p-2 hover:bg-white/10 md:hidden" title="Mở menu"><Menu size={24} /></button>

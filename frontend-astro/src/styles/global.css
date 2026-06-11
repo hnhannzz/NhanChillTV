@@ -21,8 +21,9 @@
   }
 
   .mobile-horizontal-scroll {
-    overscroll-behavior-x: contain;
+    overscroll-behavior-x: auto;
     scroll-behavior: auto;
+    touch-action: pan-x pan-y;
   }
 
   .mobile-search-panel {
@@ -37,6 +38,61 @@
 
   .mobile-search-results {
     max-height: calc(100dvh - max(1rem, env(safe-area-inset-top)) - 142px);
+  }
+}
+
+.app-header {
+  backface-visibility: hidden;
+  transform: translate3d(0, 0, 0);
+  will-change: transform;
+}
+
+.app-header.is-hidden {
+  transform: translate3d(0, -100%, 0);
+}
+
+.mobile-player-shell {
+  backface-visibility: hidden;
+  contain: layout paint;
+  isolation: isolate;
+  transform: translate3d(0, 0, 0);
+  transition: transform 200ms ease-out;
+  will-change: transform;
+}
+
+.mobile-player-shell.header-hidden {
+  transform: translate3d(0, -64px, 0);
+}
+
+.movie-player-shell,
+.movie-player-frame {
+  backface-visibility: hidden;
+  transform: translate3d(0, 0, 0);
+}
+
+.movie-player-shell {
+  contain: layout paint;
+  isolation: isolate;
+}
+
+.movie-player-frame {
+  display: block;
+}
+
+@media (min-width: 1024px) {
+  .mobile-player-shell,
+  .mobile-player-shell.header-hidden {
+    contain: none;
+    transform: none;
+    transition: none;
+    will-change: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-header,
+  .mobile-player-shell {
+    transition-duration: 1ms !important;
   }
 }
 

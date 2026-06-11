@@ -180,7 +180,7 @@ export default function MovieDetailContainer() {
       </div>
 
       {/* 2. Player Section (Centered, Prominent) */}
-      <div className="w-full bg-black rounded-xl overflow-hidden shadow-2xl border border-white/5 relative mx-auto">
+      <div className="movie-player-shell w-full bg-black rounded-xl overflow-hidden shadow-2xl border border-white/5 relative mx-auto">
         {currentEpisode ? (
           <div className="aspect-video w-full bg-[#0A0A0A]">
             <MovieStreamPlayer episode={currentEpisode} />
@@ -254,7 +254,7 @@ export default function MovieDetailContainer() {
               value={newComment}
               onChange={e => setNewComment(e.target.value)}
               placeholder="Nhập bình luận của bạn..."
-              className="w-full bg-[#1A1A1A] border border-white/10 rounded-xl py-3 pl-4 pr-12 text-sm text-white focus:outline-none focus:border-[#ED2C25] transition-colors"
+              className="w-full bg-[#1A1A1A] border border-white/10 rounded-xl py-3 pl-4 pr-12 text-base text-white focus:outline-none focus:border-[#ED2C25] transition-colors"
             />
             <button 
               type="submit" 
