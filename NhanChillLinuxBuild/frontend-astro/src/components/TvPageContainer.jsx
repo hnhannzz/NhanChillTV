@@ -27,8 +27,12 @@ export default function TvPageContainer() {
       if (!mainContainer || frame) return;
       frame = requestAnimationFrame(() => {
         const currentScrollY = mainContainer.scrollTop;
-        const hidden = currentScrollY > 0 && currentScrollY > lastScrollY.current;
-        setIsHeaderHidden(current => current === hidden ? current : hidden);
+        const delta = currentScrollY - lastScrollY.current;
+        // Dead-zone: only change direction when scroll delta > 5px (synced with Header)
+        if (Math.abs(delta) > 5) {
+          const hidden = delta > 0 && currentScrollY > 50;
+          setIsHeaderHidden(current => current === hidden ? current : hidden);
+        }
         lastScrollY.current = currentScrollY;
         frame = 0;
       });
@@ -195,7 +199,7 @@ export default function TvPageContainer() {
       <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-0 pb-8 pt-0 lg:px-8 lg:pt-6">
         <div className="hidden lg:block">{eventHeading}</div>
         <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,68fr)_minmax(340px,32fr)]">
-          <div className={`fixed left-0 right-0 z-50 w-full overflow-hidden bg-black shadow-2xl transition-[top] duration-200 lg:static lg:z-auto lg:rounded-lg lg:border lg:border-white/10 ${isHeaderHidden ? 'top-0' : 'top-[64px]'}`}>
+          <div className={`fixed left-0 right-0 z-50 w-full overflow-hidden bg-black shadow-2xl transition-[top] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] lg:static lg:z-auto lg:rounded-lg lg:border lg:border-white/10 ${isHeaderHidden ? 'top-0' : 'top-[64px]'}`} style={{ willChange: 'top' }}>
             {(currentChannelId || streamParam) ? <LivePlayerView key={`${currentChannelId || streamParam}-${activeEventStream}`} channelId={currentChannelId} streamParam={streamParam} /> : <div className="flex aspect-video items-center justify-center text-sm text-white/45">Đang chờ nguồn phát sự kiện...</div>}
           </div>
           <div className="aspect-video w-full lg:hidden" />
@@ -209,7 +213,7 @@ export default function TvPageContainer() {
   return (
     <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-6 px-4 pb-8 pt-4 md:px-8 md:pt-8">
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] xl:grid-cols-[minmax(0,68fr)_minmax(340px,32fr)]">
-        <div className={`fixed left-0 right-0 z-50 w-full overflow-hidden bg-black shadow-2xl transition-all duration-300 lg:static lg:z-auto lg:rounded-lg lg:border lg:border-white/10 ${isHeaderHidden ? 'top-0' : 'top-[64px]'}`}>
+        <div className={`fixed left-0 right-0 z-50 w-full overflow-hidden bg-black shadow-2xl transition-[top] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] lg:static lg:z-auto lg:rounded-lg lg:border lg:border-white/10 ${isHeaderHidden ? 'top-0' : 'top-[64px]'}`} style={{ willChange: 'top' }}>
           {(currentChannelId || streamParam) ? (
             <LivePlayerView key={currentChannelId || streamParam} channelId={currentChannelId} streamParam={streamParam} />
           ) : (

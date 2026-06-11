@@ -72,7 +72,7 @@ export default function HomeChannels() {
 
       <div 
         ref={scrollRef}
-        className="mobile-horizontal-scroll flex touch-pan-x gap-4 overflow-x-auto hide-scrollbar snap-x snap-proximity cursor-grab py-2 select-none px-4 md:snap-mandatory md:px-0"
+        className="mobile-horizontal-scroll flex gap-4 overflow-x-auto hide-scrollbar snap-x snap-proximity cursor-grab py-2 select-none px-4 md:snap-mandatory md:px-0"
         onDragStart={(e) => e.preventDefault()}
       >
         {channels.map(channel => (

@@ -254,7 +254,7 @@ export default function MovieDetailContainer() {
               value={newComment}
               onChange={e => setNewComment(e.target.value)}
               placeholder="Nhập bình luận của bạn..."
-              className="w-full bg-[#1A1A1A] border border-white/10 rounded-xl py-3 pl-4 pr-12 text-sm text-white focus:outline-none focus:border-[#ED2C25] transition-colors"
+              className="w-full bg-[#1A1A1A] border border-white/10 rounded-xl py-3 pl-4 pr-12 text-base md:text-sm text-white focus:outline-none focus:border-[#ED2C25] transition-colors"
             />
             <button 
               type="submit" 

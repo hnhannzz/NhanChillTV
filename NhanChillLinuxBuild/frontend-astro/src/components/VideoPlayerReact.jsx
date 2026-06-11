@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+
+const IS_IOS = typeof navigator !== 'undefined' && (/iPad|iPhone|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 import videojs from 'video.js';
 import 'video.js/dist/video-js.css';
 import { getMimeType, inferPlaybackType } from '../lib/playbackUrl';
@@ -55,16 +57,18 @@ export const VideoPlayerReact = (props) => {
       vhs: {
         overrideNative: !videojs.browser.IS_SAFARI,
         enableLowInitialPlaylist: true,
-        smoothQualityChange: false,
+        smoothQualityChange: videojs.browser.IS_SAFARI,
+        fastQualityChange: !videojs.browser.IS_SAFARI,
         useBandwidthFromLocalStorage: false,
         limitRenditionByPlayerDimensions: true,
         handleManifestRedirects: true,
         maxPlaylistRetries: 6,
         playlistExclusionDuration: 30,
+        ...(IS_IOS ? { bandwidth: 4194304 } : {}),
       },
-      nativeAudioTracks: false,
-      nativeVideoTracks: false,
-      nativeTextTracks: false,
+      nativeAudioTracks: videojs.browser.IS_SAFARI,
+      nativeVideoTracks: videojs.browser.IS_SAFARI,
+      nativeTextTracks: videojs.browser.IS_SAFARI,
     },
     ...(options || {}),
     sources: sources.slice(0, 1),
@@ -189,7 +193,7 @@ export const VideoPlayerReact = (props) => {
   }, []);
 
   return (
-    <div data-vjs-player className={className} style={{ width: '100%', height: '100%', position: 'relative', background: '#000', ...style }}>
+    <div data-vjs-player className={className} style={{ width: '100%', height: '100%', position: 'relative', background: '#000', transform: 'translateZ(0)', WebkitTransform: 'translateZ(0)', willChange: 'transform', ...style }}>
       <div ref={videoRef} style={{ width: '100%', height: '100%' }} />
       {error && (
         <div className="absolute bottom-2 left-2 right-2 z-20 rounded-md bg-red-700/95 px-3 py-2 text-center text-xs text-white">

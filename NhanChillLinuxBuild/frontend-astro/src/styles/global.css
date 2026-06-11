@@ -21,8 +21,9 @@
   }
 
   .mobile-horizontal-scroll {
-    overscroll-behavior-x: contain;
+    overscroll-behavior: auto;
     scroll-behavior: auto;
+    touch-action: auto;
   }
 
   .mobile-search-panel {
@@ -37,6 +38,17 @@
 
   .mobile-search-results {
     max-height: calc(100dvh - max(1rem, env(safe-area-inset-top)) - 142px);
+  }
+}
+
+/* Safari/iOS video GPU compositing */
+@supports (-webkit-touch-callout: none) {
+  [data-vjs-player],
+  .video-js {
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
   }
 }
 
