@@ -1,43 +1,26 @@
-# NhanChillTV Linux Server Build
+# NhanChillTV Linux Build
 
-NhanChillTV — IPTV streaming platform for small VPS servers.
+This is a clean Linux-native rebuild from `old_source code build`.
 
-**Target**: Debian 12/13, Ubuntu 24.04 — 2 vCPU / 1 GB RAM
+Main entry points:
 
-## Quick deploy
+- Frontend source: `frontend-astro`
+- Backend source: `backend`
+- Linux Nginx config: `nginx/nhanchilltv.conf`
+- Systemd unit: `systemd/nhanchilltv.service`
+- Build script: `scripts/build-linux.sh`
+- Debian deploy guide: `docs/DEPLOY-DEBIAN-13.md`
 
-```bash
-# Upload to server
-scp -r NhanChillLinuxBuild root@YOUR_SERVER_IP:/root/
+Local build:
 
-# SSH and install
-ssh root@YOUR_SERVER_IP
-cd /root/NhanChillLinuxBuild
-sudo bash scripts/install.sh
+```sh
+sh scripts/build-linux.sh
 ```
 
-## Access
+Run backend directly:
 
-| Page | URL |
-|---|---|
-| Home | `http://YOUR_SERVER_IP/` |
-| TV | `http://YOUR_SERVER_IP/tv/` |
-| Admin | `http://YOUR_SERVER_IP/admin/` |
+```sh
+sh scripts/start-linux.sh
+```
 
-## Stack
-
-| Component | Role |
-|---|---|
-| nginx :80 | Reverse proxy, HLS delivery, RTMP ingest |
-| Node/Express :3000 | API, proxy, stream management |
-| FFmpeg | Transcoding (optional, default off) |
-| SQLite-less (JSON files) | Data persistence |
-
-## Resource profile
-
-- Idle RAM: ~150 MB (Debian 12)
-- With 1 viewer (direct mode): ~180 MB
-- With ffmpeg transcode: ~350 MB + stream overhead
-- Swap: 1 GB recommended
-
-Full deployment guide: [README_DEPLOY.md](README_DEPLOY.md).
+Use only streams and movie sources that the deployment has legal rights to access. This build does not implement DRM bypass or unauthorized key retrieval.

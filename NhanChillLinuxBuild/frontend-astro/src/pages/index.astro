@@ -1,0 +1,57 @@
+---
+import Layout from '../layouts/Layout.astro';
+import MainLayout from '../components/MainLayout.jsx';
+import HeroBanner from '../components/HeroBanner.jsx';
+import HomeEvents from '../components/HomeEvents.jsx';
+import HomeChannels from '../components/HomeChannels.jsx';
+import HomeMovies from '../components/HomeMovies.jsx';
+---
+
+<Layout title="NhanChillTV - Xem Phim & Truyền Hình">
+  <MainLayout client:load>
+    <HeroBanner client:load />
+
+    <div class="px-4 md:px-12 py-12 space-y-12 pb-32">
+
+      {/* Live Events Section */}
+      <section>
+        <div class="flex items-center justify-between mb-4 md:mb-6">
+          <h2 class="text-xl md:text-4xl font-black text-white flex items-center gap-2 md:gap-3">
+            <span class="w-1.5 md:w-2 h-6 md:h-12 bg-[#ED2C25] rounded-full inline-block"></span>
+            Sự Kiện Trực Tiếp
+          </h2>
+          <a href="/events/" class="text-xs md:text-lg font-bold text-white bg-[#ED2C25] hover:bg-red-700 px-4 md:px-6 py-2 md:py-2.5 rounded-full transition-colors shadow-lg shadow-red-500/30 shrink-0">Xem tất cả</a>
+        </div>
+        
+        <HomeEvents client:only="react" />
+      </section>
+      
+      {/* Live TV Section */}
+      <section class="mt-16">
+        <div class="flex items-center justify-between mb-4 md:mb-6">
+          <h2 class="text-xl md:text-4xl font-black text-white flex items-center gap-2 md:gap-3">
+            <span class="w-1.5 md:w-2 h-6 md:h-12 bg-[#ED2C25] rounded-full inline-block"></span>
+            Truyền Hình Trực Tiếp
+          </h2>
+          <a href="/tv/" class="text-xs md:text-lg font-bold text-white bg-[#ED2C25] hover:bg-red-700 px-4 md:px-6 py-2 md:py-2.5 rounded-full transition-colors shadow-lg shadow-red-500/30 shrink-0">Xem tất cả</a>
+        </div>
+        
+        <HomeChannels client:only="react" />
+      </section>
+
+      {/* Movies Section */}
+      <section>
+        <div class="flex items-center justify-between mb-4 mt-12 md:mb-6 md:mt-16">
+          <h2 class="text-xl md:text-4xl font-black text-white flex items-center gap-2 md:gap-3">
+            <span class="w-1.5 md:w-2 h-6 md:h-12 bg-[#ED2C25] rounded-full inline-block"></span>
+            Phim Mới Cập Nhật
+          </h2>
+          <a href="/movies/" class="text-xs md:text-lg font-bold text-white bg-[#ED2C25] hover:bg-red-700 px-4 md:px-6 py-2 md:py-2.5 rounded-full transition-colors shadow-lg shadow-red-500/30 shrink-0">Xem tất cả</a>
+        </div>
+        
+        <HomeMovies client:only="react" />
+      </section>
+
+    </div>
+  </MainLayout>
+</Layout>

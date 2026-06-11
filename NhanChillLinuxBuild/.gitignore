@@ -1,45 +1,16 @@
-# Dependencies
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-
-# Runtime environment and secrets
+backend/node_modules/
+frontend-astro/node_modules/
+frontend-astro/dist/
+frontend-astro/.astro/
+nginx/temp/
+nginx/m3u_iptv/*.m3u
+!nginx/m3u_iptv/*.example.m3u
+backend/db/*.json
+!backend/db/*.example.json
+*.log
+*.key
+*.pem
+id_rsa*
 .env
 .env.*
-!.env.example
-config/nhanchilltv.env
-/etc/
-
-# Runtime database and user-generated data
-app/backend/db/*.json
-!app/backend/db/*.example.json
-app/temp/**
-!app/temp/.gitkeep
-!app/temp/hls_temp/.gitkeep
-!app/temp/event_temp/.gitkeep
-
-# Local IPTV playlists. Keep only examples in git.
-app/m3u_iptv/*.m3u
-!app/m3u_iptv/*.example.m3u
-
-# Logs and caches
-*.log
-logs/
-tmp/
-temp/
-.cache/
-.DS_Store
-Thumbs.db
-
-# Editors
-.idea/
-.vscode/
-*.swp
-*.swo
-
-# OS/binary artifacts from the Windows build
-*.exe
-*.dll
-*.bat
