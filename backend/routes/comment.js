@@ -24,9 +24,13 @@ router.get('/:movieId', (req, res) => {
 });
 
 router.post('/:movieId', requireUserAuth, (req, res) => {
-  const { content, username } = req.body;
+  const content = String(req.body?.content || '').trim();
+  const username = String(req.body?.username || '').trim();
   if (!content || !username) {
     return res.status(400).json({ success: false, error: 'Missing fields' });
+  }
+  if (content.length > 500 || username.length > 60) {
+    return res.status(400).json({ success: false, error: 'Message is too long' });
   }
   const newComment = userDb.addComment(req.params.movieId, req.userId, username, content);
   res.json({ success: true, data: newComment });

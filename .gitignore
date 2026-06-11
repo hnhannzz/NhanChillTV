@@ -4,8 +4,13 @@ frontend-astro/node_modules/
 frontend-astro/dist/
 frontend-astro/.astro/
 nginx/temp/
+nginx/m3u_iptv/*.m3u
+!nginx/m3u_iptv/*.example.m3u
 backend/db/*.json
 !backend/db/*.example.json
 *.log
+*.key
+*.pem
+id_rsa*
 .env
 .env.*

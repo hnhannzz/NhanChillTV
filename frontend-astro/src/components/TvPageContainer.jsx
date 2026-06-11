@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Clock, Heart, Radio, Search } from 'lucide-react';
 import LivePlayerView from './LivePlayerView';
+import EventChat from './EventChat';
+import { getBrowserEpgSchedule } from '../lib/browserEpg';
 
 const API_BASE = '/api';
-const CBOX_URL = 'https://www5.cbox.ws/box/?boxid=963172&boxtag=2JejR5';
 
 export default function TvPageContainer() {
   const [channels, setChannels] = useState([]);
@@ -97,11 +98,28 @@ export default function TvPageContainer() {
     const currentChannel = channels.find(channel => channel.id === currentChannelId);
     const params = new URLSearchParams({ limit: '18' });
     if (currentChannel?.name) params.set('name', currentChannel.name);
+    let cancelled = false;
     setEpgData(null);
-    fetch(`${API_BASE}/epg/${encodeURIComponent(currentChannelId)}?${params}`)
-      .then(response => response.ok ? response.json() : Promise.reject(new Error(`HTTP ${response.status}`)))
-      .then(data => data.success && setEpgData(data.data))
-      .catch(err => console.warn('[TV] EPG unavailable:', err.message));
+
+    const loadEpg = async () => {
+      try {
+        const schedule = await getBrowserEpgSchedule(currentChannelId, currentChannel?.name, 18);
+        if (!cancelled) setEpgData(schedule);
+      } catch (browserError) {
+        console.info('[TV] Direct browser EPG fetch unavailable, using same-source fallback:', browserError.message);
+        try {
+          const response = await fetch(`${API_BASE}/epg/${encodeURIComponent(currentChannelId)}?${params}`);
+          const data = await response.json();
+          if (!response.ok || !data.success) throw new Error(data.error || `HTTP ${response.status}`);
+          if (!cancelled) setEpgData({ ...data.data, transport: 'server-fallback' });
+        } catch (fallbackError) {
+          console.warn('[TV] EPG unavailable:', fallbackError.message);
+        }
+      }
+    };
+
+    loadEpg();
+    return () => { cancelled = true; };
   }, [channels, currentChannelId, eventId]);
 
   const selectEventStream = index => {
@@ -182,10 +200,7 @@ export default function TvPageContainer() {
           </div>
           <div className="aspect-video w-full lg:hidden" />
           <div className="px-4 lg:hidden">{eventHeading}</div>
-          <aside className="flex h-[430px] min-h-0 w-full flex-col overflow-hidden border-y border-white/10 bg-[#151515] lg:h-[480px] lg:rounded-lg lg:border">
-            <div className="border-b border-white/10 bg-[#101010] px-4 py-3"><div className="font-bold text-white">Trò chuyện trực tiếp</div><div className="text-xs text-white/45">Cbox sự kiện</div></div>
-            <iframe title="Trò chuyện sự kiện NhanChillTV" src={CBOX_URL} width="100%" height="450" allow="autoplay" frameBorder="0" marginHeight="0" marginWidth="0" scrolling="auto" className="min-h-0 flex-1 bg-white" />
-          </aside>
+          <EventChat eventId={eventId} />
         </div>
       </div>
     );
@@ -205,56 +220,33 @@ export default function TvPageContainer() {
         <div className="block aspect-video w-full lg:hidden" />
 
         <aside className="flex h-[330px] min-h-0 w-full flex-col overflow-hidden rounded-lg border border-white/10 bg-[#151515] lg:h-[420px] xl:h-[460px]">
-          {eventId ? (
-            <>
-              <div className="border-b border-white/10 bg-[#101010] px-3 py-2.5">
-                <div className="font-bold text-white">Trò chuyện sự kiện</div>
-                <div className="text-xs text-white/45">Cbox trực tiếp</div>
-              </div>
-              <iframe
-                title="Trò chuyện sự kiện NhanChillTV"
-                src={CBOX_URL}
-                width="100%"
-                height="450"
-                allow="autoplay"
-                frameBorder="0"
-                marginHeight="0"
-                marginWidth="0"
-                scrolling="auto"
-                className="min-h-0 flex-1 bg-white"
-              />
-            </>
-          ) : (
-            <>
-              <div className="border-b border-white/10 bg-[#101010] px-4 py-3">
-                <div className="truncate font-bold text-white">Lịch phát sóng</div>
-                <div className="truncate text-xs text-white/45">{currentChannel?.name || epgData?.channel?.name || 'Đang chọn kênh'}</div>
-              </div>
-              <div className="flex items-center justify-between border-b border-white/10 bg-[#ED2C25]/10 px-3 py-1.5 text-xs font-bold text-[#ED2C25]">
-                <span>Hôm nay</span>
-                <span className="max-w-[150px] truncate font-normal text-white/45">{epgSourceLabel}</span>
-              </div>
-              <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto px-2 py-1.5">
-                {epgPrograms.length ? epgPrograms.map((program, index) => {
-                  const active = isCurrentProgram(program);
-                  return (
-                    <div key={`${program.start}-${index}`} className={`flex min-h-11 items-center gap-2.5 border-b border-white/5 px-2 py-2 last:border-0 ${active ? 'rounded-md bg-[#ED2C25]/15 text-white' : 'text-white/60'}`}>
-                      <div className={`w-[44px] shrink-0 text-xs font-bold ${active ? 'text-[#ED2C25]' : 'text-white/45'}`}>{formatTime(program.start)}</div>
-                      <div className="min-w-0 flex-1">
-                        <div className={`truncate text-[13px] ${active ? 'font-bold text-white' : 'font-medium'}`}>{program.title}</div>
-                        {active && program.desc && <div className="mt-0.5 truncate text-[11px] text-white/40">{program.desc}</div>}
-                      </div>
-                    </div>
-                  );
-                }) : (
-                  <div className="flex h-full flex-col items-center justify-center text-white/30">
-                    <Clock size={30} className="mb-2" />
-                    <span className="text-sm">Không có lịch phát sóng</span>
+          <div className="border-b border-white/10 bg-[#101010] px-4 py-3">
+            <div className="truncate font-bold text-white">Lịch phát sóng</div>
+            <div className="truncate text-xs text-white/45">{currentChannel?.name || epgData?.channel?.name || 'Đang chọn kênh'}</div>
+          </div>
+          <div className="flex items-center justify-between border-b border-white/10 bg-[#ED2C25]/10 px-3 py-1.5 text-xs font-bold text-[#ED2C25]">
+            <span>Hôm nay</span>
+            <span className="max-w-[150px] truncate font-normal text-white/45">{epgSourceLabel}</span>
+          </div>
+          <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto px-2 py-1.5">
+            {epgPrograms.length ? epgPrograms.map((program, index) => {
+              const active = isCurrentProgram(program);
+              return (
+                <div key={`${program.start}-${index}`} className={`flex min-h-11 items-center gap-2.5 border-b border-white/5 px-2 py-2 last:border-0 ${active ? 'rounded-md bg-[#ED2C25]/15 text-white' : 'text-white/60'}`}>
+                  <div className={`w-[44px] shrink-0 text-xs font-bold ${active ? 'text-[#ED2C25]' : 'text-white/45'}`}>{formatTime(program.start)}</div>
+                  <div className="min-w-0 flex-1">
+                    <div className={`truncate text-[13px] ${active ? 'font-bold text-white' : 'font-medium'}`}>{program.title}</div>
+                    {active && program.desc && <div className="mt-0.5 truncate text-[11px] text-white/40">{program.desc}</div>}
                   </div>
-                )}
+                </div>
+              );
+            }) : (
+              <div className="flex h-full flex-col items-center justify-center text-white/30">
+                <Clock size={30} className="mb-2" />
+                <span className="text-sm">Không có lịch phát sóng</span>
               </div>
-            </>
-          )}
+            )}
+          </div>
         </aside>
       </div>
 

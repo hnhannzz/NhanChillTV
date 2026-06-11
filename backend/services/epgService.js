@@ -6,7 +6,6 @@ const { XMLParser } = require('fast-xml-parser');
 const config = require('../config');
 
 const DEFAULT_EPG_URL = 'https://vnepg.site/epg.xml';
-const DEFAULT_FALLBACK_EPG_URL = 'https://epgshare01.online/epgshare01/epg_ripper_VN1.xml.gz';
 const EPG_STALE_GRACE_MS = 2 * 60 * 60 * 1000;
 
 function normalizeKey(value) {
@@ -56,7 +55,7 @@ function parseEpgTime(timeStr) {
 class EpgService {
   constructor() {
     this.epgUrl = process.env.EPG_URL || DEFAULT_EPG_URL;
-    const configuredFallbacks = String(process.env.EPG_FALLBACK_URLS || DEFAULT_FALLBACK_EPG_URL)
+    const configuredFallbacks = String(process.env.EPG_FALLBACK_URLS || '')
       .split(',')
       .map(url => url.trim())
       .filter(Boolean);
@@ -75,9 +74,6 @@ class EpgService {
     this.activeSource = null;
 
     this.loadDiskCache();
-    this.fetchData();
-    const refreshTimer = setInterval(() => this.fetchData(), this.fetchInterval);
-    refreshTimer.unref?.();
   }
 
   async ensureData() {
@@ -116,8 +112,8 @@ class EpgService {
       headers: {
         Accept: 'application/xml,text/xml,application/gzip,application/octet-stream,*/*',
         'Accept-Encoding': 'gzip, deflate, br',
-        Referer: new URL(sourceUrl).origin,
-        'User-Agent': 'NhanChillTV/1.6 EPG Fetcher',
+        Referer: `${new URL(sourceUrl).origin}/`,
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Mobile Safari/537.36',
       },
     });
 
