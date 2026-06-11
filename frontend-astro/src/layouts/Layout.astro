@@ -13,10 +13,31 @@ const { title } = Astro.props;
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="description" content="NhanChillTV - Xem phim và truyền hình trực tuyến" />
-		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
 		<link rel="icon" type="image/x-icon" href="/favicon.ico?v=1.65" />
 		<meta name="generator" content={Astro.generator} />
 		<title>{title}</title>
+		<script is:inline>
+			(() => {
+				const syncViewport = () => {
+					const viewport = window.visualViewport;
+					const height = viewport?.height || window.innerHeight;
+					document.documentElement.style.setProperty('--app-height', `${Math.round(height)}px`);
+				};
+				const releaseKeyboardViewport = event => {
+					if (!event.target?.matches?.('input, textarea, select')) return;
+					[80, 320].forEach(delay => setTimeout(() => {
+						window.scrollTo(0, 0);
+						syncViewport();
+					}, delay));
+				};
+				syncViewport();
+				window.addEventListener('resize', syncViewport, { passive: true });
+				window.addEventListener('orientationchange', syncViewport, { passive: true });
+				window.visualViewport?.addEventListener('resize', syncViewport, { passive: true });
+				document.addEventListener('focusout', releaseKeyboardViewport, true);
+			})();
+		</script>
 	</head>
 	<body class="bg-[#050505] text-white min-h-screen overflow-x-hidden flex flex-col">
 		<slot />

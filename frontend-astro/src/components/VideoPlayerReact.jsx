@@ -4,7 +4,7 @@ import 'video.js/dist/video-js.css';
 import { getMimeType, inferPlaybackType } from '../lib/playbackUrl';
 
 const RETRIES_PER_SOURCE = 1;
-const STALL_RECOVERY_MS = 18000;
+const STALL_RECOVERY_MS = 14000;
 const IS_APPLE_WEBKIT = typeof navigator !== 'undefined' && (
   /iPad|iPhone|iPod/i.test(navigator.userAgent || '')
   || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
@@ -46,34 +46,49 @@ export const VideoPlayerReact = (props) => {
     }));
   }, [fallbackUrls, options, type, url]);
 
-  const playerOptions = useMemo(() => ({
-    controls: true,
-    autoplay: autoplay ? 'muted' : false,
-    muted,
-    preload: IS_APPLE_WEBKIT ? 'metadata' : 'auto',
-    playsinline: true,
-    liveui: true,
-    responsive: true,
-    fill: true,
-    poster,
-    html5: {
-      vhs: {
-        overrideNative: !IS_APPLE_WEBKIT,
-        enableLowInitialPlaylist: true,
-        smoothQualityChange: false,
-        useBandwidthFromLocalStorage: false,
-        limitRenditionByPlayerDimensions: true,
-        handleManifestRedirects: true,
-        maxPlaylistRetries: 6,
-        playlistExclusionDuration: 30,
+  const playerOptions = useMemo(() => {
+    const customOptions = options || {};
+    const customHtml5 = customOptions.html5 || {};
+    return {
+      controls: true,
+      autoplay: autoplay ? 'muted' : false,
+      muted,
+      preload: IS_APPLE_WEBKIT ? 'metadata' : 'auto',
+      playsinline: true,
+      liveui: true,
+      responsive: true,
+      fill: true,
+      poster,
+      disablePictureInPicture: false,
+      ...customOptions,
+      controlBar: {
+        pictureInPictureToggle: true,
+        currentTimeDisplay: true,
+        durationDisplay: true,
+        remainingTimeDisplay: false,
+        volumePanel: { inline: false },
+        ...(customOptions.controlBar || {}),
       },
-      nativeAudioTracks: IS_APPLE_WEBKIT,
-      nativeVideoTracks: IS_APPLE_WEBKIT,
-      nativeTextTracks: IS_APPLE_WEBKIT,
-    },
-    ...(options || {}),
-    sources: sources.slice(0, 1),
-  }), [autoplay, muted, options, poster, sources]);
+      html5: {
+        ...customHtml5,
+        vhs: {
+          overrideNative: !IS_APPLE_WEBKIT,
+          enableLowInitialPlaylist: true,
+          smoothQualityChange: false,
+          useBandwidthFromLocalStorage: false,
+          limitRenditionByPlayerDimensions: true,
+          handleManifestRedirects: true,
+          maxPlaylistRetries: 6,
+          playlistExclusionDuration: 30,
+          ...(customHtml5.vhs || {}),
+        },
+        nativeAudioTracks: IS_APPLE_WEBKIT,
+        nativeVideoTracks: IS_APPLE_WEBKIT,
+        nativeTextTracks: IS_APPLE_WEBKIT,
+      },
+      sources: sources.slice(0, 1),
+    };
+  }, [autoplay, muted, options, poster, sources]);
 
   useEffect(() => {
     if (!videoRef.current || !sources.length) return undefined;
@@ -165,6 +180,11 @@ export const VideoPlayerReact = (props) => {
         retryCountRef.current = 0;
         setError(null);
         if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current);
+      });
+      player.on('loadedmetadata', () => {
+        if (player.liveTracker?.isLive?.() && player.liveTracker.behindLiveEdge?.() > 12) {
+          player.liveTracker.seekToLiveEdge();
+        }
       });
       player.on('error', () => handlePlaybackError(player));
       player.on('waiting', () => {

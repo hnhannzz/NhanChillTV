@@ -9,6 +9,16 @@ const CACHE_TTL_MS = Number(process.env.MOVIE_API_CACHE_TTL_MS || 5 * 60 * 1000)
 const MAX_CACHE_ENTRIES = Number(process.env.MOVIE_API_MAX_CACHE_ENTRIES || 200);
 const cache = new Map();
 const inFlight = new Map();
+const BLOCKED_EPISODE_FIELDS = new Set(['m3u8', 'link_m3u8', 'file']);
+
+function sanitizeNguoncPayload(value) {
+  if (Array.isArray(value)) return value.map(sanitizeNguoncPayload);
+  if (!value || typeof value !== 'object') return value;
+
+  return Object.fromEntries(Object.entries(value)
+    .filter(([key]) => !BLOCKED_EPISODE_FIELDS.has(key.toLowerCase()))
+    .map(([key, child]) => [key, sanitizeNguoncPayload(child)]));
+}
 
 function pruneCache() {
   if (cache.size <= MAX_CACHE_ENTRIES) return;
@@ -67,7 +77,7 @@ router.get('/popular', async (req, res) => {
     const results = await Promise.allSettled(slugs.map(slug => fetchUpstream(`/film/${slug}`)));
     const items = results
       .filter(result => result.status === 'fulfilled' && result.value.status === 200 && result.value.data?.movie)
-      .map(result => result.value.data.movie)
+      .map(result => sanitizeNguoncPayload(result.value.data.movie))
       .slice(0, 8);
 
     if (!items.length) throw new Error('Popular movie page returned no usable films');
@@ -107,12 +117,14 @@ router.get('/*', async (req, res) => {
 
     const isJson = String(upstream.headers['content-type'] || '').includes('application/json');
     if (upstream.status >= 200 && upstream.status < 300 && isJson) {
+      const sanitizedData = sanitizeNguoncPayload(upstream.data);
       cache.set(cacheKey, {
         timestamp: now,
         status: upstream.status,
-        data: upstream.data
+        data: sanitizedData
       });
       pruneCache();
+      upstream.data = sanitizedData;
     }
 
     if (upstream.status === 429 && cached) {

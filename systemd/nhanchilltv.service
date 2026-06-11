@@ -18,6 +18,8 @@ Environment=M3U_REFRESH_INTERVAL_MS=3600000
 Environment=HLS_TEMP_PATH=/opt/nhanchilltv/nginx/temp/hls_temp
 Environment=EVENT_TEMP_PATH=/opt/nhanchilltv/nginx/temp/event_temp
 Environment=DB_PATH=/opt/nhanchilltv/backend/db/data.json
+Environment=RTMP_STAT_URL=http://127.0.0.1:8050/rtmp-stat
+Environment=RTMP_CONTROL_URL=http://127.0.0.1:8050/rtmp-control
 Environment=ADMIN_PASSWORD=change-this-password
 Environment=JWT_SECRET=change-this-secret
 ExecStart=/usr/bin/node server.js

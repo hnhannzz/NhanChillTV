@@ -9,7 +9,7 @@ export default function MainLayout({ children, lockHeader = false }) {
   const { isSidebarOpen, toggleSidebar } = useUIStore();
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#050505]">
+    <div className="app-shell flex overflow-hidden bg-[#050505]">
       <Sidebar isOpen={isSidebarOpen} toggleSidebar={toggleSidebar} />
       
       <div className="relative flex w-full flex-1 flex-col md:transition-[margin] md:duration-300 md:ease-in-out">

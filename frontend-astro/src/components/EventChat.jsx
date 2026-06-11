@@ -66,6 +66,7 @@ export default function EventChat({ eventId }) {
       if (!response.ok || !data.success) throw new Error(data.error || `HTTP ${response.status}`);
       setMessages(current => [...current, data.data]);
       setContent('');
+      document.activeElement?.blur();
     } catch {
       setError('Không thể gửi tin nhắn. Vui lòng thử lại.');
     } finally {
@@ -82,14 +83,19 @@ export default function EventChat({ eventId }) {
 
       <div ref={listRef} className="custom-scrollbar min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3" aria-live="polite">
         {messages.length ? messages.map(message => (
-          <div key={message.id} className="rounded-lg bg-black/25 px-3 py-2">
-            <div className="flex items-center justify-between gap-3">
-              <span className="truncate text-xs font-bold text-[#ED2C25]">{message.username}</span>
-              <time className="shrink-0 text-[10px] text-white/30">
-                {new Date(message.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-              </time>
+          <div key={message.id} className="flex gap-2.5 rounded-lg bg-black/25 px-3 py-2.5">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/10 text-[11px] font-black text-white/70">
+              {message.avatar ? <img src={message.avatar} alt="" className="h-full w-full bg-white object-contain p-1" /> : String(message.username || '?').slice(0, 1).toUpperCase()}
             </div>
-            <p className="mt-1 whitespace-pre-wrap break-words text-sm text-white/80">{message.content}</p>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-3">
+                <span className="truncate text-xs font-bold text-[#ED2C25]">{message.username}</span>
+                <time className="shrink-0 text-[10px] text-white/30">
+                  {new Date(message.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                </time>
+              </div>
+              <p className="mt-1 whitespace-pre-wrap break-words text-sm text-white/80">{message.content}</p>
+            </div>
           </div>
         )) : (
           <div className="flex h-full items-center justify-center text-center text-sm text-white/35">Chưa có tin nhắn. Hãy bắt đầu cuộc trò chuyện.</div>
@@ -106,7 +112,7 @@ export default function EventChat({ eventId }) {
             aria-label="Nội dung chat sự kiện"
             autoComplete="off"
             enterKeyHint="send"
-            className="min-w-0 flex-1 rounded-lg border border-white/10 bg-[#1A1A1A] px-3 py-2.5 text-base text-white outline-none focus:border-[#ED2C25]"
+            className="comment-input min-w-0 flex-1 rounded-lg border border-white/10 bg-[#1A1A1A] px-3 py-2.5 text-base text-white outline-none focus:border-[#ED2C25]"
           />
           <button type="submit" disabled={!content.trim() || sending} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[#ED2C25] text-white disabled:cursor-not-allowed disabled:opacity-40" title="Gửi tin nhắn">
             <Send size={18} />

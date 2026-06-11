@@ -238,12 +238,17 @@ export default function MovieDetailContainer() {
               <div className="text-center text-white/40 text-sm py-10">Chưa có bình luận nào. Hãy là người đầu tiên!</div>
             ) : (
               comments.map(c => (
-                <div key={c.id} className="bg-[#1A1A1A] p-3 rounded-xl border border-white/5">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-bold text-sm text-[#ED2C25]">{c.username}</span>
-                    <span className="text-[10px] text-white/40">{new Date(c.createdAt).toLocaleDateString('vi-VN')}</span>
+                <div key={c.id} className="flex gap-3 rounded-xl border border-white/5 bg-[#1A1A1A] p-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/10 text-xs font-black text-white/70">
+                    {c.avatar ? <img src={c.avatar} alt="" className="h-full w-full bg-white object-contain p-1" /> : String(c.username || '?').slice(0, 1).toUpperCase()}
                   </div>
-                  <p className="text-sm text-white/90 break-words">{c.content}</p>
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <span className="truncate text-sm font-bold text-[#ED2C25]">{c.username}</span>
+                      <span className="shrink-0 text-[10px] text-white/40">{new Date(c.createdAt).toLocaleDateString('vi-VN')}</span>
+                    </div>
+                    <p className="break-words text-sm text-white/90">{c.content}</p>
+                  </div>
                 </div>
               ))
             )}

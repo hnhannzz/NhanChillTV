@@ -23,7 +23,7 @@ const io = new Server(server, {
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD'],
-  allowedHeaders: ['DNT', 'User-Agent', 'X-Requested-With', 'If-Modified-Since', 'Cache-Control', 'Content-Type', 'Range', 'Authorization'],
+    allowedHeaders: ['DNT', 'User-Agent', 'X-Requested-With', 'X-User-Id', 'If-Modified-Since', 'Cache-Control', 'Content-Type', 'Range', 'Authorization'],
   exposedHeaders: ['Content-Length', 'Content-Range']
 }));
 app.use(express.json({ limit: '10mb' }));

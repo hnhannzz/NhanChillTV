@@ -11,9 +11,11 @@ const pidusage = require('pidusage');
 const { execFile } = require('child_process');
 const ffmpegWrapper = require('../../ffmpeg-core/wrapper');
 const m3uManager = require('../services/m3uManager');
+const { XMLParser } = require('fast-xml-parser');
 
 const db = new Database(config.dbPath);
 const adminSessions = new Set();
+const rtmpStatParser = new XMLParser({ ignoreAttributes: false, parseTagValue: true, trimValues: true });
 
 const eventTempPath = config.eventTempPath;
 if (!fs.existsSync(eventTempPath)) {
@@ -137,6 +139,71 @@ async function disconnectRtmpPublisher(streamKey) {
     `${config.rtmpControlUrl}/drop/publisher?app=${app}&name=${name}`,
     { timeout: 1500, validateStatus: status => status < 500 }
   )));
+}
+
+function asArray(value) {
+  if (value === undefined || value === null) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+async function getActiveRtmpPublishers() {
+  try {
+    const response = await axios.get(config.rtmpStatUrl, {
+      timeout: 2000,
+      responseType: 'text',
+      validateStatus: status => status >= 200 && status < 300,
+    });
+    const parsed = rtmpStatParser.parse(response.data);
+    const applications = asArray(parsed?.rtmp?.server)
+      .flatMap(server => asArray(server?.application));
+    const liveApplication = applications.find(application => application?.name === 'live');
+    return asArray(liveApplication?.live?.stream).map(stream => ({
+      id: String(stream?.name || ''),
+      type: 'obs',
+      online: true,
+      uptimeMs: Number(stream?.time || 0),
+      bitrateIn: Number(stream?.bw_in || 0),
+      bytesIn: Number(stream?.bytes_in || 0),
+      clients: Number(stream?.nclients || 0),
+    })).filter(stream => stream.id);
+  } catch (err) {
+    console.warn('[RTMP Stat] Unavailable:', err.message);
+    return [];
+  }
+}
+
+async function getManagedStreams() {
+  const rtmpPublishers = await getActiveRtmpPublishers();
+  const rtmpByKey = new Map(rtmpPublishers.map(stream => [stream.id, stream]));
+  const managedEventStreams = db.getEvents().flatMap(event => getEventStreams(event).map(stream => {
+    const publisher = stream.streamKey ? rtmpByKey.get(stream.streamKey) : null;
+    return {
+      id: stream.streamKey || `${event.id}:${stream.id}`,
+      type: stream.sourceType,
+      name: stream.name || 'Luồng sự kiện',
+      eventId: event.id,
+      eventTitle: event.title,
+      sourceChannelId: stream.sourceChannelId || null,
+      url: stream.stream || null,
+      online: stream.sourceType === 'obs' ? Boolean(publisher) : getEventStatus(event) === 'live',
+      configured: true,
+      ...(publisher || {}),
+    };
+  }));
+  const managedObsKeys = new Set(managedEventStreams.filter(stream => stream.type === 'obs').map(stream => stream.id));
+  const unmanagedPublishers = rtmpPublishers
+    .filter(stream => !managedObsKeys.has(stream.id))
+    .map(stream => ({ ...stream, name: stream.id, configured: false }));
+  const ffmpegStreams = ffmpegWrapper.getActiveStreams().map(stream => ({
+    id: stream.channelId,
+    type: 'ffmpeg',
+    name: stream.channelId,
+    online: true,
+    configured: true,
+    pid: stream.pid,
+    lastAccess: stream.lastAccess,
+  }));
+  return [...managedEventStreams, ...unmanagedPublishers, ...ffmpegStreams];
 }
 
 async function cleanupEventObsStreams(event) {
@@ -305,6 +372,27 @@ router.post('/m3u-sources/refresh', auth, async (req, res) => {
 
 router.get('/status', auth, (req, res) => {
   res.json({ success: true, data: m3uManager.getStatus() });
+});
+
+router.get('/streams/active', auth, async (req, res) => {
+  const streams = await getManagedStreams();
+  res.set('Cache-Control', 'no-store').json({ success: true, data: streams });
+});
+
+router.post('/streams/:type/:id/stop', auth, async (req, res) => {
+  const type = String(req.params.type || '');
+  const id = String(req.params.id || '');
+  if (!/^[a-zA-Z0-9:_-]+$/.test(id)) {
+    return res.status(400).json({ success: false, error: 'Invalid stream id' });
+  }
+  if (type === 'ffmpeg') {
+    return res.json({ success: ffmpegWrapper.stopTranscode(id) });
+  }
+  if (type === 'obs') {
+    await disconnectRtmpPublisher(id);
+    return res.json({ success: true });
+  }
+  return res.status(400).json({ success: false, error: 'This stream type cannot be stopped from the server' });
 });
 
 // IPTV Settings

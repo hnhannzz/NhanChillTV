@@ -151,13 +151,6 @@ export default function TvPageContainer() {
   const formatTime = value => value
     ? new Date(value).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
     : '--:--';
-  const epgSourceLabel = useMemo(() => {
-    try {
-      return epgData?.source ? new URL(epgData.source).hostname.replace(/^www\./, '') : 'EPG server';
-    } catch {
-      return 'EPG server';
-    }
-  }, [epgData?.source]);
   const eventHeading = eventData && (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
@@ -173,10 +166,10 @@ export default function TvPageContainer() {
       <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-0 pb-8 pt-0 lg:px-8 lg:pt-6">
         <div className="hidden lg:block">{eventHeading}</div>
         <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,68fr)_minmax(340px,32fr)]">
-          <div className="mobile-player-shell fixed left-0 right-0 top-[64px] z-40 w-full overflow-hidden bg-black shadow-2xl lg:static lg:z-auto lg:rounded-lg lg:border lg:border-white/10">
+          <div className="mobile-fixed-player mobile-player-shell fixed left-0 right-0 top-[64px] z-40 w-full overflow-hidden bg-black shadow-2xl lg:static lg:z-auto lg:h-auto lg:rounded-lg lg:border lg:border-white/10">
             {(currentChannelId || streamParam) ? <LivePlayerView key={`${currentChannelId || streamParam}-${activeEventStream}`} channelId={currentChannelId} streamParam={streamParam} /> : <div className="flex aspect-video items-center justify-center text-sm text-white/45">Đang chờ nguồn phát sự kiện...</div>}
           </div>
-          <div className="aspect-video w-full lg:hidden" />
+          <div className="mobile-fixed-player-spacer w-full lg:hidden" />
           <div className="px-4 lg:hidden">{eventHeading}</div>
           <EventChat eventId={eventId} />
         </div>
@@ -187,7 +180,7 @@ export default function TvPageContainer() {
   return (
     <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-6 px-4 pb-8 pt-4 md:px-8 md:pt-8">
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] xl:grid-cols-[minmax(0,68fr)_minmax(340px,32fr)]">
-        <div className="mobile-player-shell fixed left-0 right-0 top-[64px] z-40 w-full overflow-hidden bg-black shadow-2xl lg:static lg:z-auto lg:rounded-lg lg:border lg:border-white/10">
+        <div className="mobile-fixed-player mobile-player-shell fixed left-0 right-0 top-[64px] z-40 w-full overflow-hidden bg-black shadow-2xl lg:static lg:z-auto lg:h-auto lg:rounded-lg lg:border lg:border-white/10">
           {(currentChannelId || streamParam) ? (
             <LivePlayerView key={currentChannelId || streamParam} channelId={currentChannelId} streamParam={streamParam} />
           ) : (
@@ -195,16 +188,15 @@ export default function TvPageContainer() {
           )}
         </div>
 
-        <div className="block aspect-video w-full lg:hidden" />
+        <div className="mobile-fixed-player-spacer block w-full lg:hidden" />
 
         <aside className="flex h-[330px] min-h-0 w-full flex-col overflow-hidden rounded-lg border border-white/10 bg-[#151515] lg:h-[420px] xl:h-[460px]">
           <div className="border-b border-white/10 bg-[#101010] px-4 py-3">
             <div className="truncate font-bold text-white">Lịch phát sóng</div>
             <div className="truncate text-xs text-white/45">{currentChannel?.name || epgData?.channel?.name || 'Đang chọn kênh'}</div>
           </div>
-          <div className="flex items-center justify-between border-b border-white/10 bg-[#ED2C25]/10 px-3 py-1.5 text-xs font-bold text-[#ED2C25]">
+          <div className="flex items-center border-b border-white/10 bg-[#ED2C25]/10 px-3 py-1.5 text-xs font-bold text-[#ED2C25]">
             <span>Hôm nay</span>
-            <span className="max-w-[150px] truncate font-normal text-white/45">{epgSourceLabel}</span>
           </div>
           <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto px-2 py-1.5">
             {epgPrograms.length ? epgPrograms.map((program, index) => {
