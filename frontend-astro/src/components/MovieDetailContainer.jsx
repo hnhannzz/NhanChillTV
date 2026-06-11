@@ -135,8 +135,9 @@ export default function MovieDetailContainer() {
       });
       const data = await res.json();
       if (data.success) {
-        setComments([data.data, ...comments]);
+        setComments(current => [data.data, ...current]);
         setNewComment('');
+        document.activeElement?.blur();
       } else {
         alert(data.error || 'Lỗi gửi bình luận');
       }
@@ -210,7 +211,7 @@ export default function MovieDetailContainer() {
                         setCurrentEpisode(ep);
                         setCurrentEmbed(ep.embed || '');
                         setCurrentEpName(ep.name);
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                        document.getElementById('main-scroll-container')?.scrollTo({ top: 0, behavior: 'smooth' });
                       }}
                       className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${currentEmbed === (ep.embed || '') ? 'bg-[#ED2C25] text-white shadow-lg' : 'bg-[#1A1A1A] text-white/70 hover:bg-white/20'}`}
                     >
@@ -253,8 +254,11 @@ export default function MovieDetailContainer() {
               type="text" 
               value={newComment}
               onChange={e => setNewComment(e.target.value)}
+              inputMode="text"
+              enterKeyHint="send"
+              autoComplete="off"
               placeholder="Nhập bình luận của bạn..."
-              className="w-full bg-[#1A1A1A] border border-white/10 rounded-xl py-3 pl-4 pr-12 text-base text-white focus:outline-none focus:border-[#ED2C25] transition-colors"
+              className="comment-input w-full bg-[#1A1A1A] border border-white/10 rounded-xl py-3 pl-4 pr-12 text-base text-white focus:outline-none focus:border-[#ED2C25] transition-colors"
             />
             <button 
               type="submit" 

@@ -16,14 +16,15 @@
   }
 
   .mobile-scroll {
-    overscroll-behavior-y: contain;
-    touch-action: pan-y;
+    overscroll-behavior-y: auto;
+    touch-action: auto;
   }
 
   .mobile-horizontal-scroll {
-    overscroll-behavior-x: auto;
+    overscroll-behavior-x: contain;
+    overscroll-behavior-y: auto;
     scroll-behavior: auto;
-    touch-action: pan-x pan-y;
+    touch-action: pan-y pinch-zoom;
   }
 
   .mobile-search-panel {
@@ -52,26 +53,10 @@
 }
 
 .mobile-player-shell {
-  backface-visibility: hidden;
-  contain: layout paint;
   isolation: isolate;
-  transform: translate3d(0, 0, 0);
-  transition: transform 200ms ease-out;
-  will-change: transform;
-}
-
-.mobile-player-shell.header-hidden {
-  transform: translate3d(0, -64px, 0);
-}
-
-.movie-player-shell,
-.movie-player-frame {
-  backface-visibility: hidden;
-  transform: translate3d(0, 0, 0);
 }
 
 .movie-player-shell {
-  contain: layout paint;
   isolation: isolate;
 }
 
@@ -80,18 +65,14 @@
 }
 
 @media (min-width: 1024px) {
-  .mobile-player-shell,
-  .mobile-player-shell.header-hidden {
-    contain: none;
-    transform: none;
-    transition: none;
-    will-change: auto;
+  .mobile-player-shell {
+    isolation: auto;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .app-header,
-  .mobile-player-shell {
+  .hero-progress {
     transition-duration: 1ms !important;
   }
 }
@@ -108,8 +89,25 @@
     -webkit-backdrop-filter: none !important;
   }
 
-  img {
-    content-visibility: auto;
+}
+
+html,
+body {
+  -webkit-text-size-adjust: 100%;
+}
+
+@supports (-webkit-touch-callout: none) {
+  @media (max-width: 767px) {
+    input,
+    textarea,
+    select,
+    .comment-input {
+      font-size: 16px !important;
+    }
+
+    .comment-input {
+      touch-action: manipulation;
+    }
   }
 }
 

@@ -5,7 +5,7 @@ import { useUIStore } from '../store/uiStore';
 import classNames from 'classnames';
 import Footer from './Footer';
 
-export default function MainLayout({ children }) {
+export default function MainLayout({ children, lockHeader = false }) {
   const { isSidebarOpen, toggleSidebar } = useUIStore();
 
   return (
@@ -13,7 +13,7 @@ export default function MainLayout({ children }) {
       <Sidebar isOpen={isSidebarOpen} toggleSidebar={toggleSidebar} />
       
       <div className="relative flex w-full flex-1 flex-col md:transition-[margin] md:duration-300 md:ease-in-out">
-        <Header toggleSidebar={toggleSidebar} />
+        <Header toggleSidebar={toggleSidebar} autoHide={!lockHeader} />
         
         <main id="main-scroll-container" className="mobile-scroll flex-1 overflow-y-auto overflow-x-hidden pt-[70px] md:pt-[80px]">
           {children}

@@ -4,7 +4,12 @@ import 'video.js/dist/video-js.css';
 import { getMimeType, inferPlaybackType } from '../lib/playbackUrl';
 
 const RETRIES_PER_SOURCE = 1;
-const STALL_RECOVERY_MS = 12000;
+const STALL_RECOVERY_MS = 18000;
+const IS_APPLE_WEBKIT = typeof navigator !== 'undefined' && (
+  /iPad|iPhone|iPod/i.test(navigator.userAgent || '')
+  || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  || (/Safari/i.test(navigator.userAgent || '') && !/Chrome|CriOS|Edg|OPR|Firefox|FxiOS/i.test(navigator.userAgent || ''))
+);
 
 export const VideoPlayerReact = (props) => {
   const videoRef = useRef(null);
@@ -45,7 +50,7 @@ export const VideoPlayerReact = (props) => {
     controls: true,
     autoplay: autoplay ? 'muted' : false,
     muted,
-    preload: 'auto',
+    preload: IS_APPLE_WEBKIT ? 'metadata' : 'auto',
     playsinline: true,
     liveui: true,
     responsive: true,
@@ -53,7 +58,7 @@ export const VideoPlayerReact = (props) => {
     poster,
     html5: {
       vhs: {
-        overrideNative: !videojs.browser.IS_SAFARI,
+        overrideNative: !IS_APPLE_WEBKIT,
         enableLowInitialPlaylist: true,
         smoothQualityChange: false,
         useBandwidthFromLocalStorage: false,
@@ -62,9 +67,9 @@ export const VideoPlayerReact = (props) => {
         maxPlaylistRetries: 6,
         playlistExclusionDuration: 30,
       },
-      nativeAudioTracks: videojs.browser.IS_SAFARI,
-      nativeVideoTracks: videojs.browser.IS_SAFARI,
-      nativeTextTracks: videojs.browser.IS_SAFARI,
+      nativeAudioTracks: IS_APPLE_WEBKIT,
+      nativeVideoTracks: IS_APPLE_WEBKIT,
+      nativeTextTracks: IS_APPLE_WEBKIT,
     },
     ...(options || {}),
     sources: sources.slice(0, 1),
@@ -128,8 +133,6 @@ export const VideoPlayerReact = (props) => {
       videoElement.classList.add('vjs-big-play-centered', 'nhanchill-video-js');
       videoElement.setAttribute('playsinline', '');
       videoElement.setAttribute('webkit-playsinline', '');
-      videoElement.style.backfaceVisibility = 'hidden';
-      videoElement.style.transform = 'translate3d(0, 0, 0)';
       videoElement.style.width = '100%';
       videoElement.style.height = '100%';
       videoRef.current.appendChild(videoElement);
@@ -165,6 +168,9 @@ export const VideoPlayerReact = (props) => {
       });
       player.on('error', () => handlePlaybackError(player));
       player.on('waiting', () => {
+        // Native HLS on Apple devices emits waiting during normal buffer changes.
+        // Reloading the source there causes visible jumps and repeated rebuffering.
+        if (IS_APPLE_WEBKIT) return;
         if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current);
         stallTimeoutRef.current = setTimeout(() => {
           if (!player.isDisposed() && !player.paused()) loadSource(player, sourceIndexRef.current);

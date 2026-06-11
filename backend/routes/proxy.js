@@ -117,8 +117,8 @@ router.get('/*', async (req, res) => {
     }
 
     const controller = new AbortController();
-    req.on('close', () => {
-      controller.abort();
+    res.on('close', () => {
+      if (!res.writableEnded) controller.abort();
     });
 
     const customUa = req.query.ua;

@@ -17,17 +17,6 @@ export default function TvPageContainer() {
   const [epgData, setEpgData] = useState(null);
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
-  const [isHeaderHidden, setIsHeaderHidden] = useState(false);
-
-  useEffect(() => {
-    const handleHeaderVisibility = event => {
-      setIsHeaderHidden(Boolean(event.detail?.hidden));
-    };
-    window.addEventListener('app-header-visibility', handleHeaderVisibility);
-    return () => {
-      window.removeEventListener('app-header-visibility', handleHeaderVisibility);
-    };
-  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -184,7 +173,7 @@ export default function TvPageContainer() {
       <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-0 pb-8 pt-0 lg:px-8 lg:pt-6">
         <div className="hidden lg:block">{eventHeading}</div>
         <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,68fr)_minmax(340px,32fr)]">
-          <div className={`mobile-player-shell fixed left-0 right-0 top-[64px] z-40 w-full overflow-hidden bg-black shadow-2xl lg:static lg:z-auto lg:rounded-lg lg:border lg:border-white/10 ${isHeaderHidden ? 'header-hidden' : ''}`}>
+          <div className="mobile-player-shell fixed left-0 right-0 top-[64px] z-40 w-full overflow-hidden bg-black shadow-2xl lg:static lg:z-auto lg:rounded-lg lg:border lg:border-white/10">
             {(currentChannelId || streamParam) ? <LivePlayerView key={`${currentChannelId || streamParam}-${activeEventStream}`} channelId={currentChannelId} streamParam={streamParam} /> : <div className="flex aspect-video items-center justify-center text-sm text-white/45">Đang chờ nguồn phát sự kiện...</div>}
           </div>
           <div className="aspect-video w-full lg:hidden" />
@@ -198,7 +187,7 @@ export default function TvPageContainer() {
   return (
     <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-6 px-4 pb-8 pt-4 md:px-8 md:pt-8">
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] xl:grid-cols-[minmax(0,68fr)_minmax(340px,32fr)]">
-        <div className={`mobile-player-shell fixed left-0 right-0 top-[64px] z-40 w-full overflow-hidden bg-black shadow-2xl lg:static lg:z-auto lg:rounded-lg lg:border lg:border-white/10 ${isHeaderHidden ? 'header-hidden' : ''}`}>
+        <div className="mobile-player-shell fixed left-0 right-0 top-[64px] z-40 w-full overflow-hidden bg-black shadow-2xl lg:static lg:z-auto lg:rounded-lg lg:border lg:border-white/10">
           {(currentChannelId || streamParam) ? (
             <LivePlayerView key={currentChannelId || streamParam} channelId={currentChannelId} streamParam={streamParam} />
           ) : (
