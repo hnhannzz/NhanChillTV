@@ -117,29 +117,37 @@ class UserDatabase {
   // --- Comments ---
   getComments(movieId) {
     const data = this.readComments();
-    const users = this.readUsers().users || [];
-    const avatars = new Map(users.map(user => [user.id, user.avatar || null]));
+    const usersData = this.readUsers();
+    const userMap = new Map(usersData.users.map(u => [u.id, u.avatar]));
     return data.comments
       .filter(c => c.movieId === movieId)
-      .map(comment => ({ ...comment, avatar: avatars.get(comment.userId) || comment.avatar || null }))
+      .map(c => ({
+        ...c,
+        avatar: userMap.get(c.userId) || null
+      }))
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }
 
   addComment(movieId, userId, username, content) {
     const data = this.readComments();
-    const user = this.readUsers().users.find(item => item.id === userId);
+    const usersData = this.readUsers();
+    const user = usersData.users.find(u => u.id === userId);
+    
     const newComment = {
       id: Date.now().toString(),
       movieId,
       userId,
       username,
-      avatar: user?.avatar || null,
       content,
       createdAt: new Date().toISOString()
     };
     data.comments.push(newComment);
     this.writeComments(data);
-    return newComment;
+    
+    return {
+      ...newComment,
+      avatar: user ? user.avatar : null
+    };
   }
 }
 

@@ -5,8 +5,8 @@ import TvPageContainer from '../components/TvPageContainer.jsx';
 ---
 
 <Layout title="Truyền hình - NhanChillTV">
-  <MainLayout client:load lockHeader>
-    <div className="p-4 md:p-8 max-w-[1600px] mx-auto">
+  <MainLayout client:load>
+    <div className="px-0 py-4 md:p-8 max-w-[1600px] mx-auto w-full">
       <TvPageContainer client:only="react" />
     </div>
   </MainLayout>

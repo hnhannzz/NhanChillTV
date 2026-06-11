@@ -1,7 +1,7 @@
 import React from 'react';
 
 export default function MovieStreamPlayer({ episode }) {
-  const embedUrl = String(episode?.embed || '').trim();
+  const embedUrl = episode?.embed || episode?.link_embed || '';
 
   if (embedUrl) {
     return (
@@ -11,16 +11,15 @@ export default function MovieStreamPlayer({ episode }) {
         title={episode?.name || 'Nguonc embed player'}
         allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
         allowFullScreen
-        loading="eager"
-        referrerPolicy="origin-when-cross-origin"
-        className="movie-player-frame h-full w-full border-none bg-black"
+        referrerPolicy="no-referrer-when-downgrade"
+        className="w-full h-full border-none bg-black"
       />
     );
   }
 
   return (
-    <div className="flex h-full w-full items-center justify-center bg-[#121212] px-4 text-center text-white/50">
-      Nguồn embed của tập này chưa khả dụng.
+    <div className="w-full h-full flex items-center justify-center text-white/50 bg-[#121212] px-4 text-center">
+      Nguon embed cua tap nay chua kha dung.
     </div>
   );
 }

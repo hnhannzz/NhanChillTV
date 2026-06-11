@@ -31,7 +31,6 @@ module.exports = {
   epgCachePath: process.env.EPG_CACHE_PATH || path.join(projectRoot, 'nginx/temp/epg-cache.xml'),
   dbPath: process.env.DB_PATH || path.join(projectRoot, 'backend/db/data.json'),
   rtmpControlUrl: process.env.RTMP_CONTROL_URL || 'http://127.0.0.1:8050/rtmp-control',
-  rtmpStatUrl: process.env.RTMP_STAT_URL || 'http://127.0.0.1:8050/rtmp-stat',
   
   // FFmpeg transcode settings
   ffmpeg: {

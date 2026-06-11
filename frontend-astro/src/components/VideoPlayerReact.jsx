@@ -1,15 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+
+const IS_IOS = typeof navigator !== 'undefined' && (/iPad|iPhone|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 import videojs from 'video.js';
 import 'video.js/dist/video-js.css';
 import { getMimeType, inferPlaybackType } from '../lib/playbackUrl';
 
 const RETRIES_PER_SOURCE = 1;
-const STALL_RECOVERY_MS = 14000;
-const IS_APPLE_WEBKIT = typeof navigator !== 'undefined' && (
-  /iPad|iPhone|iPod/i.test(navigator.userAgent || '')
-  || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-  || (/Safari/i.test(navigator.userAgent || '') && !/Chrome|CriOS|Edg|OPR|Firefox|FxiOS/i.test(navigator.userAgent || ''))
-);
+const STALL_RECOVERY_MS = 12000;
 
 export const VideoPlayerReact = (props) => {
   const videoRef = useRef(null);
@@ -46,49 +43,39 @@ export const VideoPlayerReact = (props) => {
     }));
   }, [fallbackUrls, options, type, url]);
 
-  const playerOptions = useMemo(() => {
-    const customOptions = options || {};
-    const customHtml5 = customOptions.html5 || {};
-    return {
-      controls: true,
-      autoplay: autoplay ? 'muted' : false,
-      muted,
-      preload: IS_APPLE_WEBKIT ? 'metadata' : 'auto',
-      playsinline: true,
-      liveui: true,
-      responsive: true,
-      fill: true,
-      poster,
-      disablePictureInPicture: false,
-      ...customOptions,
-      controlBar: {
-        pictureInPictureToggle: true,
-        currentTimeDisplay: true,
-        durationDisplay: true,
-        remainingTimeDisplay: false,
-        volumePanel: { inline: false },
-        ...(customOptions.controlBar || {}),
+  const playerOptions = useMemo(() => ({
+    controls: true,
+    autoplay: autoplay ? 'muted' : false,
+    muted,
+    preload: 'auto',
+    playsinline: true,
+    liveui: true,
+    responsive: true,
+    fill: true,
+    poster,
+    controlBar: {
+      pictureInPictureToggle: true,
+    },
+    html5: {
+      vhs: {
+        overrideNative: !videojs.browser.IS_SAFARI,
+        enableLowInitialPlaylist: true,
+        smoothQualityChange: videojs.browser.IS_SAFARI,
+        fastQualityChange: !videojs.browser.IS_SAFARI,
+        useBandwidthFromLocalStorage: false,
+        limitRenditionByPlayerDimensions: true,
+        handleManifestRedirects: true,
+        maxPlaylistRetries: 6,
+        playlistExclusionDuration: 30,
+        ...(IS_IOS ? { bandwidth: 4194304 } : {}),
       },
-      html5: {
-        ...customHtml5,
-        vhs: {
-          overrideNative: !IS_APPLE_WEBKIT,
-          enableLowInitialPlaylist: true,
-          smoothQualityChange: false,
-          useBandwidthFromLocalStorage: false,
-          limitRenditionByPlayerDimensions: true,
-          handleManifestRedirects: true,
-          maxPlaylistRetries: 6,
-          playlistExclusionDuration: 30,
-          ...(customHtml5.vhs || {}),
-        },
-        nativeAudioTracks: IS_APPLE_WEBKIT,
-        nativeVideoTracks: IS_APPLE_WEBKIT,
-        nativeTextTracks: IS_APPLE_WEBKIT,
-      },
-      sources: sources.slice(0, 1),
-    };
-  }, [autoplay, muted, options, poster, sources]);
+      nativeAudioTracks: videojs.browser.IS_SAFARI,
+      nativeVideoTracks: videojs.browser.IS_SAFARI,
+      nativeTextTracks: videojs.browser.IS_SAFARI,
+    },
+    ...(options || {}),
+    sources: sources.slice(0, 1),
+  }), [autoplay, muted, options, poster, sources]);
 
   useEffect(() => {
     if (!videoRef.current || !sources.length) return undefined;
@@ -181,16 +168,8 @@ export const VideoPlayerReact = (props) => {
         setError(null);
         if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current);
       });
-      player.on('loadedmetadata', () => {
-        if (player.liveTracker?.isLive?.() && player.liveTracker.behindLiveEdge?.() > 12) {
-          player.liveTracker.seekToLiveEdge();
-        }
-      });
       player.on('error', () => handlePlaybackError(player));
       player.on('waiting', () => {
-        // Native HLS on Apple devices emits waiting during normal buffer changes.
-        // Reloading the source there causes visible jumps and repeated rebuffering.
-        if (IS_APPLE_WEBKIT) return;
         if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current);
         stallTimeoutRef.current = setTimeout(() => {
           if (!player.isDisposed() && !player.paused()) loadSource(player, sourceIndexRef.current);
@@ -217,7 +196,7 @@ export const VideoPlayerReact = (props) => {
   }, []);
 
   return (
-    <div data-vjs-player className={className} style={{ width: '100%', height: '100%', position: 'relative', background: '#000', ...style }}>
+    <div data-vjs-player className={className} style={{ width: '100%', height: '100%', position: 'relative', background: '#000', transform: 'translateZ(0)', WebkitTransform: 'translateZ(0)', willChange: 'transform', ...style }}>
       <div ref={videoRef} style={{ width: '100%', height: '100%' }} />
       {error && (
         <div className="absolute bottom-2 left-2 right-2 z-20 rounded-md bg-red-700/95 px-3 py-2 text-center text-xs text-white">

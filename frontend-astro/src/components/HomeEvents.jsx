@@ -44,14 +44,14 @@ export default function HomeEvents({ showEmpty = false }) {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4">
       {events.map(event => {
         const channelQuery = event.sourceType === 'iptv' && event.sourceChannelId
           ? `&channel=${encodeURIComponent(event.sourceChannelId)}`
           : '';
         return (
           <a key={event.id} href={`/tv/?event=${encodeURIComponent(event.id)}${channelQuery}`} className="group overflow-hidden rounded-lg border border-white/5 bg-[#121212] transition-colors hover:border-[#ED2C25]/55">
-            <div className="relative aspect-[16/9] w-full overflow-hidden bg-black/50">
+            <div className="relative aspect-video overflow-hidden bg-black/50">
               {event.thumbnailUrl || event.thumbnailBase64 ? (
                 <img src={event.thumbnailUrl || event.thumbnailBase64} alt={event.title} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
               ) : (
@@ -61,7 +61,7 @@ export default function HomeEvents({ showEmpty = false }) {
               <span className={`absolute left-3 top-3 rounded px-2 py-1 text-[10px] font-bold tracking-wide text-white ${event.status === 'live' ? 'bg-red-600' : 'bg-blue-600'}`}>{event.status === 'live' ? 'TRỰC TIẾP' : 'SẮP DIỄN RA'}</span>
               <span className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100"><span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#ED2C25]"><Play size={21} fill="currentColor" className="ml-0.5 text-white" /></span></span>
             </div>
-            <div className="p-3.5 sm:p-4">
+            <div className="p-4">
               <h3 className="line-clamp-2 font-bold text-white group-hover:text-[#ED2C25]">{event.title}</h3>
               <div className="mt-2 text-xs text-white/50">{event.time ? new Date(event.time).toLocaleString('vi-VN') : 'Chưa xác định thời gian'}</div>
             </div>

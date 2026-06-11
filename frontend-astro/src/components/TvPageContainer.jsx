@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Clock, Heart, Radio, Search } from 'lucide-react';
 import LivePlayerView from './LivePlayerView';
 import EventChat from './EventChat';
@@ -17,6 +17,32 @@ export default function TvPageContainer() {
   const [epgData, setEpgData] = useState(null);
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
+  const [isHeaderHidden, setIsHeaderHidden] = useState(false);
+  const lastScrollY = useRef(0);
+
+  useEffect(() => {
+    const mainContainer = document.getElementById('main-scroll-container');
+    let frame = 0;
+    const handleScroll = () => {
+      if (!mainContainer || frame) return;
+      frame = requestAnimationFrame(() => {
+        const currentScrollY = mainContainer.scrollTop;
+        const delta = currentScrollY - lastScrollY.current;
+        // Dead-zone: only change direction when scroll delta > 5px (synced with Header)
+        if (Math.abs(delta) > 5) {
+          const hidden = delta > 0 && currentScrollY > 50;
+          setIsHeaderHidden(current => current === hidden ? current : hidden);
+        }
+        lastScrollY.current = currentScrollY;
+        frame = 0;
+      });
+    };
+    mainContainer?.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      mainContainer?.removeEventListener('scroll', handleScroll);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -151,6 +177,13 @@ export default function TvPageContainer() {
   const formatTime = value => value
     ? new Date(value).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
     : '--:--';
+  const epgSourceLabel = useMemo(() => {
+    try {
+      return epgData?.source ? new URL(epgData.source).hostname.replace(/^www\./, '') : 'EPG server';
+    } catch {
+      return 'EPG server';
+    }
+  }, [epgData?.source]);
   const eventHeading = eventData && (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
@@ -166,21 +199,23 @@ export default function TvPageContainer() {
       <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-0 pb-8 pt-0 lg:px-8 lg:pt-6">
         <div className="hidden lg:block">{eventHeading}</div>
         <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,68fr)_minmax(340px,32fr)]">
-          <div className="mobile-fixed-player mobile-player-shell fixed left-0 right-0 top-[64px] z-40 w-full overflow-hidden bg-black shadow-2xl lg:static lg:z-auto lg:h-auto lg:rounded-lg lg:border lg:border-white/10">
+          <div className={`fixed left-0 right-0 z-50 w-full overflow-hidden bg-black shadow-2xl transition-[top] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] lg:static lg:z-auto lg:rounded-lg lg:border lg:border-white/10 ${isHeaderHidden ? 'top-0' : 'top-[64px]'}`} style={{ willChange: 'top' }}>
             {(currentChannelId || streamParam) ? <LivePlayerView key={`${currentChannelId || streamParam}-${activeEventStream}`} channelId={currentChannelId} streamParam={streamParam} /> : <div className="flex aspect-video items-center justify-center text-sm text-white/45">Đang chờ nguồn phát sự kiện...</div>}
           </div>
-          <div className="mobile-fixed-player-spacer w-full lg:hidden" />
+          <div className="aspect-video w-full lg:hidden" />
           <div className="px-4 lg:hidden">{eventHeading}</div>
-          <EventChat eventId={eventId} />
+          <div className="px-4 lg:px-0">
+            <EventChat eventId={eventId} />
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-6 px-4 pb-8 pt-4 md:px-8 md:pt-8">
+    <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-6 px-0 pb-8 pt-0 md:px-8 md:pt-8">
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] xl:grid-cols-[minmax(0,68fr)_minmax(340px,32fr)]">
-        <div className="mobile-fixed-player mobile-player-shell fixed left-0 right-0 top-[64px] z-40 w-full overflow-hidden bg-black shadow-2xl lg:static lg:z-auto lg:h-auto lg:rounded-lg lg:border lg:border-white/10">
+        <div className={`fixed left-0 right-0 z-50 w-full overflow-hidden bg-black shadow-2xl transition-[top] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] lg:static lg:z-auto lg:rounded-lg lg:border lg:border-white/10 ${isHeaderHidden ? 'top-0' : 'top-[64px]'}`} style={{ willChange: 'top' }}>
           {(currentChannelId || streamParam) ? (
             <LivePlayerView key={currentChannelId || streamParam} channelId={currentChannelId} streamParam={streamParam} />
           ) : (
@@ -188,14 +223,14 @@ export default function TvPageContainer() {
           )}
         </div>
 
-        <div className="mobile-fixed-player-spacer block w-full lg:hidden" />
+        <div className="block aspect-video w-full lg:hidden" />
 
-        <aside className="flex h-[330px] min-h-0 w-full flex-col overflow-hidden rounded-lg border border-white/10 bg-[#151515] lg:h-[420px] xl:h-[460px]">
+        <aside className="mx-4 lg:mx-0 flex h-[330px] min-h-0 w-auto lg:w-full flex-col overflow-hidden rounded-lg border border-white/10 bg-[#151515] lg:h-[420px] xl:h-[460px]">
           <div className="border-b border-white/10 bg-[#101010] px-4 py-3">
             <div className="truncate font-bold text-white">Lịch phát sóng</div>
             <div className="truncate text-xs text-white/45">{currentChannel?.name || epgData?.channel?.name || 'Đang chọn kênh'}</div>
           </div>
-          <div className="flex items-center border-b border-white/10 bg-[#ED2C25]/10 px-3 py-1.5 text-xs font-bold text-[#ED2C25]">
+          <div className="flex items-center justify-between border-b border-white/10 bg-[#ED2C25]/10 px-3 py-1.5 text-xs font-bold text-[#ED2C25]">
             <span>Hôm nay</span>
           </div>
           <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto px-2 py-1.5">
@@ -217,30 +252,35 @@ export default function TvPageContainer() {
               </div>
             )}
           </div>
+          <div className="border-t border-white/10 bg-[#101010] px-4 py-2 text-center text-[10px] text-white/40">
+            Lịch phát sóng cung cấp bởi: <span className="text-[#ED2C25] font-semibold">{epgSourceLabel}</span>
+          </div>
         </aside>
       </div>
 
-      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-        <div className="custom-scrollbar flex w-full gap-6 overflow-x-auto pb-2 md:w-auto">
-          <FilterButton active={filter === 'all'} onClick={() => setFilter('all')}>Tất cả</FilterButton>
-          <FilterButton active={filter === 'favorites'} onClick={() => setFilter('favorites')}>Yêu thích</FilterButton>
-          {groups.map(group => <FilterButton key={group} active={filter === group} onClick={() => setFilter(group)}>{group}</FilterButton>)}
+      <div className="px-4 md:px-0 flex flex-col gap-6">
+        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+          <div className="custom-scrollbar flex w-full gap-6 overflow-x-auto pb-2 md:w-auto">
+            <FilterButton active={filter === 'all'} onClick={() => setFilter('all')}>Tất cả</FilterButton>
+            <FilterButton active={filter === 'favorites'} onClick={() => setFilter('favorites')}>Yêu thích</FilterButton>
+            {groups.map(group => <FilterButton key={group} active={filter === group} onClick={() => setFilter(group)}>{group}</FilterButton>)}
+          </div>
+          <div className="relative w-full shrink-0 md:w-72">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/45" />
+            <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Tìm kiếm kênh" className="w-full rounded-md border border-white/15 bg-[#151515] py-2 pl-9 pr-3 text-sm text-white outline-none focus:border-[#ED2C25]" />
+          </div>
         </div>
-        <div className="relative w-full shrink-0 md:w-72">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/45" />
-          <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Tìm kiếm kênh" className="w-full rounded-md border border-white/15 bg-[#151515] py-2 pl-9 pr-3 text-sm text-white outline-none focus:border-[#ED2C25]" />
-        </div>
-      </div>
 
-      {filteredChannels.length ? (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-          {filteredChannels.map(channel => (
-            <ChannelCard key={channel.id} channel={channel} active={currentChannelId === channel.id} favorite={favorites.includes(channel.id)} onPlay={playChannel} onFavorite={toggleFavoriteChannel} />
-          ))}
-        </div>
-      ) : (
-        <div className="rounded-lg border border-white/5 bg-[#151515] py-16 text-center text-white/50">Không tìm thấy kênh phù hợp.</div>
-      )}
+        {filteredChannels.length ? (
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+            {filteredChannels.map(channel => (
+              <ChannelCard key={channel.id} channel={channel} active={currentChannelId === channel.id} favorite={favorites.includes(channel.id)} onPlay={playChannel} onFavorite={toggleFavoriteChannel} />
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-lg border border-white/5 bg-[#151515] py-16 text-center text-white/50">Không tìm thấy kênh phù hợp.</div>
+        )}
+      </div>
     </div>
   );
 }

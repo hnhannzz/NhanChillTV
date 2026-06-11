@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Play, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useDraggableScroll } from '../hooks/useDraggableScroll';
 import { fetchNguoncJson, getNguoncItems } from '../lib/nguoncApi';
@@ -68,7 +68,7 @@ export default function HomeMovies() {
 
       <div 
         ref={scrollRef}
-        className="mobile-horizontal-scroll flex gap-4 overflow-x-auto hide-scrollbar snap-x snap-proximity py-2 px-4 md:cursor-grab md:select-none md:snap-mandatory md:px-0"
+        className="mobile-horizontal-scroll flex gap-4 overflow-x-auto hide-scrollbar snap-x snap-proximity cursor-grab py-2 select-none px-4 md:snap-mandatory md:px-0"
         onDragStart={(e) => e.preventDefault()}
       >
         {movies.map(movie => (

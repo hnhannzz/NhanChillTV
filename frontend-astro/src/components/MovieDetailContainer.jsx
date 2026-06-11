@@ -36,7 +36,7 @@ export default function MovieDetailContainer() {
           if (m.episodes && m.episodes[0] && m.episodes[0].items[0]) {
             const firstEpisode = m.episodes[0].items[0];
             setCurrentEpisode(firstEpisode);
-            setCurrentEmbed(firstEpisode.embed || '');
+            setCurrentEmbed(firstEpisode.embed || firstEpisode.link_embed || '');
             setCurrentEpName(firstEpisode.name);
           }
 
@@ -135,9 +135,8 @@ export default function MovieDetailContainer() {
       });
       const data = await res.json();
       if (data.success) {
-        setComments(current => [data.data, ...current]);
+        setComments([data.data, ...comments]);
         setNewComment('');
-        document.activeElement?.blur();
       } else {
         alert(data.error || 'Lỗi gửi bình luận');
       }
@@ -181,7 +180,7 @@ export default function MovieDetailContainer() {
       </div>
 
       {/* 2. Player Section (Centered, Prominent) */}
-      <div className="movie-player-shell w-full bg-black rounded-xl overflow-hidden shadow-2xl border border-white/5 relative mx-auto">
+      <div className="w-full bg-black rounded-xl overflow-hidden shadow-2xl border border-white/5 relative mx-auto">
         {currentEpisode ? (
           <div className="aspect-video w-full bg-[#0A0A0A]">
             <MovieStreamPlayer episode={currentEpisode} />
@@ -204,20 +203,23 @@ export default function MovieDetailContainer() {
               <div key={sIdx} className="mb-4 last:mb-0">
                 <h4 className="text-sm font-semibold text-white/50 mb-2">{server.server_name}</h4>
                 <div className="flex flex-wrap gap-2">
-                  {server.items.map((ep, eIdx) => (
-                    <button 
-                      key={eIdx}
-                      onClick={() => {
-                        setCurrentEpisode(ep);
-                        setCurrentEmbed(ep.embed || '');
-                        setCurrentEpName(ep.name);
-                        document.getElementById('main-scroll-container')?.scrollTo({ top: 0, behavior: 'smooth' });
-                      }}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${currentEmbed === (ep.embed || '') ? 'bg-[#ED2C25] text-white shadow-lg' : 'bg-[#1A1A1A] text-white/70 hover:bg-white/20'}`}
-                    >
-                      {ep.name}
-                    </button>
-                  ))}
+                  {server.items.map((ep, eIdx) => {
+                    const epEmbed = ep.embed || ep.link_embed || '';
+                    return (
+                      <button 
+                        key={eIdx}
+                        onClick={() => {
+                          setCurrentEpisode(ep);
+                          setCurrentEmbed(epEmbed);
+                          setCurrentEpName(ep.name);
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${currentEmbed === epEmbed ? 'bg-[#ED2C25] text-white shadow-lg' : 'bg-[#1A1A1A] text-white/70 hover:bg-white/20'}`}
+                      >
+                        {ep.name}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             ))}
@@ -238,16 +240,22 @@ export default function MovieDetailContainer() {
               <div className="text-center text-white/40 text-sm py-10">Chưa có bình luận nào. Hãy là người đầu tiên!</div>
             ) : (
               comments.map(c => (
-                <div key={c.id} className="flex gap-3 rounded-xl border border-white/5 bg-[#1A1A1A] p-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/10 text-xs font-black text-white/70">
-                    {c.avatar ? <img src={c.avatar} alt="" className="h-full w-full bg-white object-contain p-1" /> : String(c.username || '?').slice(0, 1).toUpperCase()}
+                <div key={c.id} className="flex gap-2.5 bg-[#1A1A1A] p-3 rounded-xl border border-white/5">
+                  <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full border border-white/10 bg-white flex items-center justify-center">
+                    {c.avatar ? (
+                      <img src={c.avatar} alt="" className="h-full w-full object-contain p-0.5" />
+                    ) : (
+                      <svg className="h-5 w-5 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+                      </svg>
+                    )}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="mb-1 flex items-center justify-between gap-2">
-                      <span className="truncate text-sm font-bold text-[#ED2C25]">{c.username}</span>
-                      <span className="shrink-0 text-[10px] text-white/40">{new Date(c.createdAt).toLocaleDateString('vi-VN')}</span>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-bold text-sm text-[#ED2C25]">{c.username}</span>
+                      <span className="text-[10px] text-white/40">{new Date(c.createdAt).toLocaleDateString('vi-VN')}</span>
                     </div>
-                    <p className="break-words text-sm text-white/90">{c.content}</p>
+                    <p className="text-sm text-white/90 break-words">{c.content}</p>
                   </div>
                 </div>
               ))
@@ -259,11 +267,8 @@ export default function MovieDetailContainer() {
               type="text" 
               value={newComment}
               onChange={e => setNewComment(e.target.value)}
-              inputMode="text"
-              enterKeyHint="send"
-              autoComplete="off"
               placeholder="Nhập bình luận của bạn..."
-              className="comment-input w-full bg-[#1A1A1A] border border-white/10 rounded-xl py-3 pl-4 pr-12 text-base text-white focus:outline-none focus:border-[#ED2C25] transition-colors"
+              className="w-full bg-[#1A1A1A] border border-white/10 rounded-xl py-3 pl-4 pr-12 text-base md:text-sm text-white focus:outline-none focus:border-[#ED2C25] transition-colors"
             />
             <button 
               type="submit" 

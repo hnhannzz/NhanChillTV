@@ -11,17 +11,17 @@ export function useDraggableScroll() {
     let startX;
     let scrollLeft;
     let isDragging = false;
+
+    // Touch direction detection
     let touchStartX = 0;
     let touchStartY = 0;
-    let touchScrollLeft = 0;
-    let touchDirection = null;
-    let dragResetTimer = null;
+    let touchDirection = null; // 'horizontal' | 'vertical' | null
 
     const onMouseDown = (e) => {
       isDown = true;
       isDragging = false;
       ele.classList.add('cursor-grabbing');
-      ele.style.scrollSnapType = 'none'; // Disable snapping while dragging
+      ele.style.scrollSnapType = 'none';
       startX = e.pageX - ele.offsetLeft;
       scrollLeft = ele.scrollLeft;
     };
@@ -42,7 +42,7 @@ export function useDraggableScroll() {
       if (!isDown) return;
       e.preventDefault();
       const x = e.pageX - ele.offsetLeft;
-      const walk = (x - startX) * 2; // Scroll-fast multiplier
+      const walk = (x - startX) * 2;
       if (Math.abs(walk) > 5) {
         isDragging = true;
       }
@@ -56,42 +56,38 @@ export function useDraggableScroll() {
       }
     };
 
+    // Touch events: detect swipe direction, allow vertical scroll to propagate
+    const DIRECTION_THRESHOLD = 8;
+
     const onTouchStart = (e) => {
-      const touch = e.touches[0];
-      if (!touch) return;
-      touchStartX = touch.clientX;
-      touchStartY = touch.clientY;
-      touchScrollLeft = ele.scrollLeft;
       touchDirection = null;
-      isDragging = false;
+      if (e.touches.length === 1) {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+      }
     };
 
     const onTouchMove = (e) => {
-      const touch = e.touches[0];
-      if (!touch) return;
+      if (!e.touches.length) return;
+      const dx = Math.abs(e.touches[0].clientX - touchStartX);
+      const dy = Math.abs(e.touches[0].clientY - touchStartY);
 
-      const deltaX = touch.clientX - touchStartX;
-      const deltaY = touch.clientY - touchStartY;
-
-      if (!touchDirection) {
-        if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) < 7) return;
-        touchDirection = Math.abs(deltaX) > Math.abs(deltaY) * 1.15 ? 'horizontal' : 'vertical';
-        if (touchDirection === 'horizontal') ele.style.scrollSnapType = 'none';
+      if (!touchDirection && (dx > DIRECTION_THRESHOLD || dy > DIRECTION_THRESHOLD)) {
+        touchDirection = dx > dy ? 'horizontal' : 'vertical';
       }
 
-      // Vertical gestures remain native so the page keeps scrolling on iOS.
-      if (touchDirection !== 'horizontal') return;
-
-      e.preventDefault();
-      isDragging = Math.abs(deltaX) > 8;
-      ele.scrollLeft = touchScrollLeft - deltaX;
+      // If user is scrolling vertically, let it propagate naturally
+      // by NOT preventing default and NOT interfering
+      if (touchDirection === 'vertical') {
+        ele.style.overflowX = 'hidden';
+      } else {
+        ele.style.overflowX = '';
+      }
     };
 
     const onTouchEnd = () => {
-      ele.style.scrollSnapType = '';
       touchDirection = null;
-      if (dragResetTimer) clearTimeout(dragResetTimer);
-      dragResetTimer = setTimeout(() => { isDragging = false; }, 120);
+      ele.style.overflowX = '';
     };
 
     ele.addEventListener('mousedown', onMouseDown);
@@ -100,12 +96,10 @@ export function useDraggableScroll() {
     ele.addEventListener('mousemove', onMouseMove);
     ele.addEventListener('click', onClick, true);
     ele.addEventListener('touchstart', onTouchStart, { passive: true });
-    ele.addEventListener('touchmove', onTouchMove, { passive: false });
+    ele.addEventListener('touchmove', onTouchMove, { passive: true });
     ele.addEventListener('touchend', onTouchEnd, { passive: true });
-    ele.addEventListener('touchcancel', onTouchEnd, { passive: true });
 
     return () => {
-      if (dragResetTimer) clearTimeout(dragResetTimer);
       ele.removeEventListener('mousedown', onMouseDown);
       ele.removeEventListener('mouseleave', onMouseLeave);
       ele.removeEventListener('mouseup', onMouseUp);
@@ -114,7 +108,6 @@ export function useDraggableScroll() {
       ele.removeEventListener('touchstart', onTouchStart);
       ele.removeEventListener('touchmove', onTouchMove);
       ele.removeEventListener('touchend', onTouchEnd);
-      ele.removeEventListener('touchcancel', onTouchEnd);
     };
   }, []);
 

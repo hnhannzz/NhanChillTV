@@ -6,8 +6,8 @@ import HomeEvents from '../components/HomeEvents.jsx';
 
 <Layout title="Sự kiện - NhanChillTV">
   <MainLayout client:load>
-    <main class="mx-auto w-full max-w-[1600px] px-4 pb-10 pt-4 sm:pt-6 md:mt-4 md:px-8">
-      <h1 class="text-2xl font-black text-white sm:text-3xl">Sự kiện trực tiếp</h1>
+    <main class="mx-auto mt-8 w-full max-w-[1600px] px-4 pb-10 pt-6 md:px-8">
+      <h1 class="text-3xl font-black text-white">Sự kiện trực tiếp</h1>
       <p class="mb-6 mt-2 text-sm text-white/55">Các chương trình đang phát và lịch sự kiện sắp tới.</p>
       <HomeEvents client:only="react" showEmpty={true} />
     </main>
