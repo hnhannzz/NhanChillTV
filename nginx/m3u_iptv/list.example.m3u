@@ -1,0 +1,3 @@
+#EXTM3U url-tvg="https://vnepg.site/epg.xml"
+#EXTINF:-1 tvg-id="sample-channel" group-title="Example", Sample Channel
+https://example.com/live/sample.m3u8
