@@ -15,6 +15,7 @@ export default function LegacyPlayer({
   onTimeUpdate,
   onReady,
   onError,
+  clearKey,
 }) {
   const containerRef = useRef(null);
   const playerRef = useRef(null);
@@ -75,10 +76,14 @@ export default function LegacyPlayer({
     // DRM / Type config
     if (isMpd) {
       playerSetup.type = 'dash';
-      // MOCK KEY CHO TÍNH NĂNG DRM (Cần parse url hoặc lấy keyId/key thực tế nếu có)
-      // Hiện tại player KratosRepo lấy kid/key từ URL. Nếu server trả về qua header hoặc cách khác, cần parse.
-      // Vì hiện tại ta nhận clearKey string "kid:key" qua kênh nếu có (trong UnifiedPlayer ta có xử lý DRM ko? Có).
-      // Nhưng tạm thời cứ khởi tạo MPD mặc định.
+      if (clearKey) {
+        playerSetup.drm = {
+          clearkey: {
+            keyId: clearKey.split(':')[0],
+            key: clearKey.split(':')[1]
+          }
+        };
+      }
     } else if (isM3U8) {
       playerSetup.type = 'hls';
     } else {

@@ -72,7 +72,21 @@ router.get('/popular', async (req, res) => {
 });
 
 router.get('/*', async (req, res) => {
-  const upstreamPath = `/${req.params[0] || ''}`;
+  let upstreamPath = `/${req.params[0] || ''}`;
+
+  if (upstreamPath.startsWith('/films/search')) {
+    upstreamPath = upstreamPath.replace('/films/search', '/tim-kiem');
+  } else if (upstreamPath.startsWith('/films/the-loai')) {
+    upstreamPath = upstreamPath.replace('/films/the-loai', '/the-loai');
+  } else if (upstreamPath.startsWith('/films/quoc-gia')) {
+    upstreamPath = upstreamPath.replace('/films/quoc-gia', '/quoc-gia');
+  } else if (upstreamPath.startsWith('/films/nam-phat-hanh')) {
+    upstreamPath = upstreamPath.replace('/films/nam-phat-hanh', '/nam-phat-hanh');
+  } else if (upstreamPath.startsWith('/films/danh-sach')) {
+    upstreamPath = upstreamPath.replace('/films/danh-sach', '/danh-sach');
+  } else if (upstreamPath.startsWith('/films/')) {
+    upstreamPath = upstreamPath.replace('/films/', '/danh-sach/');
+  }
   const cacheKey = buildCacheKey(req);
   const cached = cache.get(cacheKey);
   const now = Date.now();

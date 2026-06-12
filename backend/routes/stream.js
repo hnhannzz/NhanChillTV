@@ -66,24 +66,26 @@ router.post('/start/:channelId', async (req, res) => {
       let finalIsMpd = isMpd;
 
       // PRE-FETCH CHECK: Verify if the URL is actually MPD despite having m3u8 extension
-      try {
-        const headRes = await axios.get(channel.url, { 
-          headers: { 
-            'Range': 'bytes=0-1024',
-            'User-Agent': channel.userAgent || 'Dalvik/2.1.0 (Linux; U; Android 10; TV Box Build/QQ3A.200805.001)',
-            'X-Requested-With': 'org.xbmc.kodi'
-          },
-          timeout: 5000
-        });
-        
-        const contentType = headRes.headers['content-type'] || '';
-        const contentStr = (headRes.data || '').toString();
-        
-        if (contentType.includes('dash+xml') || contentStr.includes('<?xml') || contentStr.includes('<MPD')) {
-          finalIsMpd = true;
+      if (String(channel.url).toLowerCase().includes('.m3u8')) {
+        try {
+          const headRes = await axios.get(channel.url, { 
+            headers: { 
+              'Range': 'bytes=0-1024',
+              'User-Agent': channel.userAgent || 'Dalvik/2.1.0 (Linux; U; Android 10; TV Box Build/QQ3A.200805.001)',
+              'X-Requested-With': 'org.xbmc.kodi'
+            },
+            timeout: 5000
+          });
+          
+          const contentType = headRes.headers['content-type'] || '';
+          const contentStr = (headRes.data || '').toString();
+          
+          if (contentType.includes('dash+xml') || contentStr.includes('<?xml') || contentStr.includes('<MPD')) {
+            finalIsMpd = true;
+          }
+        } catch (err) {
+          console.warn(`[Stream] Pre-fetch check failed for ${channelId}:`, err.message);
         }
-      } catch (err) {
-        console.warn(`[Stream] Pre-fetch check failed for ${channelId}:`, err.message);
       }
 
       const finalTarget = buildDirectProxyTarget(channel);

@@ -174,7 +174,10 @@ export default function LivePlayerView({ channelId, streamParam }) {
     );
   }
 
-  const PlayerComponent = playerType === 'legacy' ? LegacyPlayer : UnifiedPlayer;
+  const lowerUrl = String(streamUrl || '').toLowerCase();
+  const isMpegTs = !lowerUrl.includes('.m3u8') && !lowerUrl.includes('.mpd') && !lowerUrl.includes('.mp4');
+
+  const PlayerComponent = (playerType === 'legacy' && !isMpegTs) ? LegacyPlayer : UnifiedPlayer;
 
   return (
     <div className="group relative aspect-video w-full overflow-hidden rounded-lg bg-black shadow-2xl">
