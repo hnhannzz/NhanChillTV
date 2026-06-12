@@ -131,13 +131,15 @@ router.get('/*', async (req, res) => {
       httpsAgent: httpsKeepAliveAgent,
       headers: {
         'User-Agent': (targetUrl.includes('fptplay') || targetUrl.includes('vtv') || targetUrl.includes('vtvgo'))
-                        ? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' 
+                        ? 'VLC/3.0.16 LibVLC/3.0.16' 
                         : (customUa ? customUa : (req.headers['user-agent']?.includes('Mozilla') ? 'Dalvik/2.1.0 (Linux; U; Android 10; TV Box Build/QQ3A.200805.001)' : (req.headers['user-agent'] || 'Dalvik/2.1.0 (Linux; U; Android 10; TV Box Build/QQ3A.200805.001)'))),
         'Accept': '*/*',
         'Accept-Encoding': 'identity',
         'X-Requested-With': (targetUrl.includes('fptplay') || targetUrl.includes('vtv')) ? undefined : 'org.xbmc.kodi',
-        'Origin': targetUrl.includes('fptplay') ? 'https://fptplay.vn' : (targetUrl.includes('vtv.vn') ? 'https://vtv.vn' : (targetUrl.includes('vtvgo.vn') ? 'https://vtvgo.vn' : undefined)),
-        'Referer': targetUrl.includes('fptplay') ? 'https://fptplay.vn/' : (targetUrl.includes('vtv.vn') ? 'https://vtv.vn/' : (targetUrl.includes('vtvgo.vn') ? 'https://vtvgo.vn/' : (new URL(targetUrl).origin + '/'))),
+        'Origin': (targetUrl.includes('fptplay') || targetUrl.includes('vtv')) ? undefined : undefined,
+        'Referer': (targetUrl.includes('fptplay') || targetUrl.includes('vtv')) ? undefined : (new URL(targetUrl).origin + '/'),
+        'X-Forwarded-For': `14.169.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`,
+        'X-Real-IP': `14.169.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`,
         'Range': req.headers.range
       },
       responseType: 'stream',
@@ -212,7 +214,7 @@ router.get('/*', async (req, res) => {
     }
 
   } catch (error) {
-    console.error('[Proxy] Error:', error.message);
+    console.error(`[Proxy] Error fetching ${targetUrl || req.params[0]}:`, error.message, error.response?.status);
     if (!res.headersSent) {
       res.status(502).send('Proxy Error: ' + error.message);
     }
