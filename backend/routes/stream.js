@@ -16,6 +16,11 @@ function isMpdLikeChannel(channel) {
 }
 
 function buildDirectProxyTarget(channel) {
+  // Bỏ qua proxy cho các luồng FPT Play/VTV vì họ chặn IP Datacenter và có hỗ trợ CORS
+  if (channel.url.includes('fptplay') || channel.url.includes('vtv') || channel.url.includes('cvtv') || channel.url.includes('vtvprime')) {
+    return channel.url;
+  }
+
   const encryptedUrl = encryptUrl(channel.url);
   let finalTarget = encryptedUrl ? `/api/proxy/${encryptedUrl}` : `/api/proxy/${channel.url}`;
 
