@@ -317,6 +317,16 @@ router.post('/iptv-settings', auth, (req, res) => {
   res.json({ success: true, data: updated });
 });
 
+// System Settings
+router.get('/system-settings', auth, (req, res) => {
+  res.json({ success: true, data: db.getSystemSettings() });
+});
+
+router.post('/system-settings', auth, (req, res) => {
+  const updated = db.updateSystemSettings(req.body);
+  res.json({ success: true, data: updated });
+});
+
 router.get('/iptv-channels', auth, (req, res) => {
   res.json({ success: true, data: m3uManager.getChannels() });
 });
@@ -424,6 +434,10 @@ router.post('/active-streams/kill', auth, async (req, res) => {
 });
 
 // System Controls
+router.get('/system/status', (req, res) => {
+  res.json({ success: true, data: db.getSystemSettings() });
+});
+
 router.post('/system/restart', auth, (req, res) => {
   res.json({ success: true, message: 'Server is reloading...' });
   const command = process.platform === 'win32' ? 'nginx.exe' : 'nginx';

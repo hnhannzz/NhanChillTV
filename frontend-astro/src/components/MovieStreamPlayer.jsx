@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import UnifiedPlayer from './UnifiedPlayer';
+import LegacyPlayer from './LegacyPlayer';
 
 export default function MovieStreamPlayer({ episode, movieSlug, onNextEpisode, onCinemaMode }) {
   // Ưu tiên m3u8 từ OPhim, nếu không có fallback sang embed
@@ -8,11 +9,21 @@ export default function MovieStreamPlayer({ episode, movieSlug, onNextEpisode, o
   
   const progressKey = `progress_${movieSlug}_${episode?.slug || episode?.name}`;
   const [initialTime, setInitialTime] = useState(0);
+  const [playerType, setPlayerType] = useState('shaka');
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const savedTime = localStorage.getItem(progressKey);
       if (savedTime) setInitialTime(parseFloat(savedTime));
+      
+      fetch('/api/admin/system/status')
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.success && data.data) {
+            setPlayerType(data.data.playerType || 'shaka');
+          }
+        })
+        .catch(err => console.error('Failed to load system settings:', err));
     }
   }, [progressKey]);
 
@@ -23,9 +34,10 @@ export default function MovieStreamPlayer({ episode, movieSlug, onNextEpisode, o
   };
 
   if (streamUrl) {
+    const PlayerComponent = playerType === 'legacy' ? LegacyPlayer : UnifiedPlayer;
     return (
-      <UnifiedPlayer
-        key={streamUrl}
+      <PlayerComponent
+        key={`${streamUrl}_${playerType}`}
         url={streamUrl}
         initialTime={initialTime}
         onTimeUpdate={handleTimeUpdate}

@@ -16,6 +16,7 @@ export default function AdminDashboard() {
   const [sources, setSources] = useState([]);
   const [channels, setChannels] = useState([]);
   const [settings, setSettings] = useState({ hiddenGroups: [], hiddenChannels: [], groupOrder: [] });
+  const [systemSettings, setSystemSettings] = useState({ playerType: 'shaka', maintenanceMode: false });
   const [status, setStatus] = useState(null);
   const [streams, setStreams] = useState([]);
   const [health, setHealth] = useState(null);
@@ -58,6 +59,7 @@ export default function AdminDashboard() {
       adminRequest('/admin/iptv-channels'),
       adminRequest('/admin/status'),
       adminRequest('/admin/active-streams'),
+      adminRequest('/admin/system-settings'),
       fetch(`${API_BASE}/health`).then(response => response.json()),
     ]);
     if (requests[0].status === 'fulfilled') setEvents(requests[0].value.data || []);
@@ -66,7 +68,8 @@ export default function AdminDashboard() {
     if (requests[3].status === 'fulfilled') setChannels(requests[3].value.data || []);
     if (requests[4].status === 'fulfilled') setStatus(requests[4].value.data || null);
     if (requests[5].status === 'fulfilled') setStreams(requests[5].value.data || []);
-    if (requests[6].status === 'fulfilled') setHealth(requests[6].value || null);
+    if (requests[6].status === 'fulfilled') setSystemSettings(requests[6].value.data || { playerType: 'shaka', maintenanceMode: false });
+    if (requests[7].status === 'fulfilled') setHealth(requests[7].value || null);
   }, [adminRequest, settingsDirty, token]);
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -138,7 +141,7 @@ export default function AdminDashboard() {
 
   const tabs = [
     ['dashboard', 'Tổng quan', Gauge], ['events', 'Sự kiện', CalendarDays], ['m3u', 'Nguồn M3U', Radio],
-    ['channels', 'Kênh IPTV', ListVideo], ['streams', 'Luồng phát', Activity], ['security', 'Mật khẩu', KeyRound],
+    ['channels', 'Kênh IPTV', ListVideo], ['streams', 'Luồng phát', Activity], ['system', 'Hệ thống', Settings], ['security', 'Mật khẩu', KeyRound],
   ];
 
   return (
@@ -172,6 +175,7 @@ export default function AdminDashboard() {
           }} onRefresh={() => runAction(() => adminRequest('/admin/m3u-sources/refresh', { method: 'POST' }), 'Đã cập nhật danh sách M3U.')} />}
           {activeTab === 'channels' && <ChannelsTab channels={channels} settings={settings} setSettings={updater => { setSettings(updater); setSettingsDirty(true); }} search={channelSearch} setSearch={setChannelSearch} busy={busy} onSave={() => runAction(async () => { await adminRequest('/admin/iptv-settings', { method: 'POST', body: JSON.stringify(settings) }); setSettingsDirty(false); }, 'Đã lưu cấu hình IPTV.')} />}
           {activeTab === 'streams' && <StreamsTab streams={streams} onStop={stream => runAction(() => adminRequest('/admin/active-streams/kill', { method: 'POST', body: JSON.stringify({ id: stream.id }) }), 'Đã dừng luồng phát.')} />}
+          {activeTab === 'system' && <SystemTab settings={systemSettings} setSettings={setSystemSettings} busy={busy} onSave={() => runAction(async () => { await adminRequest('/admin/system-settings', { method: 'POST', body: JSON.stringify(systemSettings) }); }, 'Đã lưu cấu hình hệ thống.')} />}
           {activeTab === 'security' && <PasswordTab busy={busy} onChange={changeAdminPassword} />}
         </main>
       </div>
@@ -232,6 +236,27 @@ function ChannelsTab({ channels, settings, setSettings, search, setSearch, busy,
 function StreamsTab({ streams, onStop }) {
   return <section><SectionHeader title="Quản lý Stream" subtitle="Các luồng phát IPTV và OBS đang hoạt động trên hệ thống" />
     <div className="mt-5 overflow-hidden rounded-lg border border-white/10 bg-[#151515]">{streams.length ? streams.map(stream => <div key={stream.id} className="flex items-center gap-3 border-b border-white/5 p-4 last:border-0"><Activity size={18} className={stream.type === 'obs' ? "text-[#ED2C25]" : "text-green-400"} /><div className="min-w-0 flex-1"><div className="truncate font-bold">{stream.name}</div><div className="text-xs text-white/40">ID: {stream.id} {stream.pid ? `· PID: ${stream.pid}` : ''} · Hoạt động: {new Date(stream.lastActive).toLocaleTimeString('vi-VN')}</div></div><button onClick={() => onStop(stream)} className="flex items-center gap-2 rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-300 hover:bg-red-500/20"><CircleStop size={16} /> Dừng</button></div>) : <Empty text="Không có luồng phát nào đang hoạt động." />}</div>
+  </section>;
+}
+
+function SystemTab({ settings, setSettings, busy, onSave }) {
+  return <section><SectionHeader title="Cấu hình hệ thống" subtitle="Cài đặt chung cho toàn bộ website" action={<button disabled={busy} onClick={onSave} className="flex items-center gap-2 rounded-md bg-[#ED2C25] px-3 py-2 text-sm font-bold"><Save size={16} /> Lưu cấu hình</button>} />
+    <div className="mt-5 max-w-2xl space-y-4 rounded-lg border border-white/10 bg-[#151515] p-5">
+      <Field label="Chế độ bảo trì">
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" className="w-5 h-5 accent-[#ED2C25]" checked={settings.maintenanceMode || false} onChange={e => setSettings({ ...settings, maintenanceMode: e.target.checked })} />
+          <span>Bật chế độ bảo trì (Chặn người dùng truy cập website)</span>
+        </label>
+      </Field>
+      <div className="border-t border-white/10 my-4"></div>
+      <Field label="Trình phát mặc định">
+        <select value={settings.playerType || 'shaka'} onChange={e => setSettings({ ...settings, playerType: e.target.value })} className="input-admin mt-1">
+          <option value="shaka">Unified Player (Shaka Player - Mặc định)</option>
+          <option value="legacy">Legacy Player (Video.js - Dự phòng lỗi Shaka)</option>
+        </select>
+        <p className="text-xs text-white/50 mt-2">Chọn Legacy Player nếu nhiều phim OPhim hoặc kênh TV báo lỗi Shaka 6012.</p>
+      </Field>
+    </div>
   </section>;
 }
 

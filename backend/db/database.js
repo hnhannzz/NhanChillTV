@@ -57,6 +57,13 @@ class Database {
         };
         this.write(data);
       }
+      if (!data.systemSettings) {
+        data.systemSettings = {
+          playerType: 'shaka',
+          maintenanceMode: false
+        };
+        this.write(data);
+      }
       if (!Array.isArray(data.favorites)) {
         data.favorites = [];
         this.write(data);
@@ -157,6 +164,18 @@ class Database {
     data.iptvSettings = { ...data.iptvSettings, ...settings };
     this.write(data);
     return data.iptvSettings;
+  }
+
+  getSystemSettings() {
+    const data = this.read();
+    return data.systemSettings || { playerType: 'shaka', maintenanceMode: false };
+  }
+
+  updateSystemSettings(settings) {
+    const data = this.read();
+    data.systemSettings = { ...data.systemSettings, ...settings };
+    this.write(data);
+    return data.systemSettings;
   }
 
   verifyAdminPassword(password, fallbackPassword) {

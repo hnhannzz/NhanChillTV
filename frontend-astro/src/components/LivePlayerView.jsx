@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Loader2, Users } from 'lucide-react';
 import { io } from 'socket.io-client';
 import UnifiedPlayer from './UnifiedPlayer';
+import LegacyPlayer from './LegacyPlayer';
 import { resolveProxyPlaybackUrl } from '../lib/playbackUrl';
 
 const API_BASE = '/api';
@@ -33,6 +34,7 @@ export default function LivePlayerView({ channelId, streamParam }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [viewers, setViewers] = useState(0);
+  const [playerType, setPlayerType] = useState('shaka');
   const heartbeatIntervalRef = useRef(null);
 
   useEffect(() => {
@@ -46,6 +48,15 @@ export default function LivePlayerView({ channelId, streamParam }) {
         fetch(`${API_BASE}/stream/heartbeat/${channelId}`, { method: 'POST' }).catch(() => {});
       }, 30000);
     };
+
+    fetch('/api/admin/system/status')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.success && data.data) {
+          setPlayerType(data.data.playerType || 'shaka');
+        }
+      })
+      .catch(err => console.error('Failed to load system settings:', err));
 
     const useDirectWithProxyFallback = (rawUrl, proxyUrl) => {
       if (canUseDirectUrl(rawUrl)) {
@@ -163,10 +174,12 @@ export default function LivePlayerView({ channelId, streamParam }) {
     );
   }
 
+  const PlayerComponent = playerType === 'legacy' ? LegacyPlayer : UnifiedPlayer;
+
   return (
     <div className="group relative aspect-video w-full overflow-hidden rounded-lg bg-black shadow-2xl">
-      <UnifiedPlayer
-        key={`${streamUrl}-${fallbackUrls.join('|')}`}
+      <PlayerComponent
+        key={`${streamUrl}-${fallbackUrls.join('|')}-${playerType}`}
         url={streamUrl}
         autoplay={true}
         muted={false}
