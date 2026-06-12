@@ -69,10 +69,14 @@ class M3UManager {
 
       const aggregatedChannels = sources.flatMap(source => this.sourceChannels.get(source.id) || []);
 
-      // Deduplicate by ID (keep the last one, or first one? Let's keep the first one found)
       const uniqueChannels = [];
       const seenIds = new Set();
       for (const ch of aggregatedChannels) {
+        // Lọc bỏ hoàn toàn các nguồn hoiquan.click / hoiquan.dpdns.org vì họ dùng Cloudflare block IP Datacenter và không hỗ trợ CORS trên trình duyệt
+        if (ch.url && ch.url.includes('hoiquan')) {
+          continue;
+        }
+
         if (!seenIds.has(ch.id)) {
           seenIds.add(ch.id);
           uniqueChannels.push(ch);
