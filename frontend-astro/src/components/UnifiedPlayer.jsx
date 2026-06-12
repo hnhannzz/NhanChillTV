@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import shaka from 'shaka-player/dist/shaka-player.ui.js';
 import 'shaka-player/dist/controls.css';
 import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, SkipForward, LightbulbOff } from 'lucide-react';
+import mpegts from 'mpegts.js';
 import { getMimeType, inferPlaybackType } from '../lib/playbackUrl';
 
 export default function UnifiedPlayer({
@@ -10,6 +11,7 @@ export default function UnifiedPlayer({
   autoplay = true,
   muted = false,
   className = '',
+  clearKey,
   onNextEpisode,
   onCinemaMode,
   title,
@@ -38,53 +40,87 @@ export default function UnifiedPlayer({
   useEffect(() => {
     if (!videoRef.current || !videoContainerRef.current) return;
 
-    shaka.polyfill.installAll();
-    if (!shaka.Player.isBrowserSupported()) {
-      setError('Browser không hỗ trợ Shaka Player');
-      return;
+    let shakaPlayer = null;
+    let mpegtsPlayer = null;
+
+    const lowerUrl = String(url).toLowerCase();
+    const isMpegTs = !lowerUrl.includes('.m3u8') && !lowerUrl.includes('.mpd') && !lowerUrl.includes('.mp4');
+
+    if (isMpegTs && mpegts.isSupported()) {
+      // Dùng mpegts.js cho các luồng UDP/HTTP MPEG-TS (udpxy)
+      mpegtsPlayer = mpegts.createPlayer({
+        type: 'mse',
+        isLive: true,
+        url: url
+      });
+      playerRef.current = mpegtsPlayer;
+      
+      mpegtsPlayer.attachMediaElement(videoRef.current);
+      mpegtsPlayer.load();
+      if (autoplay) {
+        mpegtsPlayer.play().catch(err => {
+          console.warn('Autoplay prevented', err);
+          setIsPlaying(false);
+        });
+      }
+      onReady?.(mpegtsPlayer);
+
+      mpegtsPlayer.on(mpegts.Events.ERROR, (errorType, errorDetail, errorInfo) => {
+        console.error('MPEG-TS Error:', errorType, errorDetail, errorInfo);
+        setError(`Lỗi MPEG-TS: ${errorDetail}`);
+        onError?.(errorInfo);
+      });
+    } else {
+      // Dùng Shaka Player cho DASH, HLS, MP4
+      shaka.polyfill.installAll();
+      if (!shaka.Player.isBrowserSupported()) {
+        setError('Browser không hỗ trợ Shaka Player');
+        return;
+      }
+
+      shakaPlayer = new shaka.Player(videoRef.current);
+      playerRef.current = shakaPlayer;
+
+      const drmConfig = clearKey ? {
+        clearKeys: {
+          [clearKey.split(':')[0]]: clearKey.split(':')[1]
+        }
+      } : undefined;
+
+      shakaPlayer.configure({
+        streaming: {
+          bufferingGoal: 30,
+          rebufferingGoal: 10,
+          bufferBehind: 30,
+        },
+        drm: drmConfig
+      });
+
+      const loadStream = async () => {
+        try {
+          await shakaPlayer.load(url, initialTime);
+          if (autoplay) {
+            videoRef.current.play().catch(() => {
+              console.warn('Autoplay prevented');
+              setIsPlaying(false);
+            });
+          }
+          onReady?.(shakaPlayer);
+        } catch (err) {
+          console.error('Error loading video', err);
+          setError('Không thể tải luồng video: ' + err.message);
+          onError?.(err);
+        }
+      };
+
+      loadStream();
+
+      shakaPlayer.addEventListener('error', (event) => {
+        console.error('Player error', event.detail);
+        setError('Lỗi phát video: ' + event.detail.message);
+        onError?.(event.detail);
+      });
     }
-
-    const player = new shaka.Player(videoRef.current);
-    playerRef.current = player;
-
-    // Cấu hình Shaka
-    player.configure({
-      streaming: {
-        bufferingGoal: 30,
-        rebufferingGoal: 10,
-        bufferBehind: 30,
-      },
-      drm: {
-        servers: {
-          'org.w3.clearkey': 'http://dummy.clearkey.server'
-        }
-      }
-    });
-
-    const loadStream = async () => {
-      try {
-        await player.load(url, initialTime);
-        if (autoplay) {
-          videoRef.current.play().catch(() => {
-            console.warn('Autoplay prevented');
-            setIsPlaying(false);
-          });
-        }
-        onReady?.(player);
-      } catch (err) {
-        console.error('Error loading video', err);
-        setError('Không thể tải luồng video: ' + err.message);
-        onError?.(err);
-      }
-    };
-
-    loadStream();
-
-    player.addEventListener('error', (event) => {
-      console.error('Player error', event.detail);
-      setError('Lỗi phát video: ' + event.detail.message);
-      onError?.(event.detail);
-    });
 
     const video = videoRef.current;
     
@@ -104,8 +140,11 @@ export default function UnifiedPlayer({
     video.addEventListener('loadedmetadata', handleLoadedMetadata);
 
     return () => {
-      if (playerRef.current) {
-        playerRef.current.destroy();
+      if (shakaPlayer) {
+        shakaPlayer.destroy();
+      }
+      if (mpegtsPlayer) {
+        mpegtsPlayer.destroy();
       }
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('pause', handlePause);

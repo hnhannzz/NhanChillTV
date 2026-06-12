@@ -183,6 +183,7 @@ export default function LivePlayerView({ channelId, streamParam }) {
         url={streamUrl}
         autoplay={true}
         muted={false}
+        clearKey={clearKey}
         className="w-full h-full"
         title={channelId || streamParam}
         subTitle="Live TV"

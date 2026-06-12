@@ -29,8 +29,8 @@ export default function MovieDetailContainer() {
     const loadData = async () => {
       try {
         const data = await fetchNguoncJson(`/phim/${slug}`);
-        if (data.status === 'success') {
-          const m = data.movie || data.item;
+        if (data.status === 'success' || data.status === true) {
+          const m = data.movie || data.item || data.data?.item;
           setMovie(m);
           
           if (m.episodes && m.episodes[0] && (m.episodes[0].server_data || m.episodes[0].items)) {
