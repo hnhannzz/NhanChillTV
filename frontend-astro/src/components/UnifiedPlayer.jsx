@@ -12,6 +12,7 @@ export default function UnifiedPlayer({
   muted = false,
   className = '',
   clearKey,
+  isMpd,
   onNextEpisode,
   onCinemaMode,
   title,
@@ -44,7 +45,7 @@ export default function UnifiedPlayer({
     let mpegtsPlayer = null;
 
     const lowerUrl = String(url).toLowerCase();
-    const isMpegTs = !lowerUrl.includes('.m3u8') && !lowerUrl.includes('.mpd') && !lowerUrl.includes('.mp4');
+    const isMpegTs = !isMpd && !lowerUrl.includes('.m3u8') && !lowerUrl.includes('.mpd') && !lowerUrl.includes('.mp4');
 
     if (isMpegTs && mpegts.isSupported()) {
       // Dùng mpegts.js cho các luồng UDP/HTTP MPEG-TS (udpxy)

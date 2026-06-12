@@ -175,7 +175,7 @@ export default function LivePlayerView({ channelId, streamParam }) {
   }
 
   const lowerUrl = String(streamUrl || '').toLowerCase();
-  const isMpegTs = !lowerUrl.includes('.m3u8') && !lowerUrl.includes('.mpd') && !lowerUrl.includes('.mp4');
+  const isMpegTs = !isMpd && !lowerUrl.includes('.m3u8') && !lowerUrl.includes('.mpd') && !lowerUrl.includes('.mp4');
 
   const PlayerComponent = (playerType === 'legacy' && !isMpegTs) ? LegacyPlayer : UnifiedPlayer;
 
@@ -187,6 +187,7 @@ export default function LivePlayerView({ channelId, streamParam }) {
         autoplay={true}
         muted={false}
         clearKey={clearKey}
+        isMpd={isMpd}
         className="w-full h-full"
         title={channelId || streamParam}
         subTitle="Live TV"
