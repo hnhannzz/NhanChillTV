@@ -54,6 +54,11 @@ export default function UnifiedPlayer({
         rebufferingGoal: 10,
         bufferBehind: 30,
       },
+      drm: {
+        servers: {
+          'org.w3.clearkey': 'http://dummy.clearkey.server'
+        }
+      }
     });
 
     const loadStream = async () => {

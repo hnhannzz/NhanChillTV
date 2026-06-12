@@ -29,7 +29,7 @@ export default function HeroBanner() {
   useEffect(() => {
     Promise.allSettled([
       fetch('/api/admin/events').then(response => response.ok ? response.json() : Promise.reject(new Error(`HTTP ${response.status}`))),
-      fetchNguoncJson('/popular').catch(() => fetchNguoncJson('/films/phim-moi-cap-nhat')),
+      fetchNguoncJson('/popular').catch(() => fetchNguoncJson('/danh-sach/phim-moi-cap-nhat')),
     ]).then(([eventsResult, moviesResult]) => {
       const pinnedEvents = eventsResult.status === 'fulfilled' && eventsResult.value.success
         ? eventsResult.value.data

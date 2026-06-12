@@ -47,7 +47,13 @@ router.get('/popular', async (req, res) => {
   }
 
   try {
-    const page = await axios.get(NGUONC_POPULAR_URL, { timeout: 12000 });
+    const page = await axios.get(NGUONC_POPULAR_URL, { 
+      timeout: 12000,
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'NhanChillTV/1.0'
+      }
+    });
     const items = page.data?.data?.items?.slice(0, 8) || [];
     
     // Convert to the standard format if needed, but OPhim items are already good
