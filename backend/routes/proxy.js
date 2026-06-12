@@ -130,14 +130,16 @@ router.get('/*', async (req, res) => {
       httpAgent: httpKeepAliveAgent,
       httpsAgent: httpsKeepAliveAgent,
       headers: {
-        'User-Agent': customUa ? customUa : (targetUrl.includes('fptplay') 
-                      ? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' 
-                      : (req.headers['user-agent']?.includes('Mozilla') ? 'Dalvik/2.1.0 (Linux; U; Android 10; TV Box Build/QQ3A.200805.001)' : (req.headers['user-agent'] || 'Dalvik/2.1.0 (Linux; U; Android 10; TV Box Build/QQ3A.200805.001)'))),
+        'User-Agent': customUa ? customUa : (
+                        targetUrl.includes('fptplay') || targetUrl.includes('vtv') || targetUrl.includes('vtvgo')
+                        ? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' 
+                        : (req.headers['user-agent']?.includes('Mozilla') ? 'Dalvik/2.1.0 (Linux; U; Android 10; TV Box Build/QQ3A.200805.001)' : (req.headers['user-agent'] || 'Dalvik/2.1.0 (Linux; U; Android 10; TV Box Build/QQ3A.200805.001)'))
+                      ),
         'Accept': '*/*',
         'Accept-Encoding': 'identity',
-        'X-Requested-With': targetUrl.includes('fptplay') ? undefined : 'org.xbmc.kodi',
-        'Origin': targetUrl.includes('fptplay') ? 'https://fptplay.vn' : undefined,
-        'Referer': targetUrl.includes('fptplay') ? 'https://fptplay.vn/' : new URL(targetUrl).origin + '/',
+        'X-Requested-With': (targetUrl.includes('fptplay') || targetUrl.includes('vtv')) ? undefined : 'org.xbmc.kodi',
+        'Origin': targetUrl.includes('fptplay') ? 'https://fptplay.vn' : (targetUrl.includes('vtv.vn') ? 'https://vtv.vn' : (targetUrl.includes('vtvgo.vn') ? 'https://vtvgo.vn' : undefined)),
+        'Referer': targetUrl.includes('fptplay') ? 'https://fptplay.vn/' : (targetUrl.includes('vtv.vn') ? 'https://vtv.vn/' : (targetUrl.includes('vtvgo.vn') ? 'https://vtvgo.vn/' : (new URL(targetUrl).origin + '/'))),
         'Range': req.headers.range
       },
       responseType: 'stream',

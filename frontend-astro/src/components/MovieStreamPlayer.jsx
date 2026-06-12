@@ -9,8 +9,9 @@ export default function MovieStreamPlayer({ episode }) {
         key={embedUrl}
         src={embedUrl}
         title={episode?.name || 'Nguonc embed player'}
-        allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
+        allow="autoplay; fullscreen; picture-in-picture; encrypted-media; playsinline"
         allowFullScreen
+        sandbox="allow-scripts allow-same-origin allow-presentation allow-forms allow-popups"
         referrerPolicy="no-referrer-when-downgrade"
         className="w-full h-full border-none bg-black"
       />

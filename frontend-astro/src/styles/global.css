@@ -125,7 +125,13 @@
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
   display: flex;
   align-items: center;
+  flex-wrap: nowrap;
+  z-index: 100;
   transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.video-js.nhanchill-video-js .vjs-picture-in-picture-control {
+  display: block !important;
 }
 
 .video-js.nhanchill-video-js.vjs-user-inactive .vjs-control-bar {
@@ -164,6 +170,7 @@
   left: 12px;
   width: auto;
   height: 16px;
+  z-index: 101;
 }
 
 .video-js.nhanchill-video-js .vjs-progress-holder {
@@ -252,6 +259,7 @@
     right: 10px;
     bottom: 42px;
     left: 10px;
+    z-index: 101;
   }
 
   .video-js.nhanchill-video-js .vjs-remaining-time {

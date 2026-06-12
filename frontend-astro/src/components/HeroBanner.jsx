@@ -74,7 +74,21 @@ export default function HeroBanner() {
     : `/movie-detail/?slug=${encodeURIComponent(currentSlide.slug)}`;
 
   return (
-    <section className="group relative h-[60vh] w-full select-none overflow-hidden bg-black md:h-[80vh]">
+    <motion.section 
+      drag="x"
+      dragConstraints={{ left: 0, right: 0 }}
+      dragElastic={0.2}
+      onDragEnd={(e, { offset }) => {
+        if (offset.x < -50) {
+          setCurrentIndex((prev) => (prev + 1) % slides.length);
+          setProgress(0);
+        } else if (offset.x > 50) {
+          setCurrentIndex((prev) => (prev - 1 + slides.length) % slides.length);
+          setProgress(0);
+        }
+      }}
+      className="group relative h-[60vh] w-full select-none overflow-hidden bg-black md:h-[80vh] touch-pan-y"
+    >
       {/* Background image with Ken Burns effect */}
       <AnimatePresence mode="wait">
         <motion.div
@@ -86,14 +100,14 @@ export default function HeroBanner() {
           className="absolute inset-0"
           style={{ willChange: 'transform, opacity' }}
         >
-          <img src={currentSlide.poster_url || currentSlide.thumb_url || '/poster.jpg'} alt={currentSlide.name} className="h-full w-full object-cover opacity-65" />
-          <div className="absolute inset-0 bg-gradient-to-r from-black via-black/45 to-transparent" />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-transparent to-transparent" />
+          <img src={currentSlide.poster_url || currentSlide.thumb_url || '/poster.jpg'} alt={currentSlide.name} className="h-full w-full object-cover opacity-65 pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-r from-black via-black/45 to-transparent pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-transparent to-transparent pointer-events-none" />
         </motion.div>
       </AnimatePresence>
 
       {/* Content with staggered animation */}
-      <div className="absolute inset-0 z-20 flex w-full flex-col justify-end px-4 pb-16 md:w-2/3 md:px-12 md:pb-28">
+      <div className="absolute inset-0 z-20 flex w-full flex-col justify-end px-4 pb-16 md:w-2/3 md:px-12 md:pb-28 pointer-events-none">
         <AnimatePresence mode="wait">
           <motion.div
             key={`content-${currentSlide.id || currentSlide.slug || currentIndex}`}
@@ -107,7 +121,7 @@ export default function HeroBanner() {
             <motion.h1 variants={fadeSlideUp} className="line-clamp-2 text-3xl font-black leading-tight text-white md:text-6xl">{currentSlide.name}</motion.h1>
             <motion.h2 variants={fadeIn} className="mt-2 text-sm font-bold text-white/60 md:text-xl">{currentSlide.original_name}</motion.h2>
             <motion.p variants={fadeIn} className="mb-6 mt-3 line-clamp-3 max-w-3xl text-xs text-white/80 md:text-base">{description}</motion.p>
-            <motion.div variants={fadeSlideUp} className="flex items-center gap-3">
+            <motion.div variants={fadeSlideUp} className="flex items-center gap-3 pointer-events-auto">
               <a href={watchUrl} className="flex items-center gap-2 rounded-md bg-[#ED2C25] px-5 py-3 text-sm font-bold text-white transition-transform hover:scale-105 hover:bg-red-700"><Play fill="currentColor" size={19} /> {currentSlide.isEvent ? 'Xem sự kiện' : 'Xem ngay'}</a>
               {currentSlide.isEvent
                 ? <a href="/events/" className="flex items-center gap-2 rounded-md bg-white/20 px-5 py-3 text-sm font-bold text-white backdrop-blur-md transition-transform hover:scale-105 hover:bg-white/30"><Info size={19} /> Sự kiện</a>
@@ -118,7 +132,7 @@ export default function HeroBanner() {
       </div>
 
       {/* Dot indicators with progress bar */}
-      <div className="absolute bottom-7 right-5 z-20 flex items-center gap-2 md:right-12">
+      <div className="absolute bottom-7 right-5 z-20 flex items-center gap-2 md:right-12 pointer-events-auto">
         {slides.map((slide, index) => (
           <button
             key={slide.id || slide.slug || index}
@@ -138,6 +152,6 @@ export default function HeroBanner() {
       </div>
 
       {modalSlug && <MovieModal slug={modalSlug} onClose={() => setModalSlug(null)} />}
-    </section>
+    </motion.section>
   );
 }
