@@ -60,8 +60,15 @@ router.post('/start/:channelId', async (req, res) => {
     }
 
     // Direct mode: bypass FFmpeg. MPD/ClearKey must stay direct so Shaka can handle DRM.
-    if (config.directMode || isMpdLikeChannel(channel)) {
-      let isMpd = isMpdLikeChannel(channel);
+    const isMpd = isMpdLikeChannel(channel);
+    const lowerUrl = String(channel.url).toLowerCase();
+    const isM3u8OrMpd = lowerUrl.includes('.m3u8') || lowerUrl.includes('.mpd');
+    
+    // Nếu là luồng UDP/MPEG-TS (không có đuôi .m3u8 hoặc .mpd), bắt buộc dùng FFmpeg để convert qua HLS
+    const forceTranscode = !isM3u8OrMpd && !channel.url.includes('youtube.com');
+
+    if ((config.directMode || isMpd) && !forceTranscode) {
+      let finalIsMpd = isMpd;
 
       // PRE-FETCH CHECK: Verify if the URL is actually MPD despite having m3u8 extension
       try {
@@ -78,7 +85,7 @@ router.post('/start/:channelId', async (req, res) => {
         const contentStr = (headRes.data || '').toString();
         
         if (contentType.includes('dash+xml') || contentStr.includes('<?xml') || contentStr.includes('<MPD')) {
-          isMpd = true;
+          finalIsMpd = true;
         }
       } catch (err) {
         console.warn(`[Stream] Pre-fetch check failed for ${channelId}:`, err.message);
@@ -93,7 +100,7 @@ router.post('/start/:channelId', async (req, res) => {
           isDirect: true,
           hlsUrl: finalTarget,
           proxyUrl: finalTarget,
-          isMpd: isMpd,
+          isMpd: finalIsMpd,
           rawUrl: channel.url,
           userAgent: channel.userAgent || null,
           clearKey: channel.clearKey

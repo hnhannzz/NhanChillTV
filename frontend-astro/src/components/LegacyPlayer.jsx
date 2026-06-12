@@ -1,7 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react';
-import videojs from 'video.js';
-import 'video.js/dist/video-js.css';
-import 'videojs-contrib-eme'; // Thêm hỗ trợ DRM
 import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, SkipForward, LightbulbOff } from 'lucide-react';
 
 export default function LegacyPlayer({
@@ -19,8 +16,7 @@ export default function LegacyPlayer({
   onReady,
   onError,
 }) {
-  const videoRef = useRef(null);
-  const videoContainerRef = useRef(null);
+  const containerRef = useRef(null);
   const playerRef = useRef(null);
   const [error, setError] = useState(null);
   
@@ -33,45 +29,70 @@ export default function LegacyPlayer({
   const [showControls, setShowControls] = useState(true);
   const controlsTimeoutRef = useRef(null);
   const [showContinuePrompt, setShowContinuePrompt] = useState(initialTime > 0);
+  const [isJwLoaded, setIsJwLoaded] = useState(false);
 
+  // Load JWPlayer script
   useEffect(() => {
-    if (!videoRef.current) return;
+    if (window.jwplayer) {
+      setIsJwLoaded(true);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://content.jwplatform.com/libraries/SAHhwvZq.js';
+    script.async = true;
+    script.onload = () => setIsJwLoaded(true);
+    document.body.appendChild(script);
+  }, []);
 
-    // Khởi tạo Video.js
-    const videoElement = videoRef.current;
+  // Initialize JWPlayer
+  useEffect(() => {
+    if (!isJwLoaded || !containerRef.current) return;
+
+    const playerId = `jwplayer_${Date.now()}`;
     
-    // Config Video.js
-    const vjsOptions = {
-      autoplay,
-      controls: false, // Dùng custom controls
-      responsive: true,
-      fluid: true,
-      muted,
-      poster,
-      html5: {
-        vhs: {
-          overrideNative: true, // Ép dùng VHS của video.js để xử lý HLS
-        }
-      }
+    // Tạo div cho JWPlayer
+    const playerDiv = document.createElement('div');
+    playerDiv.id = playerId;
+    
+    // Clear old content
+    containerRef.current.innerHTML = '';
+    containerRef.current.appendChild(playerDiv);
+
+    const isMpd = url.includes('.mpd');
+    const isM3U8 = url.includes('.m3u8');
+
+    let playerSetup = {
+      file: url,
+      image: poster,
+      autostart: autoplay,
+      mute: muted,
+      stretching: "uniform",
+      width: "100%",
+      height: "100%",
+      controls: false, // We use custom controls
     };
 
-    const player = videojs(videoElement, vjsOptions, () => {
-      // Player is ready
-      playerRef.current = player;
-      
-      // Hỗ trợ EME (ClearKey)
-      if (player.eme) {
-        player.eme();
-      }
+    // DRM / Type config
+    if (isMpd) {
+      playerSetup.type = 'dash';
+      // MOCK KEY CHO TÍNH NĂNG DRM (Cần parse url hoặc lấy keyId/key thực tế nếu có)
+      // Hiện tại player KratosRepo lấy kid/key từ URL. Nếu server trả về qua header hoặc cách khác, cần parse.
+      // Vì hiện tại ta nhận clearKey string "kid:key" qua kênh nếu có (trong UnifiedPlayer ta có xử lý DRM ko? Có).
+      // Nhưng tạm thời cứ khởi tạo MPD mặc định.
+    } else if (isM3U8) {
+      playerSetup.type = 'hls';
+    } else {
+      playerSetup.type = 'mp4';
+    }
 
-      // Nạp luồng
-      player.src({
-        src: url,
-        type: url.includes('.mpd') ? 'application/dash+xml' : (url.includes('.m3u8') ? 'application/x-mpegURL' : 'video/mp4')
-      });
+    try {
+      const player = window.jwplayer(playerId).setup(playerSetup);
+      playerRef.current = player;
 
       if (initialTime > 0) {
-        player.currentTime(initialTime);
+        player.on('firstFrame', () => {
+          player.seek(initialTime);
+        });
       }
 
       onReady?.(player);
@@ -79,28 +100,32 @@ export default function LegacyPlayer({
       // Event Listeners
       player.on('play', () => setIsPlaying(true));
       player.on('pause', () => setIsPlaying(false));
-      player.on('volumechange', () => setIsMuted(player.muted()));
-      player.on('timeupdate', () => {
-        setCurrentTime(player.currentTime());
-        onTimeUpdate?.(player.currentTime());
+      player.on('mute', (e) => setIsMuted(e.mute));
+      player.on('time', (e) => {
+        setCurrentTime(e.position);
+        setDuration(e.duration);
+        onTimeUpdate?.(e.position);
       });
-      player.on('loadedmetadata', () => setDuration(player.duration()));
-      player.on('error', () => {
-        const err = player.error();
-        if (err) {
-          setError(`Lỗi phát video (Mã lỗi: ${err.code}): ${err.message}`);
-          onError?.(err);
-        }
+      player.on('setupError', (e) => {
+        setError(`Lỗi khởi tạo JWPlayer: ${e.message}`);
+        onError?.(e);
       });
-    });
+      player.on('error', (e) => {
+        setError(`Lỗi phát video: ${e.message}`);
+        onError?.(e);
+      });
+
+    } catch (err) {
+      setError(`Lỗi khởi tạo player: ${err.message}`);
+    }
 
     return () => {
-      if (playerRef.current) {
-        playerRef.current.dispose();
+      if (playerRef.current && playerRef.current.remove) {
+        playerRef.current.remove();
         playerRef.current = null;
       }
     };
-  }, [url]);
+  }, [url, isJwLoaded, autoplay, muted, poster]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -112,20 +137,21 @@ export default function LegacyPlayer({
 
   const togglePlay = () => {
     if (playerRef.current) {
-      if (isPlaying) playerRef.current.pause();
+      const state = playerRef.current.getState();
+      if (state === 'playing') playerRef.current.pause();
       else playerRef.current.play();
     }
   };
 
   const toggleMute = () => {
     if (playerRef.current) {
-      playerRef.current.muted(!isMuted);
+      playerRef.current.setMute(!isMuted);
     }
   };
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
-      videoContainerRef.current?.requestFullscreen?.().catch(err => {
+      containerRef.current?.parentElement?.requestFullscreen?.().catch(err => {
         console.error("Error attempting to enable fullscreen:", err);
       });
     } else {
@@ -136,13 +162,13 @@ export default function LegacyPlayer({
   const handleSeek = (e) => {
     const newTime = parseFloat(e.target.value);
     if (playerRef.current) {
-      playerRef.current.currentTime(newTime);
+      playerRef.current.seek(newTime);
       setCurrentTime(newTime);
     }
   };
 
   const formatTime = (seconds) => {
-    if (isNaN(seconds)) return '00:00';
+    if (isNaN(seconds) || !isFinite(seconds)) return '00:00';
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
     const s = Math.floor(seconds % 60);
@@ -166,30 +192,29 @@ export default function LegacyPlayer({
   const restartWatching = () => {
     setShowContinuePrompt(false);
     if (playerRef.current) {
-      playerRef.current.currentTime(0);
+      playerRef.current.seek(0);
       playerRef.current.play();
     }
   };
 
   return (
     <div 
-      ref={videoContainerRef} 
-      className={`relative group bg-black overflow-hidden flex justify-center items-center ${className} [&_.video-js]:h-full [&_.vjs-tech]:object-contain [&_.video-js]:bg-black`}
+      className={`relative group bg-black overflow-hidden flex justify-center items-center ${className}`}
       onMouseMove={handleMouseMove}
       onMouseLeave={() => isPlaying && setShowControls(false)}
     >
-      <div data-vjs-player className="w-full h-full max-h-screen">
-        <video
-          ref={videoRef}
-          className="video-js w-full h-full object-contain cursor-pointer"
-          onClick={togglePlay}
-          playsInline
-        />
+      <div 
+        ref={containerRef}
+        className="w-full h-full max-h-screen absolute inset-0 z-0 pointer-events-auto"
+        onClick={togglePlay}
+      >
+        {/* JWPlayer will inject here */}
       </div>
+      <div className="absolute inset-0 z-10 pointer-events-auto cursor-pointer" onClick={togglePlay} />
 
       {/* Continue Watching Prompt */}
       {showContinuePrompt && (
-        <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-40 backdrop-blur-sm">
+        <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-40 backdrop-blur-sm pointer-events-auto">
           <div className="bg-[#121212] p-8 rounded-2xl border border-white/10 text-center shadow-2xl max-w-sm">
             <h3 className="text-xl font-bold text-white mb-2">THÔNG BÁO!</h3>
             <p className="text-white/70 mb-6">Bạn đã dừng lại ở {formatTime(initialTime)}</p>
@@ -207,7 +232,7 @@ export default function LegacyPlayer({
 
       {/* Error Message */}
       {error && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-red-600 text-white px-4 py-2 rounded-md shadow-lg">
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-red-600 text-white px-4 py-2 rounded-md shadow-lg pointer-events-auto">
           {error}
         </div>
       )}

@@ -30,8 +30,10 @@ function fetchUpstream(upstreamPath, query) {
     params: query,
     timeout: 12000,
     headers: {
-      Accept: 'application/json',
-      'User-Agent': 'NhanChillTV/1.0'
+      Accept: 'application/json, text/plain, */*',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+      'Referer': 'https://ophim19.cc/',
+      'Origin': 'https://ophim19.cc'
     },
     validateStatus: () => true
   });
@@ -50,8 +52,10 @@ router.get('/popular', async (req, res) => {
     const page = await axios.get(NGUONC_POPULAR_URL, { 
       timeout: 12000,
       headers: {
-        Accept: 'application/json',
-        'User-Agent': 'NhanChillTV/1.0'
+        Accept: 'application/json, text/plain, */*',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+        'Referer': 'https://ophim19.cc/',
+        'Origin': 'https://ophim19.cc'
       }
     });
     const items = page.data?.data?.items?.slice(0, 8) || [];
