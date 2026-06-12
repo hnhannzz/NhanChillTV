@@ -28,7 +28,7 @@ export default function MovieDetailContainer() {
 
     const loadData = async () => {
       try {
-        const data = await fetchNguoncJson(`/film/${slug}`);
+        const data = await fetchNguoncJson(`/phim/${slug}`);
         if (data.status === 'success') {
           const m = data.movie || data.item;
           setMovie(m);

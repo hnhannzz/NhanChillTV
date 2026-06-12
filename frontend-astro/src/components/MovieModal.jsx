@@ -9,7 +9,7 @@ export default function MovieModal({ slug, onClose }) {
   useEffect(() => {
     if (!slug) return;
     setLoading(true);
-    fetchNguoncJson(`/film/${slug}`)
+    fetchNguoncJson(`/phim/${slug}`)
       .then(data => {
         if (data.status === 'success') {
           setMovie(data.movie || data.item);

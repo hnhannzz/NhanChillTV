@@ -8,6 +8,28 @@ export default function MovieStreamPlayer({ episode, movieSlug, onNextEpisode, o
   
   const progressKey = `progress_${movieSlug}_${episode?.slug || episode?.name}`;
   const [initialTime, setInitialTime] = useState(0);
+  const [proxiedUrl, setProxiedUrl] = useState('');
+
+  useEffect(() => {
+    let isMounted = true;
+    if (streamUrl) {
+      fetch(`/api/proxy/resolve?url=${encodeURIComponent(streamUrl)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (isMounted && data.success && data.url) {
+            setProxiedUrl(data.url);
+          } else if (isMounted) {
+            setProxiedUrl(streamUrl);
+          }
+        })
+        .catch(() => {
+          if (isMounted) setProxiedUrl(streamUrl);
+        });
+    } else {
+      setProxiedUrl('');
+    }
+    return () => { isMounted = false; };
+  }, [streamUrl]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -25,10 +47,17 @@ export default function MovieStreamPlayer({ episode, movieSlug, onNextEpisode, o
   };
 
   if (streamUrl) {
+    if (!proxiedUrl) {
+      return (
+        <div className="w-full h-full flex items-center justify-center text-white/50 bg-[#121212] px-4 text-center">
+          <div className="animate-pulse">Đang tải luồng phim...</div>
+        </div>
+      );
+    }
     return (
       <UnifiedPlayer
-        key={streamUrl}
-        url={streamUrl}
+        key={proxiedUrl}
+        url={proxiedUrl}
         initialTime={initialTime}
         onTimeUpdate={handleTimeUpdate}
         onNextEpisode={onNextEpisode}
