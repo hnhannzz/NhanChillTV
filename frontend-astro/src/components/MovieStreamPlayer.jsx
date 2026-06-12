@@ -1,14 +1,51 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import UnifiedPlayer from './UnifiedPlayer';
 
-export default function MovieStreamPlayer({ episode }) {
-  const embedUrl = episode?.embed || episode?.link_embed || '';
+export default function MovieStreamPlayer({ episode, movieSlug, onNextEpisode, onCinemaMode }) {
+  // Ưu tiên m3u8 từ OPhim, nếu không có fallback sang embed
+  const streamUrl = episode?.link_m3u8 || episode?.link_hls || '';
+  const embedUrl = episode?.link_embed || episode?.embed || '';
+  
+  const progressKey = `progress_${movieSlug}_${episode?.slug || episode?.name}`;
+  const [initialTime, setInitialTime] = useState(0);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(progressKey);
+      if (saved) {
+        setInitialTime(parseFloat(saved));
+      }
+    }
+  }, [progressKey]);
+
+  const handleTimeUpdate = (currentTime) => {
+    if (currentTime > 5 && typeof window !== 'undefined') {
+      localStorage.setItem(progressKey, currentTime.toString());
+    }
+  };
+
+  if (streamUrl) {
+    return (
+      <UnifiedPlayer
+        key={streamUrl}
+        url={streamUrl}
+        initialTime={initialTime}
+        onTimeUpdate={handleTimeUpdate}
+        onNextEpisode={onNextEpisode}
+        onCinemaMode={onCinemaMode}
+        title={episode?.name || 'Tập phim'}
+        autoplay={true}
+        className="w-full h-full"
+      />
+    );
+  }
 
   if (embedUrl) {
     return (
       <iframe
         key={embedUrl}
         src={embedUrl}
-        title={episode?.name || 'Nguonc embed player'}
+        title={episode?.name || 'Embed player'}
         allow="autoplay; fullscreen; picture-in-picture; encrypted-media; playsinline"
         allowFullScreen
         sandbox="allow-scripts allow-same-origin allow-presentation allow-forms allow-popups"
@@ -20,7 +57,7 @@ export default function MovieStreamPlayer({ episode }) {
 
   return (
     <div className="w-full h-full flex items-center justify-center text-white/50 bg-[#121212] px-4 text-center">
-      Nguon embed cua tap nay chua kha dung.
+      Nguồn phát của tập này chưa khả dụng.
     </div>
   );
 }

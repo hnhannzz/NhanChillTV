@@ -260,7 +260,7 @@ export default function TvPageContainer() {
 
       <div className="px-4 md:px-0 flex flex-col gap-6">
         <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-          <div className="custom-scrollbar flex w-full gap-6 overflow-x-auto pb-2 md:w-auto">
+          <div className="hide-scrollbar flex w-full gap-3 overflow-x-auto pb-2 md:w-auto snap-x">
             <FilterButton active={filter === 'all'} onClick={() => setFilter('all')}>Tất cả</FilterButton>
             <FilterButton active={filter === 'favorites'} onClick={() => setFilter('favorites')}>Yêu thích</FilterButton>
             {groups.map(group => <FilterButton key={group} active={filter === group} onClick={() => setFilter(group)}>{group}</FilterButton>)}
@@ -286,7 +286,14 @@ export default function TvPageContainer() {
 }
 
 function FilterButton({ active, onClick, children }) {
-  return <button onClick={onClick} className={`shrink-0 border-b-2 pb-1 text-base font-bold transition-colors ${active ? 'border-[#ED2C25] text-white' : 'border-transparent text-white/50 hover:text-white'}`}>{children}</button>;
+  return (
+    <button 
+      onClick={onClick} 
+      className={`snap-start shrink-0 px-5 py-2 rounded-full text-sm font-bold transition-all ${active ? 'bg-[#ED2C25] text-white shadow-[0_0_15px_rgba(237,44,37,0.4)]' : 'bg-[#1A1A1A] border border-white/10 text-white/60 hover:bg-[#252525] hover:text-white'}`}
+    >
+      {children}
+    </button>
+  );
 }
 
 function ChannelCard({ channel, active, favorite, onPlay, onFavorite }) {

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Info, Play } from 'lucide-react';
 import MovieModal from './MovieModal';
-import { fetchNguoncJson, getNguoncItems } from '../lib/nguoncApi';
+import { fetchNguoncJson, getNguoncItems, getOPhimImageUrl } from '../lib/nguoncApi';
 
 const staggerContainer = {
   hidden: {},
@@ -77,17 +77,18 @@ export default function HeroBanner() {
     <motion.section 
       drag="x"
       dragConstraints={{ left: 0, right: 0 }}
-      dragElastic={0.2}
+      dragElastic={0.05}
       onDragEnd={(e, { offset }) => {
-        if (offset.x < -50) {
+        if (offset.x < -80) {
           setCurrentIndex((prev) => (prev + 1) % slides.length);
           setProgress(0);
-        } else if (offset.x > 50) {
+        } else if (offset.x > 80) {
           setCurrentIndex((prev) => (prev - 1 + slides.length) % slides.length);
           setProgress(0);
         }
       }}
-      className="group relative h-[60vh] w-full select-none overflow-hidden bg-black md:h-[80vh] touch-pan-y"
+      className="group relative h-[60vh] w-full select-none overflow-hidden bg-black md:h-[80vh]"
+      style={{ touchAction: 'pan-y' }}
     >
       {/* Background image with Ken Burns effect */}
       <AnimatePresence mode="wait">
@@ -100,7 +101,7 @@ export default function HeroBanner() {
           className="absolute inset-0"
           style={{ willChange: 'transform, opacity' }}
         >
-          <img src={currentSlide.poster_url || currentSlide.thumb_url || '/poster.jpg'} alt={currentSlide.name} className="h-full w-full object-cover opacity-65 pointer-events-none" />
+          <img src={getOPhimImageUrl(currentSlide.poster_url || currentSlide.thumb_url)} alt={currentSlide.name} className="h-full w-full object-cover opacity-65 pointer-events-none" />
           <div className="absolute inset-0 bg-gradient-to-r from-black via-black/45 to-transparent pointer-events-none" />
           <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-transparent to-transparent pointer-events-none" />
         </motion.div>

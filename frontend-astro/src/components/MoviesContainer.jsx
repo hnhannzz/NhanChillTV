@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Play, Search } from 'lucide-react';
-import { fetchNguoncJson, getNguoncItems, getNguoncPagination, isNguoncSuccess } from '../lib/nguoncApi';
+import { fetchNguoncJson, getNguoncItems, getNguoncPagination, isNguoncSuccess, getOPhimImageUrl } from '../lib/nguoncApi';
 
 const GENRES = [
   ['Hành Động', 'hanh-dong'], ['Phiêu Lưu', 'phieu-luu'], ['Hoạt Hình', 'hoat-hinh'], ['Hài', 'hai'],
@@ -144,9 +144,9 @@ export default function MoviesContainer() {
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
             {movies.map(movie => (
               <a key={movie.slug || movie.id} href={`/movie-detail/?slug=${encodeURIComponent(movie.slug)}`} className="group relative aspect-[2/3] overflow-hidden rounded-lg border border-white/5 bg-[#1A1A1A] hover:border-[#ED2C25]/50">
-                <img src={movie.thumb_url || movie.poster_url || '/poster.jpg'} alt={movie.name} className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" onError={event => { event.currentTarget.src = '/poster.jpg'; }} />
+                <img src={getOPhimImageUrl(movie.thumb_url || movie.poster_url)} alt={movie.name} className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" onError={event => { event.currentTarget.src = '/poster.jpg'; }} />
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-black/10 to-transparent" />
-                <span className="absolute right-2 top-2 rounded bg-[#ED2C25] px-2 py-1 text-[10px] font-bold text-white">{movie.quality || movie.current_episode || 'HD'}</span>
+                <span className="absolute right-2 top-2 rounded bg-[#ED2C25] px-2 py-1 text-[10px] font-bold text-white">{movie.quality || movie.episode_current || 'HD'}</span>
                 <div className="absolute bottom-0 left-0 right-0 p-3"><h3 className="line-clamp-1 text-sm font-bold text-white group-hover:text-[#ED2C25]">{movie.name}</h3><p className="truncate text-xs text-white/55">{movie.original_name || movie.year}</p></div>
                 <span className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100"><span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#ED2C25]"><Play size={19} fill="currentColor" className="ml-0.5" /></span></span>
               </a>

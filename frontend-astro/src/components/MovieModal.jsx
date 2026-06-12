@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Play } from 'lucide-react';
-import { fetchNguoncJson } from '../lib/nguoncApi';
+import { fetchNguoncJson, getOPhimImageUrl } from '../lib/nguoncApi';
 
 export default function MovieModal({ slug, onClose }) {
   const [movie, setMovie] = useState(null);
@@ -39,7 +39,7 @@ export default function MovieModal({ slug, onClose }) {
           <div className="flex flex-col md:flex-row gap-6 p-6 md:p-8">
             <div className="w-full md:w-1/3 shrink-0">
               <img 
-                src={movie.thumb_url || movie.poster_url} 
+                src={getOPhimImageUrl(movie.thumb_url || movie.poster_url)} 
                 alt={movie.name} 
                 className="w-full rounded-xl shadow-lg border border-white/10"
               />
@@ -62,12 +62,13 @@ export default function MovieModal({ slug, onClose }) {
                 <span className="px-2 py-1 bg-[#ED2C25]/20 text-[#ED2C25] text-xs font-bold rounded">{movie.quality || 'HD'}</span>
                 <span className="px-2 py-1 bg-white/10 text-white/70 text-xs font-bold rounded">{movie.year || 'N/A'}</span>
                 <span className="px-2 py-1 bg-white/10 text-white/70 text-xs font-bold rounded">{movie.time || 'N/A'}</span>
-                <span className="px-2 py-1 bg-white/10 text-white/70 text-xs font-bold rounded">{movie.current_episode || 'Full'}</span>
+                <span className="px-2 py-1 bg-white/10 text-white/70 text-xs font-bold rounded">{movie.episode_current || movie.current_episode || 'Full'}</span>
               </div>
 
               <div className="text-sm text-white/80 space-y-2">
-                <p><strong>Đạo diễn:</strong> {movie.director || 'Đang cập nhật'}</p>
-                <p><strong>Diễn viên:</strong> {movie.casts || 'Đang cập nhật'}</p>
+                <p><strong>Đạo diễn:</strong> {movie.director ? movie.director.join(', ') : 'Đang cập nhật'}</p>
+                <p><strong>Diễn viên:</strong> {movie.actor ? movie.actor.join(', ') : (movie.casts || 'Đang cập nhật')}</p>
+                <p><strong>Điểm:</strong> {movie.tmdb?.vote_average ? `TMDB ${movie.tmdb.vote_average}` : (movie.imdb?.vote_average ? `IMDB ${movie.imdb.vote_average}` : 'Chưa có')}</p>
                 <p><strong>Thể loại:</strong> {movie.category && movie.category[1] ? movie.category[1].list.map(c => c.name).join(', ') : 'Đang cập nhật'}</p>
                 <p><strong>Quốc gia:</strong> {movie.category && movie.category[4] ? movie.category[4].list.map(c => c.name).join(', ') : 'Đang cập nhật'}</p>
               </div>
@@ -76,14 +77,14 @@ export default function MovieModal({ slug, onClose }) {
                 <h4 className="text-lg font-bold text-white mb-2">Nội Dung Phim</h4>
                 <div 
                   className="text-sm text-white/60 leading-relaxed max-h-32 overflow-y-auto hide-scrollbar" 
-                  dangerouslySetInnerHTML={{ __html: movie.description }} 
+                  dangerouslySetInnerHTML={{ __html: movie.content || movie.description }} 
                 />
               </div>
 
               <div className="mt-6">
                 <h4 className="text-lg font-bold text-white mb-2">Danh sách tập</h4>
                 <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto hide-scrollbar">
-                  {(movie.episodes?.[0]?.items || []).map(ep => (
+                  {(movie.episodes?.[0]?.server_data || movie.episodes?.[0]?.items || []).map(ep => (
                     <a 
                       key={ep.name}
                       href={`/movie-detail?slug=${movie.slug}`}

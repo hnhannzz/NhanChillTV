@@ -33,11 +33,13 @@ export default function MovieDetailContainer() {
           const m = data.movie || data.item;
           setMovie(m);
           
-          if (m.episodes && m.episodes[0] && m.episodes[0].items[0]) {
-            const firstEpisode = m.episodes[0].items[0];
-            setCurrentEpisode(firstEpisode);
-            setCurrentEmbed(firstEpisode.embed || firstEpisode.link_embed || '');
-            setCurrentEpName(firstEpisode.name);
+          if (m.episodes && m.episodes[0] && (m.episodes[0].server_data || m.episodes[0].items)) {
+            const firstEpisode = (m.episodes[0].server_data || m.episodes[0].items)[0];
+            if (firstEpisode) {
+              setCurrentEpisode(firstEpisode);
+              setCurrentEmbed(firstEpisode.link_m3u8 || firstEpisode.link_embed || firstEpisode.embed || '');
+              setCurrentEpName(firstEpisode.name);
+            }
           }
 
           // Check favorite
@@ -163,10 +165,19 @@ export default function MovieDetailContainer() {
           <h1 className="text-2xl md:text-3xl font-bold text-white mb-1">{movie.name}</h1>
           <h2 className="text-lg text-white/50 mb-4">{movie.original_name}</h2>
           
-          <div className="grid grid-cols-2 md:flex md:gap-8 gap-y-2 text-sm text-white/70 mb-6">
-            <div><strong>Trạng thái:</strong> {movie.current_episode}</div>
-            <div><strong>Ngôn ngữ:</strong> {movie.language}</div>
-            <div className="col-span-2 md:col-span-1"><strong>Thời lượng:</strong> {movie.time}</div>
+          <div className="grid grid-cols-2 md:flex md:gap-8 gap-y-2 text-sm text-white/70 mb-6 flex-wrap">
+            <div><strong>Trạng thái:</strong> {movie.episode_current || movie.current_episode}</div>
+            <div><strong>Ngôn ngữ:</strong> {movie.lang || movie.language}</div>
+            <div><strong>Thời lượng:</strong> {movie.time}</div>
+            {(movie.tmdb?.vote_average || movie.imdb?.vote_average) ? (
+              <div><strong>Điểm:</strong> {movie.tmdb?.vote_average ? `TMDB ${movie.tmdb.vote_average}` : `IMDB ${movie.imdb.vote_average}`}</div>
+            ) : null}
+            {movie.actor && movie.actor.length > 0 && (
+              <div className="col-span-2 w-full"><strong>Diễn viên:</strong> {movie.actor.join(', ')}</div>
+            )}
+            {movie.director && movie.director.length > 0 && (
+              <div className="col-span-2 w-full"><strong>Đạo diễn:</strong> {movie.director.join(', ')}</div>
+            )}
           </div>
 
           <button 
@@ -203,8 +214,8 @@ export default function MovieDetailContainer() {
               <div key={sIdx} className="mb-4 last:mb-0">
                 <h4 className="text-sm font-semibold text-white/50 mb-2">{server.server_name}</h4>
                 <div className="flex flex-wrap gap-2">
-                  {server.items.map((ep, eIdx) => {
-                    const epEmbed = ep.embed || ep.link_embed || '';
+                  {(server.server_data || server.items).map((ep, eIdx) => {
+                    const epEmbed = ep.link_m3u8 || ep.link_embed || ep.embed || '';
                     return (
                       <button 
                         key={eIdx}
@@ -227,7 +238,7 @@ export default function MovieDetailContainer() {
 
           <div className="bg-[#121212] rounded-xl p-6 border border-white/5">
             <h3 className="text-lg font-bold text-white mb-3">Nội Dung Phim</h3>
-            <div className="text-sm text-white/70 leading-relaxed" dangerouslySetInnerHTML={{ __html: movie.description }} />
+            <div className="text-sm text-white/70 leading-relaxed" dangerouslySetInnerHTML={{ __html: movie.content || movie.description }} />
           </div>
         </div>
 

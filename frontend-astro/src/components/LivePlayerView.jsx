@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Loader2, Users } from 'lucide-react';
 import { io } from 'socket.io-client';
-import VideoPlayerReact from './VideoPlayerReact';
-import JWPlayerReact from './JWPlayerReact';
+import UnifiedPlayer from './UnifiedPlayer';
 import { resolveProxyPlaybackUrl } from '../lib/playbackUrl';
 
 const API_BASE = '/api';
@@ -166,24 +165,15 @@ export default function LivePlayerView({ channelId, streamParam }) {
 
   return (
     <div className="group relative aspect-video w-full overflow-hidden rounded-lg bg-black shadow-2xl">
-      {!isMpd ? (
-        <VideoPlayerReact
-          key={`${streamUrl}-${fallbackUrls.join('|')}`}
-          url={streamUrl}
-          fallbackUrls={fallbackUrls}
-          type="hls"
-          style={{ width: '100%', height: '100%' }}
-        />
-      ) : (
-        <JWPlayerReact
-          key={streamUrl}
-          url={streamUrl}
-          fallbackUrls={fallbackUrls}
-          isMpd
-          clearKey={clearKey}
-          style={{ width: '100%', height: '100%' }}
-        />
-      )}
+      <UnifiedPlayer
+        key={`${streamUrl}-${fallbackUrls.join('|')}`}
+        url={streamUrl}
+        autoplay={true}
+        muted={false}
+        className="w-full h-full"
+        title={channelId || streamParam}
+        subTitle="Live TV"
+      />
       <div className="pointer-events-none absolute right-4 top-4 z-50 flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
         <div className="flex items-center gap-2 rounded-md border border-white/10 bg-black/65 px-3 py-1.5 text-xs font-bold text-white backdrop-blur-sm">
           <Users size={14} className="text-blue-400" />

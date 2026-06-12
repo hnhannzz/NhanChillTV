@@ -40,12 +40,18 @@ export function isNguoncSuccess(data) {
 }
 
 export function getNguoncPagination(data) {
-  const pagination = data?.paginate || data?.data?.paginate;
+  const pagination = data?.paginate || data?.data?.paginate || data?.data?.params?.pagination;
   if (!pagination) return null;
   return {
     currentPage: Number(pagination.current_page ?? pagination.currentPage ?? 1),
-    totalPages: Number(pagination.total_page ?? pagination.totalPages ?? 1),
+    totalPages: Number(pagination.total_page ?? Math.ceil(pagination.totalItems / pagination.totalItemsPerPage) ?? 1),
     totalItems: Number(pagination.total_items ?? pagination.totalItems ?? 0),
-    itemsPerPage: Number(pagination.items_per_page ?? pagination.itemsPerPage ?? 0),
+    itemsPerPage: Number(pagination.items_per_page ?? pagination.totalItemsPerPage ?? 0),
   };
+}
+
+export function getOPhimImageUrl(path) {
+  if (!path) return '/poster.jpg';
+  if (path.startsWith('http')) return path;
+  return `https://img.ophim.live/uploads/movies/${path}`;
 }
