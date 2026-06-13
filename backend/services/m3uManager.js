@@ -177,11 +177,29 @@ class M3UManager {
   }
 
   getChannels() {
-    return this.channels;
+    const settings = this.db.getIptvSettings();
+    const customLogos = settings.customLogos || {};
+    return this.channels.map(c => {
+      const key = c.id || String(c.name).toLowerCase().replace(/[^a-z0-9]/g, '');
+      const customUrl = customLogos[key] || customLogos[String(key).toLowerCase()];
+      if (customUrl) {
+        return { ...c, logo: customUrl };
+      }
+      return c;
+    });
   }
 
   getChannelById(id) {
-    return this.channels.find(ch => ch.id === id);
+    const channel = this.channels.find(ch => ch.id === id);
+    if (!channel) return null;
+    const settings = this.db.getIptvSettings();
+    const customLogos = settings.customLogos || {};
+    const key = channel.id || String(channel.name).toLowerCase().replace(/[^a-z0-9]/g, '');
+    const customUrl = customLogos[key] || customLogos[String(key).toLowerCase()];
+    if (customUrl) {
+      return { ...channel, logo: customUrl };
+    }
+    return channel;
   }
 
   getChannelsByGroup(group) {

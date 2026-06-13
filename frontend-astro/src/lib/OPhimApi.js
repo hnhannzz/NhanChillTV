@@ -1,7 +1,7 @@
-export const NGUONC_API_BASE = '/api/movies';
+export const OPHIM_API_BASE = '/api/movies';
 
-export async function fetchNguoncJson(endpoint, options = {}) {
-  const url = endpoint.startsWith('http') ? endpoint : `${NGUONC_API_BASE}${endpoint}`;
+export async function fetchOPhimJson(endpoint, options = {}) {
+  const url = endpoint.startsWith('http') ? endpoint : `${OPHIM_API_BASE}${endpoint}`;
   const response = await fetch(url, {
     ...options,
     headers: {
@@ -12,17 +12,17 @@ export async function fetchNguoncJson(endpoint, options = {}) {
   const contentType = response.headers.get('content-type') || '';
 
   if (!response.ok) {
-    throw new Error(`Nguonc API HTTP ${response.status}`);
+    throw new Error(`OPhim API HTTP ${response.status}`);
   }
 
   if (!contentType.includes('application/json')) {
-    throw new Error(`Nguonc API returned ${contentType || 'non-JSON response'}`);
+    throw new Error(`OPhim API returned ${contentType || 'non-JSON response'}`);
   }
 
   return response.json();
 }
 
-export function getNguoncItems(data) {
+export function getOPhimItems(data) {
   const items =
     data?.items ||
     data?.data?.items ||
@@ -35,11 +35,11 @@ export function getNguoncItems(data) {
   return Array.isArray(items) ? items : [];
 }
 
-export function isNguoncSuccess(data) {
-  return data?.status === 'success' || data?.success === true || getNguoncItems(data).length > 0;
+export function isOPhimSuccess(data) {
+  return data?.status === 'success' || data?.status === true || data?.success === true || getOPhimItems(data).length > 0;
 }
 
-export function getNguoncPagination(data) {
+export function getOPhimPagination(data) {
   const pagination = data?.paginate || data?.data?.paginate || data?.data?.params?.pagination;
   if (!pagination) return null;
   return {
@@ -53,5 +53,14 @@ export function getNguoncPagination(data) {
 export function getOPhimImageUrl(path) {
   if (!path) return '/poster.jpg';
   if (path.startsWith('http')) return path;
-  return `https://img.ophim.live/uploads/movies/${path}`;
+  
+  let cleanedPath = path;
+  if (cleanedPath.startsWith('/')) {
+    cleanedPath = cleanedPath.substring(1);
+  }
+  if (cleanedPath.startsWith('uploads/movies/')) {
+    cleanedPath = cleanedPath.replace('uploads/movies/', '');
+  }
+  
+  return `https://img.ophim.live/uploads/movies/${cleanedPath}`;
 }

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Info, Play } from 'lucide-react';
 import MovieModal from './MovieModal';
-import { fetchNguoncJson, getNguoncItems, getOPhimImageUrl } from '../lib/nguoncApi';
+import { fetchOPhimJson, getOPhimItems, getOPhimImageUrl } from '../lib/OPhimApi';
 
 const staggerContainer = {
   hidden: {},
@@ -29,8 +29,8 @@ export default function HeroBanner() {
   useEffect(() => {
     Promise.allSettled([
       fetch('/api/admin/events').then(response => response.ok ? response.json() : Promise.reject(new Error(`HTTP ${response.status}`))),
-      fetchNguoncJson('/popular').catch(() => fetchNguoncJson('/danh-sach/phim-moi-cap-nhat')),
-    ]).then(([eventsResult, moviesResult]) => {
+      fetchOPhimJson('/popular').catch(() => fetchOPhimJson('/danh-sach/phim-moi-cap-nhat')),
+    ]).then(async ([eventsResult, moviesResult]) => {
       const pinnedEvents = eventsResult.status === 'fulfilled' && eventsResult.value.success
         ? eventsResult.value.data
           .filter(event => event.isPinned && event.status !== 'ended')
@@ -42,7 +42,28 @@ export default function HeroBanner() {
             poster_url: event.thumbnailUrl || event.thumbnailBase64 || '/poster.jpg',
           }))
         : [];
-      const movies = moviesResult.status === 'fulfilled' ? getNguoncItems(moviesResult.value).slice(0, 6) : [];
+      
+      const rawMovies = moviesResult.status === 'fulfilled' ? getOPhimItems(moviesResult.value).slice(0, 6) : [];
+      
+      // Fetch detailed movie info in parallel for true description
+      const movies = await Promise.all(
+        rawMovies.map(async (movie) => {
+          try {
+            const detailData = await fetchOPhimJson(`/phim/${movie.slug}`);
+            const detailItem = detailData.movie || detailData.item || detailData.data?.item;
+            if (detailItem) {
+              return {
+                ...movie,
+                description: detailItem.content || detailItem.description || ''
+              };
+            }
+          } catch (err) {
+            console.error(`Failed to load details for banner movie ${movie.slug}:`, err);
+          }
+          return movie;
+        })
+      );
+
       setSlides([...pinnedEvents, ...movies]);
     }).finally(() => setLoading(false));
   }, []);
@@ -98,7 +119,7 @@ export default function HeroBanner() {
           className="absolute inset-0"
           style={{ willChange: 'transform, opacity' }}
         >
-          <img src={getOPhimImageUrl(currentSlide.poster_url || currentSlide.thumb_url)} alt={currentSlide.name} className="h-full w-full object-cover opacity-65 pointer-events-none" />
+          <img src={currentSlide.isEvent ? (currentSlide.poster_url || '/poster.jpg') : getOPhimImageUrl(currentSlide.poster_url || currentSlide.thumb_url)} alt={currentSlide.name} className="h-full w-full object-cover opacity-65 pointer-events-none" />
           <div className="absolute inset-0 bg-gradient-to-r from-black via-black/45 to-transparent pointer-events-none" />
           <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-transparent to-transparent pointer-events-none" />
         </motion.div>

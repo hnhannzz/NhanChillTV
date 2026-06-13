@@ -1,0 +1,32 @@
+name: Update EPG Data
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # Run every 6 hours
+  workflow_dispatch:      # Allow manual trigger
+
+jobs:
+  update-epg:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download EPG from vnepg.site
+        run: |
+          mkdir -p backend/data
+          curl -L -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36" -o backend/data/epg.xml.gz https://vnepg.site/epg.xml.gz
+
+      - name: Commit and push changes
+        run: |
+          git config --global user.name "Github Actions"
+          git config --global user.email "actions@github.com"
+          git add backend/data/epg.xml.gz
+          if ! git diff-index --quiet HEAD; then
+            git commit -m "chore: auto-update EPG data [skip ci]"
+            git push
+          else
+            echo "No changes in EPG data"
+          fi

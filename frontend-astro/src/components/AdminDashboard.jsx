@@ -228,9 +228,41 @@ function ChannelsTab({ channels, settings, setSettings, search, setSearch, busy,
     [next[index], next[target]] = [next[target], next[index]];
     setSettings(current => ({ ...current, groupOrder: next }));
   };
+  const updateCustomLogo = (channelId, logoUrl) => {
+    setSettings(current => {
+      const nextLogos = { ...(current.customLogos || {}) };
+      if (logoUrl.trim()) {
+        nextLogos[channelId] = logoUrl.trim();
+      } else {
+        delete nextLogos[channelId];
+      }
+      return { ...current, customLogos: nextLogos };
+    });
+  };
   return <section><SectionHeader title="Kênh IPTV" subtitle={`${channels.length} kênh đã nạp`} action={<button disabled={busy} onClick={onSave} className="flex items-center gap-2 rounded-md bg-[#ED2C25] px-3 py-2 text-sm font-bold"><Save size={16} /> Lưu cấu hình</button>} />
     <div className="mt-5 grid gap-4 xl:grid-cols-[310px_1fr]"><Panel title="Thứ tự nhóm"><div className="max-h-[460px] overflow-y-auto pr-1">{orderedGroups.map((group, index) => <div key={group} className="flex h-9 items-center gap-1 border-b border-white/5 last:border-0"><span className="w-6 text-center text-[10px] text-white/30">{index + 1}</span><button onClick={() => toggle('hiddenGroups', group)} className={`rounded p-1 ${settings.hiddenGroups.includes(group) ? 'text-white/30' : 'text-green-400'}`}>{settings.hiddenGroups.includes(group) ? <EyeOff size={15} /> : <Eye size={15} />}</button><span className="min-w-0 flex-1 truncate text-xs">{group}</span><button disabled={index === 0} onClick={() => moveGroup(index, -1)} className="rounded p-1 hover:bg-white/5 disabled:opacity-20"><ChevronUp size={14} /></button><button disabled={index === orderedGroups.length - 1} onClick={() => moveGroup(index, 1)} className="rounded p-1 hover:bg-white/5 disabled:opacity-20"><ChevronDown size={14} /></button></div>)}</div></Panel>
-      <Panel title="Kênh"><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Tìm kênh..." className="mb-3 w-full rounded-md border border-white/10 bg-black/25 px-3 py-2 text-sm outline-none focus:border-[#ED2C25]" /><div className="max-h-[560px] overflow-y-auto">{visibleChannels.map(channel => <label key={channel.id} className="flex cursor-pointer items-center gap-2 border-b border-white/5 py-2 text-sm sm:gap-3"><input type="checkbox" checked={!settings.hiddenChannels.includes(channel.id)} onChange={() => toggle('hiddenChannels', channel.id)} /><img src={channel.logo || '/poster.jpg'} className="h-7 w-10 object-contain" alt="" /><span className="min-w-0 flex-1 truncate">{channel.name}</span><span className="hidden text-xs text-white/35 sm:block">{channel.group}</span></label>)}</div></Panel></div>
+      <Panel title="Kênh"><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Tìm kênh..." className="mb-3 w-full rounded-md border border-white/10 bg-black/25 px-3 py-2 text-sm outline-none focus:border-[#ED2C25]" /><div className="max-h-[560px] overflow-y-auto flex flex-col gap-2">{visibleChannels.map(channel => {
+        const customLogoVal = settings.customLogos?.[channel.id] || '';
+        return (
+          <div key={channel.id} className="flex items-center justify-between border-b border-white/5 py-2 text-sm gap-2 sm:gap-3">
+            <label className="flex cursor-pointer items-center gap-2 min-w-0 flex-1">
+              <input type="checkbox" checked={!settings.hiddenChannels.includes(channel.id)} onChange={() => toggle('hiddenChannels', channel.id)} className="shrink-0" />
+              <img src={channel.logo || '/poster.jpg'} className="h-7 w-10 object-contain bg-black/20 rounded shrink-0" alt="" />
+              <span className="min-w-0 flex-1 truncate">{channel.name}</span>
+              <span className="hidden text-xs text-white/35 sm:block shrink-0">{channel.group}</span>
+            </label>
+            <div className="flex items-center gap-1 shrink-0">
+              <input 
+                type="text" 
+                placeholder="Custom Logo URL" 
+                value={customLogoVal} 
+                onChange={(e) => updateCustomLogo(channel.id, e.target.value)} 
+                className="rounded border border-white/10 bg-black/35 px-2 py-1 text-xs outline-none focus:border-[#ED2C25] w-24 sm:w-48" 
+              />
+            </div>
+          </div>
+        );
+      })}</div></Panel></div>
   </section>;
 }
 
@@ -304,7 +336,32 @@ function EventModal({ event, channels, token, onClose, onSaved }) {
   const readImage = useCallback(file => {
     if (!file?.type?.startsWith('image/')) return;
     const reader = new FileReader();
-    reader.onload = () => setForm(current => ({ ...current, thumbnailBase64: reader.result }));
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const maxDim = 1280;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        // Compress to WebP format with 0.8 quality
+        const webpBase64 = canvas.toDataURL('image/webp', 0.8);
+        setForm(current => ({ ...current, thumbnailBase64: webpBase64 }));
+      };
+      img.src = reader.result;
+    };
     reader.readAsDataURL(file);
   }, []);
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Play, Search } from 'lucide-react';
-import { fetchNguoncJson, getNguoncItems, getNguoncPagination, isNguoncSuccess, getOPhimImageUrl } from '../lib/nguoncApi';
+import { fetchOPhimJson, getOPhimItems, getOPhimPagination, isOPhimSuccess, getOPhimImageUrl } from '../lib/OPhimApi';
 
 const GENRES = [
   ['Hành Động', 'hanh-dong'], ['Phiêu Lưu', 'phieu-luu'], ['Hoạt Hình', 'hoat-hinh'], ['Hài', 'hai'],
@@ -40,10 +40,10 @@ export default function MoviesContainer() {
       setLoading(true);
       try {
         const separator = endpoint.includes('?') ? '&' : '?';
-        const data = await fetchNguoncJson(`${endpoint}${separator}page=${page}`, { signal: controller.signal });
-        if (!isNguoncSuccess(data)) throw new Error('Nguonc returned no data');
-        setMovies(getNguoncItems(data));
-        setPagination(getNguoncPagination(data));
+        const data = await fetchOPhimJson(`${endpoint}${separator}page=${page}`, { signal: controller.signal });
+        if (!isOPhimSuccess(data)) throw new Error('OPhim returned no data');
+        setMovies(getOPhimItems(data));
+        setPagination(getOPhimPagination(data));
       } catch (err) {
         if (err.name !== 'AbortError') {
           setMovies([]);

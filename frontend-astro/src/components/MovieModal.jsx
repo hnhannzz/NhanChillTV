@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Play } from 'lucide-react';
-import { fetchNguoncJson, getOPhimImageUrl } from '../lib/nguoncApi';
+import { fetchOPhimJson, getOPhimImageUrl } from '../lib/OPhimApi';
 
 export default function MovieModal({ slug, onClose }) {
   const [movie, setMovie] = useState(null);
@@ -9,10 +9,11 @@ export default function MovieModal({ slug, onClose }) {
   useEffect(() => {
     if (!slug) return;
     setLoading(true);
-    fetchNguoncJson(`/phim/${slug}`)
+    fetchOPhimJson(`/phim/${slug}`)
       .then(data => {
-        if (data.status === 'success') {
-          setMovie(data.movie || data.item);
+        const m = data.movie || data.item || data.data?.item;
+        if (m) {
+          setMovie(m);
         }
       })
       .catch(console.error)

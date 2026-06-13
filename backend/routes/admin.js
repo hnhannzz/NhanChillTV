@@ -64,9 +64,9 @@ function processEventPayload(data, id) {
   
   if (data.thumbnailBase64) {
     const base64Data = data.thumbnailBase64.replace(/^data:image\/\w+;base64,/, "");
-    const imgPath = path.join(eventTempPath, `${id}.jpg`);
+    const imgPath = path.join(eventTempPath, `${id}.webp`);
     fs.writeFileSync(imgPath, base64Data, 'base64');
-    eventData.thumbnailUrl = `/event_temp/${id}.jpg?v=${Date.now()}`;
+    eventData.thumbnailUrl = `/event_temp/${id}.webp?v=${Date.now()}`;
   }
   delete eventData.thumbnailBase64;
 
@@ -160,9 +160,13 @@ async function cleanupEventObsStreams(event) {
 function cleanupEventThumbnail(event) {
   const eventId = String(event.id || '').replace(/[^a-zA-Z0-9_-]/g, '');
   if (!eventId) return;
-  const thumbnailPath = path.resolve(eventTempPath, `${eventId}.jpg`);
-  if (path.dirname(thumbnailPath) === path.resolve(eventTempPath) && fs.existsSync(thumbnailPath)) {
-    fs.rmSync(thumbnailPath, { force: true });
+  const thumbnailPathJpg = path.resolve(eventTempPath, `${eventId}.jpg`);
+  const thumbnailPathWebp = path.resolve(eventTempPath, `${eventId}.webp`);
+  if (path.dirname(thumbnailPathJpg) === path.resolve(eventTempPath) && fs.existsSync(thumbnailPathJpg)) {
+    fs.rmSync(thumbnailPathJpg, { force: true });
+  }
+  if (path.dirname(thumbnailPathWebp) === path.resolve(eventTempPath) && fs.existsSync(thumbnailPathWebp)) {
+    fs.rmSync(thumbnailPathWebp, { force: true });
   }
 }
 

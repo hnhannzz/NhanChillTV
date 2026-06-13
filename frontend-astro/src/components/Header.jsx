@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { LogOut, Menu, Search, User, X } from 'lucide-react';
 import classNames from 'classnames';
 import AuthModal from './AuthModal';
-import { fetchNguoncJson, getNguoncItems } from '../lib/nguoncApi';
+import { fetchOPhimJson, getOPhimItems } from '../lib/OPhimApi';
 import AvatarPicker from './AvatarPicker';
 
 export default function Header({ toggleSidebar }) {
@@ -88,13 +88,13 @@ export default function Header({ toggleSidebar }) {
       setSearchOpen(true);
       try {
         const [moviesResult, channelsResult] = await Promise.allSettled([
-          fetchNguoncJson(`/films/search?keyword=${encodeURIComponent(query)}`),
+          fetchOPhimJson(`/films/search?keyword=${encodeURIComponent(query)}`),
           fetch('/api/iptv/channels').then(response => response.ok ? response.json() : Promise.reject(new Error(`HTTP ${response.status}`))),
         ]);
         if (requestId !== searchRequestRef.current) return;
 
         const movies = moviesResult.status === 'fulfilled'
-          ? getNguoncItems(moviesResult.value).slice(0, 5).map(movie => ({
+          ? getOPhimItems(moviesResult.value).slice(0, 5).map(movie => ({
             name: movie.name,
             subtitle: movie.original_name || movie.year || 'Phim',
             image: movie.thumb_url || movie.poster_url || '/poster.jpg',

@@ -5,7 +5,7 @@ const zlib = require('zlib');
 const { XMLParser } = require('fast-xml-parser');
 const config = require('../config');
 
-const DEFAULT_EPG_URL = 'https://epg.pw/xmltv/epg_VN.xml';
+const DEFAULT_EPG_URL = 'https://raw.githubusercontent.com/hnhannzz/NhanChillTV/main/backend/data/epg.xml.gz';
 const EPG_STALE_GRACE_MS = 2 * 60 * 60 * 1000;
 
 function normalizeKey(value) {
@@ -55,7 +55,7 @@ function parseEpgTime(timeStr) {
 class EpgService {
   constructor() {
     this.epgUrl = process.env.EPG_URL || DEFAULT_EPG_URL;
-    const configuredFallbacks = String(process.env.EPG_FALLBACK_URLS || '')
+    const configuredFallbacks = String(process.env.EPG_FALLBACK_URLS || 'https://vnepg.site/epg.xml.gz,https://epg.pw/xmltv/epg_VN.xml')
       .split(',')
       .map(url => url.trim())
       .filter(Boolean);
@@ -104,18 +104,24 @@ class EpgService {
     fs.renameSync(tempPath, this.cachePath);
   }
 
-  async fetchSource(sourceUrl) {
-    const response = await axios.get(sourceUrl, {
-      timeout: 60000,
+  async fetchSource(sourceUrl, useProxyObj = null) {
+    const requestConfig = {
+      timeout: 30000,
       responseType: 'arraybuffer',
       maxContentLength: 25 * 1024 * 1024,
       headers: {
         Accept: 'application/xml,text/xml,application/gzip,application/octet-stream,*/*',
         'Accept-Encoding': 'gzip, deflate, br',
         Referer: `${new URL(sourceUrl).origin}/`,
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Mobile Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
       },
-    });
+    };
+
+    if (useProxyObj) {
+      requestConfig.proxy = useProxyObj;
+    }
+
+    const response = await axios.get(sourceUrl, requestConfig);
 
     let payload = Buffer.from(response.data);
     const isGzip = sourceUrl.toLowerCase().endsWith('.gz') || (payload[0] === 0x1f && payload[1] === 0x8b);
@@ -139,9 +145,6 @@ class EpgService {
           console.log('[EPG] Fetching EPG data from', sourceUrl);
           const xml = await this.fetchSource(sourceUrl);
           const parsed = this.parseEpg(xml, false);
-          if (parsed.latestProgramStop < Date.now() - EPG_STALE_GRACE_MS) {
-            throw new Error(`EPG data is stale (latest programme ended ${new Date(parsed.latestProgramStop).toISOString()})`);
-          }
           this.applyParsedEpg(parsed);
           this.saveDiskCache(xml);
           this.lastFetch = new Date();
@@ -152,6 +155,39 @@ class EpgService {
         } catch (err) {
           failures.push(`${sourceUrl}: ${err.message}`);
           console.warn(`[EPG] Source failed (${sourceUrl}):`, err.message);
+
+          // If the primary/direct vnepg.site URL failed (likely 403), try using a VN Proxy as fallback
+          if (sourceUrl.includes('vnepg.site') && !err.message.includes('XMLTV')) {
+            try {
+              console.log('[EPG] Direct vnepg.site failed. Trying to fetch via Vietnam proxy pool...');
+              const proxyListRes = await axios.get('https://proxylist.geonode.com/api/proxy-list?limit=15&page=1&sort_by=lastChecked&sort_type=desc&country=VN&protocols=http', { timeout: 8000 });
+              const proxies = proxyListRes.data?.data || [];
+              console.log(`[EPG] Found ${proxies.length} potential VN proxies.`);
+              
+              let proxySuccess = false;
+              for (const p of proxies) {
+                const proxyObj = { host: p.ip, port: parseInt(p.port) };
+                console.log(`[EPG] Attempting vnepg.site via proxy http://${p.ip}:${p.port}...`);
+                try {
+                  const xml = await this.fetchSource(sourceUrl, proxyObj);
+                  const parsed = this.parseEpg(xml, false);
+                  this.applyParsedEpg(parsed);
+                  this.saveDiskCache(xml);
+                  this.lastFetch = new Date();
+                  this.lastError = null;
+                  this.activeSource = `${sourceUrl} (via proxy http://${p.ip}:${p.port})`;
+                  console.log(`[EPG] Success via proxy! Parsed channels: ${Object.keys(this.channels).length}`);
+                  proxySuccess = true;
+                  break;
+                } catch (proxyErr) {
+                  console.warn(`[EPG] Proxy http://${p.ip}:${p.port} failed: ${proxyErr.message}`);
+                }
+              }
+              if (proxySuccess) return;
+            } catch (proxyPoolErr) {
+              console.warn('[EPG] Proxy pool fetch failed:', proxyPoolErr.message);
+            }
+          }
         }
       }
       this.lastError = failures.join(' | ');

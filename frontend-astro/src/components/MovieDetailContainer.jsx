@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Heart, Play, Send } from 'lucide-react';
-import { fetchNguoncJson, getOPhimImageUrl } from '../lib/nguoncApi';
+import { fetchOPhimJson, getOPhimImageUrl } from '../lib/OPhimApi';
 import MovieStreamPlayer from './MovieStreamPlayer';
 
 export default function MovieDetailContainer() {
@@ -28,7 +28,7 @@ export default function MovieDetailContainer() {
 
     const loadData = async () => {
       try {
-        const data = await fetchNguoncJson(`/phim/${slug}`);
+        const data = await fetchOPhimJson(`/phim/${slug}`);
         if (data.status === 'success' || data.status === true) {
           const m = data.movie || data.item || data.data?.item;
           setMovie(m);

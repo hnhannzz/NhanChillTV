@@ -59,6 +59,11 @@ export default function UnifiedPlayer({
     (/Safari/.test(navigator.userAgent) && !/Chrome|CriOS|Android/.test(navigator.userAgent))
   );
 
+  const isIOS = typeof navigator !== 'undefined' && (
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  );
+
   useEffect(() => {
     if (typeof document !== 'undefined') {
       setIsPipSupported(document.pictureInPictureEnabled || false);
@@ -73,7 +78,6 @@ export default function UnifiedPlayer({
 
     const lowerUrl = String(url).toLowerCase();
     const isMpegTs = !isMpd && !lowerUrl.includes('.m3u8') && !lowerUrl.includes('.mpd') && !lowerUrl.includes('.mp4');
-    const isHls = lowerUrl.includes('.m3u8');
 
     // 1. Block DRM MPD streams on iOS Safari
     if (isMpd && clearKey && isSafariOrIOS) {
@@ -104,23 +108,30 @@ export default function UnifiedPlayer({
           setIsPlaying(false);
         });
       }
-      onReady?.(mpegtsPlayer);
+      onReady?.(null);
 
       mpegtsPlayer.on(mpegts.Events.ERROR, (errorType, errorDetail, errorInfo) => {
         console.error('MPEG-TS Error:', errorType, errorDetail, errorInfo);
         setError(`Lỗi MPEG-TS: ${errorDetail}`);
         onError?.(errorInfo);
       });
-    } else if (isSafariOrIOS && isHls && !isMpd) {
-      // 2. Dùng native player của iOS/Safari cho HLS để mượt mà nhất và tránh lỗi Shaka MSE
-      console.log('[Player] Using native Safari HLS engine');
+    } else if (isSafariOrIOS && !isMpd) {
+      // 2. Dùng native player của iOS/Safari cho tất cả các luồng non-DRM (HLS/VOD) để tránh lỗi Shaka MSE
+      console.log('[Player] Using native Safari HLS/VOD engine');
       videoRef.current.src = url;
-      if (initialTime > 0) {
-        videoRef.current.currentTime = initialTime;
-      }
+      
+      const onMetadataLoaded = () => {
+        if (initialTime > 0) {
+          videoRef.current.currentTime = initialTime;
+        }
+        videoRef.current.removeEventListener('loadedmetadata', onMetadataLoaded);
+      };
+      
+      videoRef.current.addEventListener('loadedmetadata', onMetadataLoaded);
+
       if (autoplay) {
         videoRef.current.play().catch(err => {
-          console.warn('Native HLS autoplay prevented', err);
+          console.warn('Native autoplay prevented', err);
           setIsPlaying(false);
         });
       }
@@ -229,11 +240,17 @@ export default function UnifiedPlayer({
     };
     const handleLoadedMetadata = () => setDuration(video.duration);
 
+    // Sync fullscreen state with native iOS player controls
+    const handleWebKitBeginFullscreen = () => setIsFullscreen(true);
+    const handleWebKitEndFullscreen = () => setIsFullscreen(false);
+
     video.addEventListener('play', handlePlay);
     video.addEventListener('pause', handlePause);
     video.addEventListener('volumechange', handleVolumeChange);
     video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('loadedmetadata', handleLoadedMetadata);
+    video.addEventListener('webkitbeginfullscreen', handleWebKitBeginFullscreen);
+    video.addEventListener('webkitendfullscreen', handleWebKitEndFullscreen);
 
     return () => {
       if (shakaPlayer) {
@@ -247,6 +264,8 @@ export default function UnifiedPlayer({
       video.removeEventListener('volumechange', handleVolumeChange);
       video.removeEventListener('timeupdate', handleTimeUpdate);
       video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      video.removeEventListener('webkitbeginfullscreen', handleWebKitBeginFullscreen);
+      video.removeEventListener('webkitendfullscreen', handleWebKitEndFullscreen);
     };
   }, [url]);
 
@@ -612,23 +631,25 @@ export default function UnifiedPlayer({
                 <button onClick={toggleMute} className="text-white hover:text-[#ED2C25] transition-colors focus:outline-none">
                   {isMuted ? <VolumeX size={22} /> : <Volume2 size={22} />}
                 </button>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={isMuted ? 0 : volume}
-                  onChange={(e) => {
-                    const val = parseFloat(e.target.value);
-                    setVolume(val);
-                    if (videoRef.current) {
-                      videoRef.current.volume = val;
-                      videoRef.current.muted = val === 0;
-                    }
-                    setIsMuted(val === 0);
-                  }}
-                  className="w-0 overflow-hidden group-hover/volume:w-20 transition-all duration-300 h-1.5 accent-[#ED2C25] bg-white/20 rounded-full cursor-pointer appearance-none outline-none"
-                />
+                {!isIOS && (
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={isMuted ? 0 : volume}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value);
+                      setVolume(val);
+                      if (videoRef.current) {
+                        videoRef.current.volume = val;
+                        videoRef.current.muted = val === 0;
+                      }
+                      setIsMuted(val === 0);
+                    }}
+                    className="w-0 overflow-hidden group-hover/volume:w-20 transition-all duration-300 h-1.5 accent-[#ED2C25] bg-white/20 rounded-full cursor-pointer appearance-none outline-none"
+                  />
+                )}
               </div>
 
               {isLiveStream ? (

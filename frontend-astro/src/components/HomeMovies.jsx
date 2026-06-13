@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useDraggableScroll } from '../hooks/useDraggableScroll';
-import { fetchNguoncJson, getNguoncItems, getOPhimImageUrl } from '../lib/nguoncApi';
+import { fetchOPhimJson, getOPhimItems, getOPhimImageUrl } from '../lib/OPhimApi';
 
 export default function HomeMovies() {
   const [movies, setMovies] = useState([]);
@@ -12,11 +12,9 @@ export default function HomeMovies() {
   const fetchMovies = () => {
     setLoading(true);
     setError(null);
-    fetchNguoncJson('/films/phim-moi-cap-nhat')
+    fetchOPhimJson('/films/phim-moi-cap-nhat')
       .then(data => {
-        if (data.status === 'success') {
-          setMovies(getNguoncItems(data).slice(0, 12));
-        }
+        setMovies(getOPhimItems(data).slice(0, 12));
       })
       .catch(err => {
         console.error(err);
