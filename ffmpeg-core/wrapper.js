@@ -124,10 +124,13 @@ class FFmpegWrapper {
       '-loglevel', 'warning',
       '-user_agent', userAgent,
       '-fflags', '+genpts+igndts+discardcorrupt',
-      '-fifo_size', '150000',
-      '-overrun_nonfatal', '1',
-      '-i', udpUrl
     ];
+
+    if (String(udpUrl).startsWith('udp://')) {
+      args.push('-fifo_size', '150000', '-overrun_nonfatal', '1');
+    }
+
+    args.push('-i', udpUrl);
 
     // Phương án 2: Dùng copy (0% CPU, bỏ qua Deinterlace)
     args.push('-c:v', 'copy');
