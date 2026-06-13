@@ -69,24 +69,29 @@ class M3UManager {
 
       const aggregatedChannels = sources.flatMap(source => this.sourceChannels.get(source.id) || []);
 
-      const channelsById = new Map();
+      const normalizeName = (name) => {
+        return String(name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      };
+
+      const channelsByKey = new Map();
       for (const ch of aggregatedChannels) {
         // Lọc bỏ hoàn toàn các nguồn hoiquan.click / hoiquan.dpdns.org vì họ dùng Cloudflare block IP Datacenter và không hỗ trợ CORS trên trình duyệt
         if (ch.url && ch.url.includes('hoiquan')) {
           continue;
         }
-        if (!channelsById.has(ch.id)) {
-          channelsById.set(ch.id, []);
+        const key = ch.id && !ch.id.startsWith('ch_') ? ch.id.toLowerCase() : normalizeName(ch.name);
+        if (!channelsByKey.has(key)) {
+          channelsByKey.set(key, []);
         }
-        channelsById.get(ch.id).push(ch);
+        channelsByKey.get(key).push(ch);
       }
 
       const uniqueChannels = [];
-      for (const [id, group] of channelsById.entries()) {
+      for (const [key, group] of channelsByKey.entries()) {
         if (group.length === 1) {
           uniqueChannels.push(group[0]);
         } else {
-          // Nếu có nhiều luồng cho cùng một kênh (cùng ID/tvg-id), ưu tiên luồng HLS (.m3u8) để không tốn tài nguyên transcode
+          // Nếu có nhiều luồng cho cùng một kênh, ưu tiên luồng HLS (.m3u8) để không tốn tài nguyên transcode
           const hlsChannel = group.find(ch => String(ch.url || '').toLowerCase().includes('.m3u8'));
           if (hlsChannel) {
             uniqueChannels.push(hlsChannel);

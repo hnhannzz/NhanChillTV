@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import shaka from 'shaka-player/dist/shaka-player.ui.js';
 import 'shaka-player/dist/controls.css';
-import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, SkipForward, LightbulbOff, Tv, Settings } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, SkipForward, LightbulbOff, Settings } from 'lucide-react';
 import mpegts from 'mpegts.js';
 import { getMimeType, inferPlaybackType } from '../lib/playbackUrl';
 
@@ -52,6 +52,13 @@ export default function UnifiedPlayer({
 
   const isLiveStream = duration === Infinity || !isFinite(duration) || subTitle === 'Live TV';
 
+  // Detect iOS Safari or macOS Safari
+  const isSafariOrIOS = typeof navigator !== 'undefined' && (
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
+    (/Safari/.test(navigator.userAgent) && !/Chrome|CriOS|Android/.test(navigator.userAgent))
+  );
+
   useEffect(() => {
     if (typeof document !== 'undefined') {
       setIsPipSupported(document.pictureInPictureEnabled || false);
@@ -66,6 +73,13 @@ export default function UnifiedPlayer({
 
     const lowerUrl = String(url).toLowerCase();
     const isMpegTs = !isMpd && !lowerUrl.includes('.m3u8') && !lowerUrl.includes('.mpd') && !lowerUrl.includes('.mp4');
+    const isHls = lowerUrl.includes('.m3u8');
+
+    // 1. Block DRM MPD streams on iOS Safari
+    if (isMpd && clearKey && isSafariOrIOS) {
+      setError('Kênh DRM MPD này chưa hỗ trợ iOS, iPadOS hoặc Safari. Vui lòng dùng Chrome/Edge trên Windows hoặc Android.');
+      return;
+    }
 
     if (isMpegTs && mpegts.isSupported()) {
       const absoluteUrl = new URL(url, window.location.href).href;
@@ -97,6 +111,20 @@ export default function UnifiedPlayer({
         setError(`Lỗi MPEG-TS: ${errorDetail}`);
         onError?.(errorInfo);
       });
+    } else if (isSafariOrIOS && isHls && !isMpd) {
+      // 2. Dùng native player của iOS/Safari cho HLS để mượt mà nhất và tránh lỗi Shaka MSE
+      console.log('[Player] Using native Safari HLS engine');
+      videoRef.current.src = url;
+      if (initialTime > 0) {
+        videoRef.current.currentTime = initialTime;
+      }
+      if (autoplay) {
+        videoRef.current.play().catch(err => {
+          console.warn('Native HLS autoplay prevented', err);
+          setIsPlaying(false);
+        });
+      }
+      onReady?.(null);
     } else {
       shaka.polyfill.installAll();
       if (!shaka.Player.isBrowserSupported()) {
@@ -123,11 +151,21 @@ export default function UnifiedPlayer({
         clearKeys: clearKeysObj
       } : undefined;
 
+      // 3. Tối ưu hóa ABR & Buffering để phát mượt mà nhất
       shakaPlayer.configure({
         streaming: {
-          bufferingGoal: 30,
-          rebufferingGoal: 10,
-          bufferBehind: 30,
+          bufferingGoal: 45, // Tăng lên 45 giây để tránh buffering khi mạng chập chờn
+          rebufferingGoal: 5, // Bắt đầu phát lại khi có 5 giây buffer
+          bufferBehind: 15,
+          retryParameters: {
+            maxAttempts: 5,
+            timeout: 10000,
+          },
+          abr: {
+            enabled: true,
+            defaultBandwidthEstimate: 1500000, // 1.5 Mbps mặc định ban đầu
+            switchInterval: 4, // Switch chất lượng nhạy hơn (4 giây)
+          }
         },
         drm: drmConfig
       });
@@ -212,12 +250,17 @@ export default function UnifiedPlayer({
     };
   }, [url]);
 
+  // Handle Fullscreen state change events, including webkit prefix
   useEffect(() => {
     const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
+      setIsFullscreen(!!(document.fullscreenElement || document.webkitFullscreenElement));
     };
     document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+    };
   }, []);
 
   // Keyboard Shortcuts Listener
@@ -304,13 +347,29 @@ export default function UnifiedPlayer({
     }
   };
 
+  // Fullscreen support including iPhone / iOS Safari webkit fallback
   const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      videoContainerRef.current?.requestFullscreen?.().catch(err => {
-        console.error("Error attempting to enable fullscreen:", err);
-      });
+    const video = videoRef.current;
+    const container = videoContainerRef.current;
+    if (!video || !container) return;
+
+    if (!document.fullscreenElement && !document.webkitFullscreenElement && !video.webkitDisplayingFullscreen) {
+      if (container.requestFullscreen) {
+        container.requestFullscreen().catch(err => {
+          console.warn("Fullscreen error", err);
+        });
+      } else if (container.webkitRequestFullscreen) {
+        container.webkitRequestFullscreen();
+      } else if (video.webkitEnterFullscreen) {
+        // iOS Safari Fullscreen
+        video.webkitEnterFullscreen();
+      }
     } else {
-      document.exitFullscreen?.();
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      }
     }
   };
 
@@ -418,10 +477,10 @@ export default function UnifiedPlayer({
       };
     } else {
       return {
-        type: 'MPEG-TS / Native HTML5',
+        type: isSafariOrIOS ? 'iOS Safari Native engine' : 'MPEG-TS / Native HTML5',
         width: videoRef.current?.videoWidth || 'Unknown',
         height: videoRef.current?.videoHeight || 'Unknown',
-        videoCodec: 'h264 (Direct)',
+        videoCodec: 'h264 (Phần cứng)',
         audioCodec: 'aac/mp3/mp2',
         droppedFrames: videoRef.current?.webkitDroppedFrameCount || 0,
         decodedFrames: videoRef.current?.webkitDecodedFrameCount || 0,
@@ -466,7 +525,7 @@ export default function UnifiedPlayer({
 
       {/* Error Message */}
       {error && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-red-600 text-white px-4 py-2 rounded-md shadow-lg text-xs font-semibold">
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-red-600 text-white px-4 py-2 rounded-md shadow-lg text-xs font-semibold max-w-[90%] text-center">
           {error}
         </div>
       )}
@@ -600,7 +659,10 @@ export default function UnifiedPlayer({
 
               {isPipSupported && (
                 <button onClick={togglePip} className="text-white/80 hover:text-white transition-colors focus:outline-none group/btn" title="Xem hình trong hình (PiP)">
-                  <Tv size={20} className="group-hover/btn:scale-110 transition-transform" />
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 16V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z" />
+                    <rect x="13" y="13" width="8" height="8" rx="1" fill="currentColor" stroke="none" />
+                  </svg>
                 </button>
               )}
 
@@ -616,50 +678,48 @@ export default function UnifiedPlayer({
         </div>
       </div>
 
-      {/* Settings Popover */}
-      {showSettings && (
-        <div className="absolute bottom-14 right-6 bg-[#121212]/95 border border-white/10 rounded-xl p-3 w-48 text-white z-50 text-xs flex flex-col gap-2 shadow-2xl backdrop-blur-md pointer-events-auto select-none">
-          <div className="font-bold border-b border-white/10 pb-1.5 text-[#ED2C25] uppercase tracking-wide">Cài đặt</div>
-          
-          <div className="flex flex-col gap-1">
-            <span className="text-white/45 font-semibold">Tốc độ phát:</span>
-            <div className="flex flex-wrap gap-1">
-              {[0.5, 1, 1.25, 1.5, 2].map(speed => (
+      {/* Settings Popover with slide animation */}
+      <div className={`absolute bottom-14 right-6 bg-[#121212]/95 border border-white/10 rounded-xl p-3 w-48 text-white z-50 text-xs flex flex-col gap-2 shadow-2xl backdrop-blur-md pointer-events-auto select-none transition-all duration-300 origin-bottom-right ${showSettings ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-2 scale-95 pointer-events-none'}`}>
+        <div className="font-bold border-b border-white/10 pb-1.5 text-[#ED2C25] uppercase tracking-wide">Cài đặt</div>
+        
+        <div className="flex flex-col gap-1">
+          <span className="text-white/45 font-semibold">Tốc độ phát:</span>
+          <div className="flex flex-wrap gap-1">
+            {[0.5, 1, 1.25, 1.5, 2].map(speed => (
+              <button
+                key={speed}
+                onClick={() => selectSpeed(speed)}
+                className={`px-1.5 py-0.5 rounded ${playbackSpeed === speed ? 'bg-[#ED2C25] text-white font-bold' : 'bg-white/5 text-white/75 hover:bg-white/10'}`}
+              >
+                {speed}x
+              </button>
+            ))}
+          </div>
+        </div>
+        
+        {availableQualities.length > 0 && (
+          <div className="flex flex-col gap-1 mt-1 border-t border-white/5 pt-1.5">
+            <span className="text-white/45 font-semibold">Chất lượng:</span>
+            <div className="flex flex-col gap-1 max-h-32 overflow-y-auto custom-scrollbar">
+              <button
+                onClick={() => selectQuality('auto')}
+                className={`text-left px-2 py-1 rounded transition-colors ${currentQuality === 'auto' ? 'bg-[#ED2C25] text-white font-bold' : 'hover:bg-white/5 text-white/75'}`}
+              >
+                Tự động (Auto)
+              </button>
+              {availableQualities.map(track => (
                 <button
-                  key={speed}
-                  onClick={() => selectSpeed(speed)}
-                  className={`px-1.5 py-0.5 rounded ${playbackSpeed === speed ? 'bg-[#ED2C25] text-white font-bold' : 'bg-white/5 text-white/75 hover:bg-white/10'}`}
+                  key={track.height}
+                  onClick={() => selectQuality(track.height)}
+                  className={`text-left px-2 py-1 rounded transition-colors ${currentQuality === track.height ? 'bg-[#ED2C25] text-white font-bold' : 'hover:bg-white/5 text-white/75'}`}
                 >
-                  {speed}x
+                  {track.height}p
                 </button>
               ))}
             </div>
           </div>
-          
-          {availableQualities.length > 0 && (
-            <div className="flex flex-col gap-1 mt-1 border-t border-white/5 pt-1.5">
-              <span className="text-white/45 font-semibold">Chất lượng:</span>
-              <div className="flex flex-col gap-1 max-h-32 overflow-y-auto custom-scrollbar">
-                <button
-                  onClick={() => selectQuality('auto')}
-                  className={`text-left px-2 py-1 rounded transition-colors ${currentQuality === 'auto' ? 'bg-[#ED2C25] text-white font-bold' : 'hover:bg-white/5 text-white/75'}`}
-                >
-                  Tự động (Auto)
-                </button>
-                {availableQualities.map(track => (
-                  <button
-                    key={track.height}
-                    onClick={() => selectQuality(track.height)}
-                    className={`text-left px-2 py-1 rounded transition-colors ${currentQuality === track.height ? 'bg-[#ED2C25] text-white font-bold' : 'hover:bg-white/5 text-white/75'}`}
-                  >
-                    {track.height}p
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Custom Context Menu */}
       {contextMenu && (
@@ -692,62 +752,58 @@ export default function UnifiedPlayer({
         </div>
       )}
 
-      {/* Codec Info Modal */}
-      {showCodecModal && (
-        <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm pointer-events-auto">
-          <div className="bg-[#121212] p-6 rounded-2xl border border-white/10 max-w-xs w-full mx-4 shadow-2xl relative select-none">
-            <h3 className="text-xs font-black text-[#ED2C25] mb-4 uppercase tracking-wide border-b border-white/10 pb-2">Thông tin Codec & Luồng</h3>
-            {(() => {
-              const info = getCodecInfo();
-              return (
-                <div className="space-y-2 text-[11px] text-white/80">
-                  <div><strong className="text-white/40">Trình phát:</strong> {info.type}</div>
-                  <div><strong className="text-white/40">Độ phân giải:</strong> {info.width}x{info.height}</div>
-                  <div><strong className="text-white/40">Video Codec:</strong> {info.videoCodec}</div>
-                  <div><strong className="text-white/40">Audio Codec:</strong> {info.audioCodec}</div>
-                  {info.bandwidth !== 'N/A' && <div><strong className="text-white/40">Băng thông:</strong> {info.bandwidth}</div>}
-                  <div><strong className="text-white/40">Khung hình giải mã:</strong> {info.decodedFrames}</div>
-                  <div><strong className="text-white/40">Khung hình bị rớt:</strong> {info.droppedFrames}</div>
-                </div>
-              );
-            })()}
-            <button 
-              onClick={() => setShowCodecModal(false)}
-              className="mt-6 w-full bg-[#ED2C25] text-white text-[11px] font-bold py-2 rounded-xl hover:bg-red-700 transition-colors"
-            >
-              Đóng
-            </button>
-          </div>
+      {/* Codec Info Modal with slide/fade animation */}
+      <div className={`absolute inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm pointer-events-auto transition-opacity duration-300 ${showCodecModal ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+        <div className={`bg-[#121212] p-6 rounded-2xl border border-white/10 max-w-xs w-full mx-4 shadow-2xl relative select-none transition-all duration-300 transform ${showCodecModal ? 'scale-100 translate-y-0 opacity-100' : 'scale-90 translate-y-4 opacity-0'}`}>
+          <h3 className="text-xs font-black text-[#ED2C25] mb-4 uppercase tracking-wide border-b border-white/10 pb-2">Thông tin Codec & Luồng</h3>
+          {(() => {
+            const info = getCodecInfo();
+            return (
+              <div className="space-y-2 text-[11px] text-white/80">
+                <div><strong className="text-white/40">Trình phát:</strong> {info.type}</div>
+                <div><strong className="text-white/40">Độ phân giải:</strong> {info.width}x{info.height}</div>
+                <div><strong className="text-white/40">Video Codec:</strong> {info.videoCodec}</div>
+                <div><strong className="text-white/40">Audio Codec:</strong> {info.audioCodec}</div>
+                {info.bandwidth !== 'N/A' && <div><strong className="text-white/40">Băng thông:</strong> {info.bandwidth}</div>}
+                <div><strong className="text-white/40">Khung hình giải mã:</strong> {info.decodedFrames}</div>
+                <div><strong className="text-white/40">Khung hình bị rớt:</strong> {info.droppedFrames}</div>
+              </div>
+            );
+          })()}
+          <button 
+            onClick={() => setShowCodecModal(false)}
+            className="mt-6 w-full bg-[#ED2C25] text-white text-[11px] font-bold py-2 rounded-xl hover:bg-red-700 transition-colors"
+          >
+            Đóng
+          </button>
         </div>
-      )}
+      </div>
 
-      {/* Keyboard Shortcuts Modal */}
-      {showShortcutsModal && (
-        <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm pointer-events-auto">
-          <div className="bg-[#121212] p-6 rounded-2xl border border-white/10 max-w-xs w-full mx-4 shadow-2xl relative select-none">
-            <h3 className="text-xs font-black text-[#ED2C25] mb-4 uppercase tracking-wide border-b border-white/10 pb-2">Phím tắt bàn phím</h3>
-            <div className="space-y-2.5 text-[11px] text-white/80">
-              <div className="flex justify-between"><span>Phát / Tạm dừng</span><kbd className="bg-white/10 px-1.5 py-0.5 rounded text-white font-mono text-[9px]">Space / K</kbd></div>
-              {!isLiveStream && (
-                <>
-                  <div className="flex justify-between"><span>Tua nhanh 5 giây</span><kbd className="bg-white/10 px-1.5 py-0.5 rounded text-white font-mono text-[9px]">Right Arrow / L</kbd></div>
-                  <div className="flex justify-between"><span>Tua lại 5 giây</span><kbd className="bg-white/10 px-1.5 py-0.5 rounded text-white font-mono text-[9px]">Left Arrow / J</kbd></div>
-                </>
-              )}
-              <div className="flex justify-between"><span>Tăng âm lượng 5%</span><kbd className="bg-white/10 px-1.5 py-0.5 rounded text-white font-mono text-[9px]">Up Arrow</kbd></div>
-              <div className="flex justify-between"><span>Giảm âm lượng 5%</span><kbd className="bg-white/10 px-1.5 py-0.5 rounded text-white font-mono text-[9px]">Down Arrow</kbd></div>
-              <div className="flex justify-between"><span>Bật / Tắt tiếng</span><kbd className="bg-white/10 px-1.5 py-0.5 rounded text-white font-mono text-[9px]">M</kbd></div>
-              <div className="flex justify-between"><span>Toàn màn hình</span><kbd className="bg-white/10 px-1.5 py-0.5 rounded text-white font-mono text-[9px]">F</kbd></div>
-            </div>
-            <button 
-              onClick={() => setShowShortcutsModal(false)}
-              className="mt-6 w-full bg-[#ED2C25] text-white text-[11px] font-bold py-2 rounded-xl hover:bg-red-700 transition-colors"
-            >
-              Đóng
-            </button>
+      {/* Keyboard Shortcuts Modal with slide/fade animation */}
+      <div className={`absolute inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm pointer-events-auto transition-opacity duration-300 ${showShortcutsModal ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+        <div className={`bg-[#121212] p-6 rounded-2xl border border-white/10 max-w-xs w-full mx-4 shadow-2xl relative select-none transition-all duration-300 transform ${showShortcutsModal ? 'scale-100 translate-y-0 opacity-100' : 'scale-90 translate-y-4 opacity-0'}`}>
+          <h3 className="text-xs font-black text-[#ED2C25] mb-4 uppercase tracking-wide border-b border-white/10 pb-2">Phím tắt bàn phím</h3>
+          <div className="space-y-2.5 text-[11px] text-white/80">
+            <div className="flex justify-between"><span>Phát / Tạm dừng</span><kbd className="bg-white/10 px-1.5 py-0.5 rounded text-white font-mono text-[9px]">Space / K</kbd></div>
+            {!isLiveStream && (
+              <>
+                <div className="flex justify-between"><span>Tua nhanh 5 giây</span><kbd className="bg-white/10 px-1.5 py-0.5 rounded text-white font-mono text-[9px]">Right Arrow / L</kbd></div>
+                <div className="flex justify-between"><span>Tua lại 5 giây</span><kbd className="bg-white/10 px-1.5 py-0.5 rounded text-white font-mono text-[9px]">Left Arrow / J</kbd></div>
+              </>
+            )}
+            <div className="flex justify-between"><span>Tăng âm lượng 5%</span><kbd className="bg-white/10 px-1.5 py-0.5 rounded text-white font-mono text-[9px]">Up Arrow</kbd></div>
+            <div className="flex justify-between"><span>Giảm âm lượng 5%</span><kbd className="bg-white/10 px-1.5 py-0.5 rounded text-white font-mono text-[9px]">Down Arrow</kbd></div>
+            <div className="flex justify-between"><span>Bật / Tắt tiếng</span><kbd className="bg-white/10 px-1.5 py-0.5 rounded text-white font-mono text-[9px]">M</kbd></div>
+            <div className="flex justify-between"><span>Toàn màn hình</span><kbd className="bg-white/10 px-1.5 py-0.5 rounded text-white font-mono text-[9px]">F</kbd></div>
           </div>
+          <button 
+            onClick={() => setShowShortcutsModal(false)}
+            className="mt-6 w-full bg-[#ED2C25] text-white text-[11px] font-bold py-2 rounded-xl hover:bg-red-700 transition-colors"
+          >
+            Đóng
+          </button>
         </div>
-      )}
+      </div>
     </div>
   );
 }

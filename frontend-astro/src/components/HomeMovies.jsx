@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useDraggableScroll } from '../hooks/useDraggableScroll';
-import { fetchNguoncJson, getNguoncItems } from '../lib/nguoncApi';
+import { fetchNguoncJson, getNguoncItems, getOPhimImageUrl } from '../lib/nguoncApi';
 
 export default function HomeMovies() {
   const [movies, setMovies] = useState([]);
@@ -74,7 +74,7 @@ export default function HomeMovies() {
         {movies.map(movie => (
         <a key={movie.slug} href={`/movie-detail?slug=${movie.slug}`} className="group cursor-pointer flex-none w-[140px] md:w-[180px] snap-start" draggable="false">
           <div className="relative rounded-xl overflow-hidden aspect-[2/3] bg-[#1A1A1A] mb-3 border border-white/5 group-hover:border-[#ED2C25]/50 transition-colors">
-            <img src={movie.thumb_url} alt={movie.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" draggable="false" />
+            <img src={getOPhimImageUrl(movie.thumb_url || movie.poster_url)} alt={movie.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" draggable="false" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
               <div className="w-10 h-10 rounded-full bg-[#ED2C25] flex items-center justify-center text-white translate-y-4 group-hover:translate-y-0 transition-all duration-300 shadow-lg shadow-red-500/50">
                 <Play size={16} fill="currentColor" className="ml-1" />

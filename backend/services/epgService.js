@@ -5,7 +5,7 @@ const zlib = require('zlib');
 const { XMLParser } = require('fast-xml-parser');
 const config = require('../config');
 
-const DEFAULT_EPG_URL = 'https://vnepg.site/epg.xml';
+const DEFAULT_EPG_URL = 'https://epg.pw/xmltv/epg_VN.xml';
 const EPG_STALE_GRACE_MS = 2 * 60 * 60 * 1000;
 
 function normalizeKey(value) {

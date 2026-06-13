@@ -180,19 +180,19 @@ export default function MovieDetailContainer() {
             {movie.modified?.time && (
               <div><strong className="text-white/40">Cập nhật:</strong> <span className="text-white font-medium">{new Date(movie.modified.time).toLocaleDateString('vi-VN')}</span></div>
             )}
-            {movie.category && movie.category.length > 0 && (
+            {movie.category && Array.isArray(movie.category) && movie.category.length > 0 && (
               <div className="sm:col-span-2 md:col-span-3"><strong className="text-white/40">Thể loại:</strong> <span className="text-white font-medium">{movie.category.map(c => c.name).join(', ')}</span></div>
             )}
-            {movie.country && movie.country.length > 0 && (
+            {movie.country && Array.isArray(movie.country) && movie.country.length > 0 && (
               <div className="sm:col-span-2 md:col-span-3"><strong className="text-white/40">Quốc gia:</strong> <span className="text-white font-medium">{movie.country.map(c => c.name).join(', ')}</span></div>
             )}
-            {movie.alternative_names && movie.alternative_names.length > 0 && (
+            {movie.alternative_names && Array.isArray(movie.alternative_names) && movie.alternative_names.length > 0 && (
               <div className="sm:col-span-2 md:col-span-3"><strong className="text-white/40">Tên khác:</strong> <span className="text-white font-medium">{movie.alternative_names.join(', ')}</span></div>
             )}
-            {movie.actor && movie.actor.length > 0 && (
+            {movie.actor && Array.isArray(movie.actor) && movie.actor.length > 0 && (
               <div className="sm:col-span-2 md:col-span-3"><strong className="text-white/40">Diễn viên:</strong> <span className="text-white font-medium">{movie.actor.join(', ')}</span></div>
             )}
-            {movie.director && movie.director.length > 0 && (
+            {movie.director && Array.isArray(movie.director) && movie.director.length > 0 && (
               <div className="sm:col-span-2 md:col-span-3"><strong className="text-white/40">Đạo diễn:</strong> <span className="text-white font-medium">{movie.director.join(', ')}</span></div>
             )}
           </div>
