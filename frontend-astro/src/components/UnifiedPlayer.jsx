@@ -623,21 +623,22 @@ export default function UnifiedPlayer({
       {/* Click/Touch Overlay */}
       <div 
         className="absolute inset-0 z-10 cursor-pointer"
+        onTouchEnd={(e) => {
+          e.preventDefault();
+          setShowControls(prev => {
+            const nextVal = !prev;
+            if (nextVal) {
+              triggerControlsTimeout();
+            } else {
+              if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+            }
+            return nextVal;
+          });
+        }}
         onClick={(e) => {
+          if (isMobile) return;
           if (e.target !== e.currentTarget) return;
-          if (isMobile) {
-            setShowControls(prev => {
-              const nextVal = !prev;
-              if (nextVal) {
-                triggerControlsTimeout();
-              } else {
-                if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
-              }
-              return nextVal;
-            });
-          } else {
-            togglePlay();
-          }
+          togglePlay();
         }}
       />
 
@@ -645,7 +646,13 @@ export default function UnifiedPlayer({
       {(!isPlaying || showControls) && (
         <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
           <button 
+            onTouchEnd={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              togglePlay();
+            }}
             onClick={(e) => {
+              if (isMobile) return;
               e.stopPropagation();
               togglePlay();
             }}
