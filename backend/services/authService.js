@@ -10,7 +10,7 @@ class AuthService {
     // Tạo mã MD5 băm theo chuẩn Nginx Secure Link
     // Cấu trúc: "expires/channelIdIP secret"
     const secret = config.jwtSecret; 
-    const str = `${expires}/${channelId}${ip} ${secret}`;
+    const str = `${expires}/${channelId} ${secret}`;
     const hash = crypto.createHash('md5').update(str).digest('base64');
     
     // Nginx base64url encode format: thay thế +/ và bỏ =
