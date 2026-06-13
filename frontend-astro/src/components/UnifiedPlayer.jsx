@@ -50,9 +50,14 @@ export default function UnifiedPlayer({
     if (isMpegTs && mpegts.isSupported()) {
       // Dùng mpegts.js cho các luồng UDP/HTTP MPEG-TS (udpxy)
       mpegtsPlayer = mpegts.createPlayer({
-        type: 'mse',
+        type: 'mpegts', // Quan trọng: phải là mpegts chứ không phải mse
         isLive: true,
         url: url
+      }, {
+        enableWorker: true,
+        lazyLoad: false,
+        enableStashBuffer: false,
+        liveBufferLatencyChasing: true,
       });
       playerRef.current = mpegtsPlayer;
       

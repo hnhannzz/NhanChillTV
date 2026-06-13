@@ -61,13 +61,8 @@ router.post('/start/:channelId', async (req, res) => {
 
     // Direct mode: bypass FFmpeg. MPD/ClearKey must stay direct so Shaka can handle DRM.
     const isMpd = isMpdLikeChannel(channel);
-    const lowerUrl = String(channel.url).toLowerCase();
-    const isM3u8OrMpd = lowerUrl.includes('.m3u8') || lowerUrl.includes('.mpd');
-    
-    // Nếu là luồng UDP/MPEG-TS (không có đuôi .m3u8 hoặc .mpd), bắt buộc dùng FFmpeg để convert qua HLS do MSE không decode được H264 thiếu PPS/SPS
-    const forceTranscode = !isM3u8OrMpd && !channel.url.includes('youtube.com');
 
-    if ((config.directMode || isMpd) && !forceTranscode) {
+    if (config.directMode || isMpd) {
       let finalIsMpd = isMpd;
 
       // PRE-FETCH CHECK: Verify if the URL is actually MPD despite having m3u8 extension
