@@ -41,6 +41,7 @@ export default function UnifiedPlayer({
   // Seeking optimizations
   const [isSeeking, setIsSeeking] = useState(false);
   const [seekingTime, setSeekingTime] = useState(0);
+  const [showUnmuteHint, setShowUnmuteHint] = useState(false);
 
   // Settings & Custom Features State
   const [isPipSupported, setIsPipSupported] = useState(false);
@@ -143,8 +144,13 @@ export default function UnifiedPlayer({
       mpegtsPlayer.load();
       if (autoplay) {
         mpegtsPlayer.play().catch(err => {
-          console.warn('Autoplay prevented', err);
-          setIsPlaying(false);
+          console.warn('Autoplay unmuted prevented for mpegts, trying muted...', err);
+          if (videoRef.current) {
+            videoRef.current.muted = true;
+            setIsMuted(true);
+            setShowUnmuteHint(true);
+            videoRef.current.play().catch(() => {});
+          }
         });
       }
       onReady?.(null);
@@ -176,8 +182,13 @@ export default function UnifiedPlayer({
 
       if (autoplay) {
         videoRef.current.play().catch(err => {
-          console.warn('Native autoplay prevented', err);
-          setIsPlaying(false);
+          console.warn('Native HLS autoplay unmuted prevented, trying muted...', err);
+          if (videoRef.current) {
+            videoRef.current.muted = true;
+            setIsMuted(true);
+            setShowUnmuteHint(true);
+            videoRef.current.play().catch(() => {});
+          }
         });
       }
       onReady?.(null);
@@ -230,8 +241,13 @@ export default function UnifiedPlayer({
           await shakaPlayer.load(url, initialTime);
           if (autoplay) {
             videoRef.current.play().catch(() => {
-              console.warn('Autoplay prevented');
-              setIsPlaying(false);
+              console.warn('Shaka autoplay unmuted prevented, trying muted...');
+              if (videoRef.current) {
+                videoRef.current.muted = true;
+                setIsMuted(true);
+                setShowUnmuteHint(true);
+                videoRef.current.play().catch(() => {});
+              }
             });
           }
           
@@ -417,6 +433,7 @@ export default function UnifiedPlayer({
 
   const togglePlay = () => {
     if (videoRef.current) {
+      setShowUnmuteHint(false);
       if (isPlaying) videoRef.current.pause();
       else videoRef.current.play().catch(e => console.warn('Play request failed/blocked:', e));
     }
@@ -424,6 +441,7 @@ export default function UnifiedPlayer({
 
   const toggleMute = () => {
     if (videoRef.current) {
+      setShowUnmuteHint(false);
       videoRef.current.muted = !isMuted;
     }
   };
@@ -653,6 +671,24 @@ export default function UnifiedPlayer({
         </div>
       )}
 
+      {/* Unmute Hint toast */}
+      {showUnmuteHint && isMuted && isPlaying && (
+        <div 
+          onClick={(e) => {
+            e.stopPropagation();
+            if (videoRef.current) {
+              videoRef.current.muted = false;
+              setIsMuted(false);
+            }
+            setShowUnmuteHint(false);
+          }}
+          className="absolute top-16 left-1/2 -translate-x-1/2 z-45 bg-[#ED2C25] text-white px-4 py-2.5 rounded-full shadow-2xl text-[10px] sm:text-xs font-black tracking-wide flex items-center gap-2 animate-bounce cursor-pointer border border-white/20 pointer-events-auto"
+        >
+          <VolumeX size={14} className="animate-pulse" />
+          <span>CHẠM ĐỂ BẬT ÂM THANH</span>
+        </div>
+      )}
+
       {/* Custom Controls UI */}
       <div 
         className={`absolute inset-0 z-20 pointer-events-none transition-opacity duration-300 flex flex-col justify-between ${showControls || !isPlaying ? 'opacity-100' : 'opacity-0'}`}
@@ -660,13 +696,13 @@ export default function UnifiedPlayer({
         {/* Top Gradient & Title */}
         <div className="bg-gradient-to-b from-black/80 to-transparent pt-4 pb-12 px-6 flex justify-between items-start pointer-events-auto">
           <div>
-            <h2 className="text-white font-bold text-lg md:text-xl drop-shadow-md">{title}</h2>
-            {subTitle && <p className="text-white/80 text-sm drop-shadow-md">{subTitle}</p>}
+            <h2 className="text-white font-bold text-base md:text-xl drop-shadow-md">{title}</h2>
+            {subTitle && <p className="text-white/80 text-xs md:text-sm drop-shadow-md">{subTitle}</p>}
           </div>
         </div>
 
         {/* Bottom Gradient & Controls */}
-        <div className="bg-gradient-to-t from-black/90 via-black/50 to-transparent pt-12 pb-4 px-6 pointer-events-auto">
+        <div className="bg-gradient-to-t from-black/90 via-black/50 to-transparent pt-12 pb-3 md:pb-4 px-3 md:px-6 pointer-events-auto">
           {/* Progress Bar */}
           {!isLiveStream && (
             <div className="group/progress relative flex items-center h-4 cursor-pointer mb-2">
@@ -696,7 +732,7 @@ export default function UnifiedPlayer({
           )}
 
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 md:gap-4">
               {/* Skip backward 5s */}
               {!isLiveStream && (
                 <button
@@ -766,13 +802,13 @@ export default function UnifiedPlayer({
                   TRỰC TIẾP (LIVE)
                 </span>
               ) : (
-                <span className="text-white/90 text-sm font-medium tracking-wide">
+                <span className="text-white/90 text-xs md:text-sm font-medium tracking-wide">
                   {formatTime(isSeeking ? seekingTime : currentTime)} <span className="text-white/40 mx-1">/</span> {formatTime(duration)}
                 </span>
               )}
             </div>
 
-            <div className="flex items-center gap-5">
+            <div className="flex items-center gap-2.5 md:gap-5">
               {onNextEpisode && (
                 <button onClick={onNextEpisode} className="flex items-center gap-1.5 text-white/80 hover:text-white transition-colors focus:outline-none group/btn">
                   <SkipForward size={20} className="group-hover/btn:scale-110 transition-transform" />
@@ -781,7 +817,7 @@ export default function UnifiedPlayer({
               )}
               
               {onCinemaMode && (
-                <button onClick={onCinemaMode} className="flex items-center gap-1.5 text-white/80 hover:text-white transition-colors focus:outline-none group/btn" title="Tắt đèn">
+                <button onClick={onCinemaMode} className="hidden sm:flex items-center gap-1.5 text-white/80 hover:text-white transition-colors focus:outline-none group/btn" title="Tắt đèn">
                   <LightbulbOff size={20} className="group-hover/btn:text-yellow-400 transition-colors" />
                 </button>
               )}
