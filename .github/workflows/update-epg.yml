@@ -14,10 +14,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Download EPG from vnepg.site
+      - name: Download EPG Data with Fallback
         run: |
           mkdir -p backend/data
-          curl -L -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36" -o backend/data/epg.xml.gz https://vnepg.site/epg.xml.gz
+          echo "Attempting to download EPG from vnepg.site..."
+          if curl -f -L -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36" -o backend/data/epg.xml.gz https://vnepg.site/epg.xml.gz; then
+            echo "Successfully downloaded from vnepg.site"
+          else
+            echo "vnepg.site blocked or failed. Falling back to epg.pw..."
+            if curl -f -L -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -o epg_VN.xml https://epg.pw/xmltv/epg_VN.xml; then
+              echo "Successfully downloaded epg_VN.xml from epg.pw. Compressing..."
+              gzip -c epg_VN.xml > backend/data/epg.xml.gz
+              rm epg_VN.xml
+            else
+              echo "All EPG sources failed to download in workflow."
+              exit 0
+            fi
+          fi
 
       - name: Commit and push changes
         run: |
