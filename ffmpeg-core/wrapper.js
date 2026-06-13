@@ -39,14 +39,14 @@ class FFmpegWrapper {
         if (!isResolved) {
           isResolved = true;
           console.warn(`[FFprobe] Timeout for ${channelId}, using fallback`);
-          resolve({ videoCodec: 'h264', audioCodec: 'aac', fieldOrder: 'progressive', fps: 25 });
+          resolve({ videoCodec: 'h264', audioCodec: 'unknown', fieldOrder: 'progressive', fps: 25 });
         }
       }, 2000);
 
       const ffprobeExe = config.ffprobeBin;
       if (path.isAbsolute(ffprobeExe) && !fs.existsSync(ffprobeExe)) {
         clearTimeout(timeout);
-        return resolve({ videoCodec: 'h264', audioCodec: 'aac', fieldOrder: 'progressive', fps: 25 });
+        return resolve({ videoCodec: 'h264', audioCodec: 'unknown', fieldOrder: 'progressive', fps: 25 });
       }
 
       const args = [
@@ -96,7 +96,7 @@ class FFmpegWrapper {
           resolve({ videoCodec: vCodec, audioCodec: aCodec, fieldOrder: fOrder, fps: fps });
         } catch (e) {
           console.warn(`[FFprobe] Parse error for ${channelId}, using fallback`);
-          resolve({ videoCodec: 'h264', audioCodec: 'aac', fieldOrder: 'progressive', fps: 25 });
+          resolve({ videoCodec: 'h264', audioCodec: 'unknown', fieldOrder: 'progressive', fps: 25 });
         }
       });
     });

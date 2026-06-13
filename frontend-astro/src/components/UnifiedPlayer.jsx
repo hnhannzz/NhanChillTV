@@ -90,10 +90,20 @@ export default function UnifiedPlayer({
       shakaPlayer = new shaka.Player(videoRef.current);
       playerRef.current = shakaPlayer;
 
-      const drmConfig = clearKey ? {
-        clearKeys: {
-          [clearKey.split(':')[0]]: clearKey.split(':')[1]
+      let clearKeysObj = {};
+      if (clearKey) {
+        if (typeof clearKey === 'string') {
+          if (clearKey.includes(':')) {
+            const [kid, key] = clearKey.split(':');
+            clearKeysObj[kid] = key;
+          }
+        } else if (typeof clearKey === 'object') {
+          clearKeysObj = clearKey;
         }
+      }
+
+      const drmConfig = Object.keys(clearKeysObj).length > 0 ? {
+        clearKeys: clearKeysObj
       } : undefined;
 
       shakaPlayer.configure({

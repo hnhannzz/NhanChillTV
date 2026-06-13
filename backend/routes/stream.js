@@ -62,7 +62,27 @@ router.post('/start/:channelId', async (req, res) => {
     // Direct mode: bypass FFmpeg. MPD/ClearKey must stay direct so Shaka can handle DRM.
     const isMpd = isMpdLikeChannel(channel);
 
-    if (config.directMode || isMpd) {
+    let shouldGoDirect = config.directMode || isMpd;
+
+    // Nếu là stream MPEG-TS (có vẻ là UDP/HTTP-TS) và không phải MPD, kiểm tra xem có cần transcode không
+    if (shouldGoDirect && !isMpd) {
+      const lowerUrl = String(channel.url).toLowerCase();
+      const isMpegTs = !lowerUrl.includes('.m3u8') && !lowerUrl.includes('.mpd') && !lowerUrl.includes('.mp4');
+      if (isMpegTs) {
+        try {
+          const info = await ffmpegWrapper.getStreamInfo(channelId, channel);
+          if (info.audioCodec === 'mp2' || info.audioCodec === 'mp3' || info.audioCodec === 'ac3' || info.audioCodec === 'unknown') {
+            shouldGoDirect = false;
+            console.log(`[Stream] Force transcoding for channel ${channelId} due to incompatible audio codec: ${info.audioCodec}`);
+          }
+        } catch (err) {
+          console.warn(`[Stream] Probe failed for ${channelId}, forcing transcode:`, err.message);
+          shouldGoDirect = false;
+        }
+      }
+    }
+
+    if (shouldGoDirect) {
       let finalIsMpd = isMpd;
 
       // PRE-FETCH CHECK: Verify if the URL is actually MPD despite having m3u8 extension
