@@ -124,6 +124,8 @@ class FFmpegWrapper {
       '-loglevel', 'warning',
       '-user_agent', userAgent,
       '-fflags', '+genpts+igndts+discardcorrupt',
+      '-thread_queue_size', '1024',
+      '-use_wallclock_as_timestamps', '1'
     ];
 
     if (String(udpUrl).startsWith('udp://')) {
@@ -139,16 +141,16 @@ class FFmpegWrapper {
     if (info.audioCodec === 'aac') {
       args.push('-c:a', 'copy'); // Không cần encode lại nếu đã là AAC
     } else {
-      args.push('-c:a', 'aac');
+      args.push('-c:a', 'aac', '-ar', '44100', '-ac', '2');
     }
 
     // HLS output
     args.push(
       '-f', 'hls',
-      '-hls_time', '4', // Segment 4s for stability
-      '-hls_list_size', '15',
+      '-hls_time', '2', // Giảm xuống 2s để giảm độ trễ và giảm buffering
+      '-hls_list_size', '6', // Giữ 6 phân đoạn trong playlist (12s buffer)
       '-hls_flags', 'delete_segments',
-      '-hls_segment_type', 'mpegts' // Use standard TS for max compatibility
+      '-hls_segment_type', 'mpegts' // Dùng mpegts cho độ tương thích tối đa
     );
 
     let hlsFile = 'index.m3u8';
