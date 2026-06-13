@@ -7,6 +7,7 @@ const si = require('systeminformation');
 const config = require('./config');
 const ffmpegWrapper = require('../ffmpeg-core/wrapper');
 const m3uManager = require('./services/m3uManager');
+const transcode247Manager = require('./services/transcode247Manager');
 
 const app = express();
 const server = http.createServer(app);
@@ -142,6 +143,10 @@ setInterval(async () => {
 // Start server
 m3uManager.refreshAll().then(() => {
   m3uManager.startAutoRefresh(Number(process.env.M3U_REFRESH_INTERVAL_MS || 60 * 60 * 1000));
+  
+  // Khởi động trình quản lý transcode 24/7
+  transcode247Manager.start();
+
   server.listen(config.apiPort, () => {
     console.log(`[Server] NhanChillTV ${config.version} running in ${config.mode} mode on port ${config.apiPort}`);
     console.log(`[FFmpeg] Binary check: ${ffmpegWrapper.checkFFmpegExists()}`);

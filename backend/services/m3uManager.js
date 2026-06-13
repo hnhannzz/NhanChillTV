@@ -88,6 +88,10 @@ class M3UManager {
       this.lastError = errors.length ? errors.join('; ') : null;
       this.sourceResults = sourceResults;
       console.log(`[M3U Manager] Refresh complete. Total unique channels: ${this.channels.length}`);
+      
+      // Khởi chạy tiến trình dò quét ngầm tuần tự các kênh udpxy nghi vấn
+      setTimeout(() => this.probeSuspectChannels().catch(err => console.error('[M3U Manager] Probe suspects error:', err.message)), 2000);
+      
       return this.getStatus();
       } catch (err) {
         this.lastError = err.message;
@@ -111,6 +115,36 @@ class M3UManager {
       });
     }, intervalMs);
     this.refreshTimer.unref?.();
+  }
+
+  async probeSuspectChannels() {
+    const suspects = this.channels.filter(ch => {
+      const lower = String(ch.url || '').toLowerCase();
+      return lower.includes('/tqvudp/') || lower.includes('/udp/') || lower.includes('.ts') || lower.startsWith('udp://');
+    });
+
+    if (suspects.length === 0) return;
+    console.log(`[M3U Manager] Found ${suspects.length} suspected udpxy/MPEG-TS channels. Starting throttled background probe...`);
+
+    const ffmpegWrapper = require('../../ffmpeg-core/wrapper');
+
+    for (const ch of suspects) {
+      // Dò quét tuần tự từng kênh cách nhau 3 giây để tránh làm vọt CPU của VPS 1GB RAM
+      try {
+        const info = await ffmpegWrapper.getStreamInfo(ch.id, ch);
+        ch.audioCodec = info.audioCodec;
+        ch.videoCodec = info.videoCodec;
+        if (info.audioCodec === 'mp2') {
+          ch.isUdpxyMp2 = true;
+          console.log(`[M3U Manager] Detected udpxy+mp2 channel: ${ch.name} (${ch.id})`);
+        }
+      } catch (err) {
+        console.warn(`[M3U Manager] Background probe failed for ${ch.name}:`, err.message);
+      }
+      await new Promise(resolve => setTimeout(resolve, 3000));
+    }
+
+    console.log(`[M3U Manager] Background probe completed.`);
   }
 
   getStatus() {

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Activity, CalendarDays, ChevronDown, ChevronUp, CircleStop, Eye, EyeOff,
   Copy, Gauge, ListVideo, LogOut, Pencil, Plus, Radio, RefreshCw, RotateCcw,
-  KeyRound, Save, Server, Settings, Trash2, UploadCloud, X,
+  KeyRound, Save, Server, Settings, Trash2, UploadCloud, X, Cpu
 } from 'lucide-react';
 
 const API_BASE = '/api';
@@ -141,7 +141,7 @@ export default function AdminDashboard() {
 
   const tabs = [
     ['dashboard', 'Tổng quan', Gauge], ['events', 'Sự kiện', CalendarDays], ['m3u', 'Nguồn M3U', Radio],
-    ['channels', 'Kênh IPTV', ListVideo], ['streams', 'Luồng phát', Activity], ['system', 'Hệ thống', Settings], ['security', 'Mật khẩu', KeyRound],
+    ['channels', 'Kênh IPTV', ListVideo], ['transcode247', 'Chuyển mã 24/7', Cpu], ['streams', 'Luồng phát', Activity], ['system', 'Hệ thống', Settings], ['security', 'Mật khẩu', KeyRound],
   ];
 
   return (
@@ -174,6 +174,7 @@ export default function AdminDashboard() {
             if (window.confirm(`Xóa nguồn "${source.name}"?`)) runAction(() => adminRequest(`/admin/m3u-sources/${source.id}`, { method: 'DELETE' }), 'Đã xóa nguồn M3U.');
           }} onRefresh={() => runAction(() => adminRequest('/admin/m3u-sources/refresh', { method: 'POST' }), 'Đã cập nhật danh sách M3U.')} />}
           {activeTab === 'channels' && <ChannelsTab channels={channels} settings={settings} setSettings={updater => { setSettings(updater); setSettingsDirty(true); }} search={channelSearch} setSearch={setChannelSearch} busy={busy} onSave={() => runAction(async () => { await adminRequest('/admin/iptv-settings', { method: 'POST', body: JSON.stringify(settings) }); setSettingsDirty(false); }, 'Đã lưu cấu hình IPTV.')} />}
+          {activeTab === 'transcode247' && <Transcode247Tab channels={channels} settings={settings} setSettings={setSettings} busy={busy} adminRequest={adminRequest} runAction={runAction} streams={streams} />}
           {activeTab === 'streams' && <StreamsTab streams={streams} onStop={stream => runAction(() => adminRequest('/admin/active-streams/kill', { method: 'POST', body: JSON.stringify({ id: stream.id }) }), 'Đã dừng luồng phát.')} />}
           {activeTab === 'system' && <SystemTab settings={systemSettings} setSettings={setSystemSettings} busy={busy} onSave={() => runAction(async () => { await adminRequest('/admin/system-settings', { method: 'POST', body: JSON.stringify(systemSettings) }); }, 'Đã lưu cấu hình hệ thống.')} />}
           {activeTab === 'security' && <PasswordTab busy={busy} onChange={changeAdminPassword} />}
@@ -357,9 +358,164 @@ function EventModal({ event, channels, token, onClose, onSaved }) {
   </div><div className="grid shrink-0 grid-cols-2 gap-2 border-t border-white/10 px-4 py-3 sm:flex sm:justify-end sm:px-5 sm:py-4"><button type="button" onClick={onClose} className="rounded-md px-4 py-2 hover:bg-white/5">Hủy</button><button disabled={saving} className="rounded-md bg-[#ED2C25] px-5 py-2 font-bold disabled:opacity-50">{saving ? 'Đang lưu...' : 'Lưu sự kiện'}</button></div></form></div>;
 }
 
+function Transcode247Tab({ channels, settings, setSettings, busy, adminRequest, runAction, streams }) {
+  const [search, setSearch] = useState('');
+  const transcode247List = settings.transcode247 || [];
+
+  const suggestedChannels = useMemo(() => {
+    return channels.filter(ch => ch.isUdpxyMp2 || ch.audioCodec === 'mp2');
+  }, [channels]);
+
+  const otherChannels = useMemo(() => {
+    return channels.filter(ch => 
+      !ch.isUdpxyMp2 && 
+      ch.audioCodec !== 'mp2' &&
+      ch.name.toLowerCase().includes(search.toLowerCase())
+    );
+  }, [channels, search]);
+
+  const handleToggle247 = async (channelId) => {
+    await runAction(async () => {
+      const res = await adminRequest('/admin/iptv-settings/transcode247/toggle', {
+        method: 'POST',
+        body: JSON.stringify({ channelId })
+      });
+      if (res.success) {
+        setSettings(prev => ({ ...prev, transcode247: res.data }));
+      }
+    }, 'Đã cập nhật cấu hình chuyển mã 24/7.');
+  };
+
+  return (
+    <section>
+      <SectionHeader 
+        title="Chuyển mã 24/7" 
+        subtitle="Quản lý các kênh IPTV tự động chuyển mã liên tục 24/7 (Đặc biệt dành cho các kênh Udpxy & MP2 audio)" 
+      />
+
+      <div className="mt-5 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4 text-sm text-yellow-200">
+        <p className="font-semibold flex items-center gap-2">
+          <Cpu size={16} /> Lưu ý tối ưu hóa VPS:
+        </p>
+        <p className="mt-1 text-white/70 text-xs">
+          Hệ thống chạy chuyển mã 24/7 trực tiếp trên ổ cứng và tự động giới hạn chỉ giữ lại tối đa 4 segment HLS (~8 giây bộ đệm, dung lượng &lt; 5MB/kênh). 
+          Không sử dụng RAM Disk giúp tiết kiệm tối đa tài nguyên cho VPS có cấu hình RAM thấp (1GB).
+        </p>
+      </div>
+
+      <div className="mt-6">
+        <h2 className="text-lg font-bold mb-3 flex items-center gap-2">
+          <span className="flex h-2 w-2 rounded-full bg-green-400" />
+          Kênh Udpxy & MP2 Phát Hiện Được ({suggestedChannels.length})
+        </h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {suggestedChannels.length > 0 ? (
+            suggestedChannels.map(ch => {
+              const isActive = transcode247List.includes(ch.id);
+              const isRunning = streams.some(s => s.id === ch.id);
+              return (
+                <div key={ch.id} className="rounded-lg border border-white/10 bg-[#151515] p-4 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center gap-3">
+                      <img src={ch.logo || '/poster.jpg'} className="h-8 w-12 object-contain rounded bg-black/20" alt="" />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-bold text-sm">{ch.name}</div>
+                        <div className="text-xs text-white/40 truncate">{ch.group}</div>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      <span className="rounded bg-white/5 px-2 py-0.5 text-[10px] text-white/60">
+                        Codec: {ch.videoCodec || 'h264'} / {ch.audioCodec || 'mp2'}
+                      </span>
+                      {isRunning && (
+                        <span className="rounded bg-green-500/20 px-2 py-0.5 text-[10px] text-green-300 font-medium animate-pulse">
+                          Đang chạy (Active)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between">
+                    <span className="text-xs text-white/60">Chuyển mã 24/7</span>
+                    <button
+                      disabled={busy}
+                      onClick={() => handleToggle247(ch.id)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        isActive ? 'bg-[#ED2C25]' : 'bg-white/10'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          isActive ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="sm:col-span-2 lg:col-span-3">
+              <Empty text="Không phát hiện kênh udpxy/MP2 nào cần transcode." />
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-8">
+        <h2 className="text-lg font-bold mb-3">Tất cả các kênh khác</h2>
+        <div className="rounded-lg border border-white/10 bg-[#151515] p-4">
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Tìm kiếm kênh IPTV khác để cấu hình..."
+            className="mb-4 w-full rounded-md border border-white/10 bg-black/25 px-3 py-2 text-sm outline-none focus:border-[#ED2C25]"
+          />
+          <div className="max-h-[400px] overflow-y-auto space-y-2 pr-1">
+            {otherChannels.slice(0, 100).map(ch => {
+              const isActive = transcode247List.includes(ch.id);
+              const isRunning = streams.some(s => s.id === ch.id);
+              return (
+                <div key={ch.id} className="flex items-center justify-between border-b border-white/5 pb-2 last:border-0 last:pb-0">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <img src={ch.logo || '/poster.jpg'} className="h-7 w-10 object-contain rounded" alt="" />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-bold text-xs">{ch.name}</div>
+                      <div className="text-[10px] text-white/45 truncate">{ch.group}</div>
+                    </div>
+                    {isRunning && (
+                      <span className="rounded bg-green-500/20 px-1.5 py-0.5 text-[9px] text-green-300 font-medium">
+                        Active
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    disabled={busy}
+                    type="button"
+                    onClick={() => handleToggle247(ch.id)}
+                    className={`px-3 py-1 rounded text-xs font-semibold ${
+                      isActive 
+                        ? 'bg-[#ED2C25] text-white' 
+                        : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    {isActive ? 'Tắt 24/7' : 'Bật 24/7'}
+                  </button>
+                </div>
+              );
+            })}
+            {otherChannels.length === 0 && <Empty text="Không tìm thấy kênh nào." />}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function SectionHeader({ title, subtitle, action }) { return <div className="flex flex-wrap items-center justify-between gap-3"><div className="min-w-0"><h1 className="text-xl font-bold sm:text-2xl">{title}</h1><p className="text-xs text-white/45 sm:text-sm">{subtitle}</p></div>{action && <div className="w-full sm:w-auto [&>button]:w-full [&>button]:justify-center sm:[&>button]:w-auto">{action}</div>}</div>; }
 function Panel({ title, children }) { return <div className="rounded-lg border border-white/10 bg-[#151515] p-4"><h2 className="mb-3 font-bold">{title}</h2>{children}</div>; }
 function InfoRow({ label, value }) { return <div className="flex justify-between border-b border-white/5 py-2 text-sm last:border-0"><span className="text-white/45">{label}</span><span>{value}</span></div>; }
 function Empty({ text }) { return <div className="p-10 text-center text-sm text-white/45">{text}</div>; }
 function Field({ label, children }) { return <label className="block text-sm"><span className="mb-1.5 block text-white/55">{label}</span>{children}</label>; }
 function formatBytes(value) { const bytes = Number(value || 0); if (!bytes) return '--'; return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`; }
+

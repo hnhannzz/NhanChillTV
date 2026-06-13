@@ -30,7 +30,8 @@ class Database {
         iptvSettings: {
           hiddenGroups: [],
           hiddenChannels: [],
-          groupOrder: []
+          groupOrder: [],
+          transcode247: []
         }
       });
     } else {
@@ -53,8 +54,12 @@ class Database {
         data.iptvSettings = {
           hiddenGroups: [],
           hiddenChannels: [],
-          groupOrder: []
+          groupOrder: [],
+          transcode247: []
         };
+        this.write(data);
+      } else if (!data.iptvSettings.transcode247) {
+        data.iptvSettings.transcode247 = [];
         this.write(data);
       }
       if (!data.systemSettings) {

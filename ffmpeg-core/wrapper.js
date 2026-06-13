@@ -148,7 +148,7 @@ class FFmpegWrapper {
     args.push(
       '-f', 'hls',
       '-hls_time', '2', // Giảm xuống 2s để giảm độ trễ và giảm buffering
-      '-hls_list_size', '6', // Giữ 6 phân đoạn trong playlist (12s buffer)
+      '-hls_list_size', '4', // Giữ 4 phân đoạn trong playlist (8s buffer, tối ưu hóa đĩa)
       '-hls_flags', 'delete_segments',
       '-hls_segment_type', 'mpegts' // Dùng mpegts cho độ tương thích tối đa
     );
@@ -212,7 +212,18 @@ class FFmpegWrapper {
 
   cleanupInactive() {
     const now = Date.now();
+    let list247 = [];
+    try {
+      const Database = require('../backend/db/database');
+      const db = new Database(config.dbPath);
+      list247 = db.getIptvSettings().transcode247 || [];
+    } catch (e) {}
+
     for (const [channelId, session] of this.processes.entries()) {
+      if (list247.includes(channelId)) {
+        // Bỏ qua dọn dẹp đối với kênh transcode 24/7
+        continue;
+      }
       if (now - session.lastAccess > config.streamTimeout) {
         console.log(`[Cleanup] Stopping inactive stream: ${channelId}`);
         this.stopTranscode(channelId);

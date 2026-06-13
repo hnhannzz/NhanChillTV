@@ -317,6 +317,33 @@ router.post('/iptv-settings', auth, (req, res) => {
   res.json({ success: true, data: updated });
 });
 
+router.post('/iptv-settings/transcode247/toggle', auth, (req, res) => {
+  const { channelId } = req.body;
+  if (!channelId) {
+    return res.status(400).json({ success: false, error: 'Channel ID is required' });
+  }
+
+  const settings = db.getIptvSettings();
+  if (!settings.transcode247) settings.transcode247 = [];
+
+  const idx = settings.transcode247.indexOf(channelId);
+  if (idx === -1) {
+    settings.transcode247.push(channelId);
+  } else {
+    settings.transcode247.splice(idx, 1);
+    // Khi tắt 24/7, dừng chuyển mã của kênh luôn
+    ffmpegWrapper.stopTranscode(channelId);
+  }
+
+  db.updateIptvSettings(settings);
+
+  // Gọi quản lý kiểm tra tức thời để khởi động/dừng luồng
+  const transcode247Manager = require('../services/transcode247Manager');
+  transcode247Manager.checkAndMaintainStreams().catch(() => {});
+
+  res.json({ success: true, data: settings.transcode247 });
+});
+
 // System Settings
 router.get('/system-settings', auth, (req, res) => {
   res.json({ success: true, data: db.getSystemSettings() });
