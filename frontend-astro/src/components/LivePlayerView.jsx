@@ -26,7 +26,7 @@ function isUnsupportedAppleDrmBrowser() {
   return isIOS || isSafari;
 }
 
-export default function LivePlayerView({ channelId, streamParam }) {
+export default function LivePlayerView({ channelId, streamParam, channelName }) {
   const [streamUrl, setStreamUrl] = useState(null);
   const [fallbackUrls, setFallbackUrls] = useState([]);
   const [clearKey, setClearKey] = useState(null);
@@ -189,7 +189,7 @@ export default function LivePlayerView({ channelId, streamParam }) {
         clearKey={clearKey}
         isMpd={isMpd}
         className="w-full h-full"
-        title={channelId || streamParam}
+        title={channelName || channelId || streamParam}
         subTitle="Live TV"
       />
       <div className="pointer-events-none absolute right-4 top-4 z-50 flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">

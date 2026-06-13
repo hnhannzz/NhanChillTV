@@ -200,7 +200,7 @@ export default function TvPageContainer() {
         <div className="hidden lg:block">{eventHeading}</div>
         <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,68fr)_minmax(340px,32fr)]">
           <div className={`fixed left-0 right-0 z-50 w-full overflow-hidden bg-black shadow-2xl transition-[top] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] lg:static lg:z-auto lg:rounded-lg lg:border lg:border-white/10 ${isHeaderHidden ? 'top-0' : 'top-[64px]'}`} style={{ willChange: 'top' }}>
-            {(currentChannelId || streamParam) ? <LivePlayerView key={`${currentChannelId || streamParam}-${activeEventStream}`} channelId={currentChannelId} streamParam={streamParam} /> : <div className="flex aspect-video items-center justify-center text-sm text-white/45">Đang chờ nguồn phát sự kiện...</div>}
+            {(currentChannelId || streamParam) ? <LivePlayerView key={`${currentChannelId || streamParam}-${activeEventStream}`} channelId={currentChannelId} streamParam={streamParam} channelName={eventData ? `${eventData.title} - ${eventData.streams?.[activeEventStream]?.name || 'Luồng trực tiếp'}` : currentChannel?.name} /> : <div className="flex aspect-video items-center justify-center text-sm text-white/45">Đang chờ nguồn phát sự kiện...</div>}
           </div>
           <div className="aspect-video w-full lg:hidden" />
           <div className="px-4 lg:hidden">{eventHeading}</div>
@@ -217,7 +217,7 @@ export default function TvPageContainer() {
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] xl:grid-cols-[minmax(0,68fr)_minmax(340px,32fr)]">
         <div className={`fixed left-0 right-0 z-50 w-full overflow-hidden bg-black shadow-2xl transition-[top] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] lg:static lg:z-auto lg:rounded-lg lg:border lg:border-white/10 ${isHeaderHidden ? 'top-0' : 'top-[64px]'}`} style={{ willChange: 'top' }}>
           {(currentChannelId || streamParam) ? (
-            <LivePlayerView key={currentChannelId || streamParam} channelId={currentChannelId} streamParam={streamParam} />
+            <LivePlayerView key={currentChannelId || streamParam} channelId={currentChannelId} streamParam={streamParam} channelName={currentChannel?.name} />
           ) : (
             <div className="aspect-video w-full animate-pulse bg-[#121212]" />
           )}
@@ -260,7 +260,29 @@ export default function TvPageContainer() {
 
       <div className="px-4 md:px-0 flex flex-col gap-6">
         <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-          <div className="hide-scrollbar flex w-full gap-3 overflow-x-auto pb-2 md:w-auto snap-x">
+          <div 
+            className="hide-scrollbar flex w-full gap-3 overflow-x-auto pb-2 md:w-auto snap-x cursor-grab active:cursor-grabbing select-none"
+            onMouseDown={(e) => {
+              const el = e.currentTarget;
+              el.dataset.isDown = 'true';
+              el.dataset.startX = e.pageX - el.offsetLeft;
+              el.dataset.scrollLeft = el.scrollLeft;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.dataset.isDown = 'false';
+            }}
+            onMouseUp={(e) => {
+              e.currentTarget.dataset.isDown = 'false';
+            }}
+            onMouseMove={(e) => {
+              const el = e.currentTarget;
+              if (el.dataset.isDown !== 'true') return;
+              e.preventDefault();
+              const x = e.pageX - el.offsetLeft;
+              const walk = (x - parseFloat(el.dataset.startX)) * 1.5;
+              el.scrollLeft = parseFloat(el.dataset.scrollLeft) - walk;
+            }}
+          >
             <FilterButton active={filter === 'all'} onClick={() => setFilter('all')}>Tất cả</FilterButton>
             <FilterButton active={filter === 'favorites'} onClick={() => setFilter('favorites')}>Yêu thích</FilterButton>
             {groups.map(group => <FilterButton key={group} active={filter === group} onClick={() => setFilter(group)}>{group}</FilterButton>)}

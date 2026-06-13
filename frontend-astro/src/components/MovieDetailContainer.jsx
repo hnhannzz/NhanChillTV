@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Heart, Play, Send } from 'lucide-react';
-import { fetchNguoncJson } from '../lib/nguoncApi';
+import { fetchNguoncJson, getOPhimImageUrl } from '../lib/nguoncApi';
 import MovieStreamPlayer from './MovieStreamPlayer';
 
 export default function MovieDetailContainer() {
@@ -156,7 +156,7 @@ export default function MovieDetailContainer() {
       
       {/* 1. Movie Info */}
       <div className="flex flex-col md:flex-row gap-6 items-start">
-        <img src={movie.thumb_url || movie.poster_url} alt={movie.name} className="w-[150px] md:w-[200px] object-cover rounded-xl border border-white/10 shadow-lg" />
+        <img src={getOPhimImageUrl(movie.thumb_url || movie.poster_url)} alt={movie.name} className="w-[150px] md:w-[200px] object-cover rounded-xl border border-white/10 shadow-lg" />
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-2">
             <span className="bg-[#ED2C25] text-white text-[10px] font-bold px-2 py-1 rounded">{movie.quality || 'HD'}</span>
@@ -165,18 +165,35 @@ export default function MovieDetailContainer() {
           <h1 className="text-2xl md:text-3xl font-bold text-white mb-1">{movie.name}</h1>
           <h2 className="text-lg text-white/50 mb-4">{movie.original_name}</h2>
           
-          <div className="grid grid-cols-2 md:flex md:gap-8 gap-y-2 text-sm text-white/70 mb-6 flex-wrap">
-            <div><strong>Trạng thái:</strong> {movie.episode_current || movie.current_episode}</div>
-            <div><strong>Ngôn ngữ:</strong> {movie.lang || movie.language}</div>
-            <div><strong>Thời lượng:</strong> {movie.time}</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-3 text-sm text-white/75 mb-6 leading-relaxed bg-white/5 p-4 rounded-xl border border-white/5">
+            <div><strong className="text-white/40">Trạng thái:</strong> <span className="text-white font-medium">{movie.episode_current || movie.current_episode}</span></div>
+            <div><strong className="text-white/40">Số tập:</strong> <span className="text-white font-medium">{movie.episode_total || 'N/A'}</span></div>
+            <div><strong className="text-white/40">Ngôn ngữ:</strong> <span className="text-white font-medium">{movie.lang || movie.language}</span></div>
+            <div><strong className="text-white/40">Thời lượng:</strong> <span className="text-white font-medium">{movie.time || 'N/A'}</span></div>
+            <div><strong className="text-white/40">Năm phát hành:</strong> <span className="text-white font-medium">{movie.year || 'N/A'}</span></div>
             {(movie.tmdb?.vote_average || movie.imdb?.vote_average) ? (
-              <div><strong>Điểm:</strong> {movie.tmdb?.vote_average ? `TMDB ${movie.tmdb.vote_average}` : `IMDB ${movie.imdb.vote_average}`}</div>
+              <div><strong className="text-white/40">Điểm số:</strong> <span className="text-white font-medium">{movie.tmdb?.vote_average ? `TMDB ${movie.tmdb.vote_average}` : `IMDB ${movie.imdb.vote_average}`}</span></div>
             ) : null}
+            {movie.created?.time && (
+              <div><strong className="text-white/40">Ngày đăng:</strong> <span className="text-white font-medium">{new Date(movie.created.time).toLocaleDateString('vi-VN')}</span></div>
+            )}
+            {movie.modified?.time && (
+              <div><strong className="text-white/40">Cập nhật:</strong> <span className="text-white font-medium">{new Date(movie.modified.time).toLocaleDateString('vi-VN')}</span></div>
+            )}
+            {movie.category && movie.category.length > 0 && (
+              <div className="sm:col-span-2 md:col-span-3"><strong className="text-white/40">Thể loại:</strong> <span className="text-white font-medium">{movie.category.map(c => c.name).join(', ')}</span></div>
+            )}
+            {movie.country && movie.country.length > 0 && (
+              <div className="sm:col-span-2 md:col-span-3"><strong className="text-white/40">Quốc gia:</strong> <span className="text-white font-medium">{movie.country.map(c => c.name).join(', ')}</span></div>
+            )}
+            {movie.alternative_names && movie.alternative_names.length > 0 && (
+              <div className="sm:col-span-2 md:col-span-3"><strong className="text-white/40">Tên khác:</strong> <span className="text-white font-medium">{movie.alternative_names.join(', ')}</span></div>
+            )}
             {movie.actor && movie.actor.length > 0 && (
-              <div className="col-span-2 w-full"><strong>Diễn viên:</strong> {movie.actor.join(', ')}</div>
+              <div className="sm:col-span-2 md:col-span-3"><strong className="text-white/40">Diễn viên:</strong> <span className="text-white font-medium">{movie.actor.join(', ')}</span></div>
             )}
             {movie.director && movie.director.length > 0 && (
-              <div className="col-span-2 w-full"><strong>Đạo diễn:</strong> {movie.director.join(', ')}</div>
+              <div className="sm:col-span-2 md:col-span-3"><strong className="text-white/40">Đạo diễn:</strong> <span className="text-white font-medium">{movie.director.join(', ')}</span></div>
             )}
           </div>
 
@@ -194,7 +211,7 @@ export default function MovieDetailContainer() {
       <div className="w-full bg-black rounded-xl overflow-hidden shadow-2xl border border-white/5 relative mx-auto">
         {currentEpisode ? (
           <div className="aspect-video w-full bg-[#0A0A0A]">
-            <MovieStreamPlayer episode={currentEpisode} />
+            <MovieStreamPlayer episode={currentEpisode} movie={movie} />
           </div>
         ) : (
           <div className="aspect-video flex items-center justify-center text-white/50 bg-[#121212]">

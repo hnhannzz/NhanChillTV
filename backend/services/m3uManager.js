@@ -69,17 +69,30 @@ class M3UManager {
 
       const aggregatedChannels = sources.flatMap(source => this.sourceChannels.get(source.id) || []);
 
-      const uniqueChannels = [];
-      const seenIds = new Set();
+      const channelsById = new Map();
       for (const ch of aggregatedChannels) {
         // Lọc bỏ hoàn toàn các nguồn hoiquan.click / hoiquan.dpdns.org vì họ dùng Cloudflare block IP Datacenter và không hỗ trợ CORS trên trình duyệt
         if (ch.url && ch.url.includes('hoiquan')) {
           continue;
         }
+        if (!channelsById.has(ch.id)) {
+          channelsById.set(ch.id, []);
+        }
+        channelsById.get(ch.id).push(ch);
+      }
 
-        if (!seenIds.has(ch.id)) {
-          seenIds.add(ch.id);
-          uniqueChannels.push(ch);
+      const uniqueChannels = [];
+      for (const [id, group] of channelsById.entries()) {
+        if (group.length === 1) {
+          uniqueChannels.push(group[0]);
+        } else {
+          // Nếu có nhiều luồng cho cùng một kênh (cùng ID/tvg-id), ưu tiên luồng HLS (.m3u8) để không tốn tài nguyên transcode
+          const hlsChannel = group.find(ch => String(ch.url || '').toLowerCase().includes('.m3u8'));
+          if (hlsChannel) {
+            uniqueChannels.push(hlsChannel);
+          } else {
+            uniqueChannels.push(group[0]);
+          }
         }
       }
 

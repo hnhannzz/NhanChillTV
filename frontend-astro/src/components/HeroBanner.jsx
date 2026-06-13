@@ -75,14 +75,11 @@ export default function HeroBanner() {
 
   return (
     <motion.section 
-      drag="x"
-      dragConstraints={{ left: 0, right: 0 }}
-      dragElastic={0.05}
-      onDragEnd={(e, { offset }) => {
-        if (offset.x < -80) {
+      onPanEnd={(e, info) => {
+        if (info.offset.x < -80) {
           setCurrentIndex((prev) => (prev + 1) % slides.length);
           setProgress(0);
-        } else if (offset.x > 80) {
+        } else if (info.offset.x > 80) {
           setCurrentIndex((prev) => (prev - 1 + slides.length) % slides.length);
           setProgress(0);
         }

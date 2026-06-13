@@ -14,3 +14,4 @@ backend/db/*.json
 id_rsa*
 .env
 .env.*
+DO_NOT_UPLOAD_TO_GITHUB/

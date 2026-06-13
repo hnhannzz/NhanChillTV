@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import UnifiedPlayer from './UnifiedPlayer';
 import LegacyPlayer from './LegacyPlayer';
 
-export default function MovieStreamPlayer({ episode, movieSlug, onNextEpisode, onCinemaMode }) {
+export default function MovieStreamPlayer({ episode, movie, movieSlug, onNextEpisode, onCinemaMode }) {
   // Ưu tiên m3u8 từ OPhim, nếu không có fallback sang embed
   const streamUrl = episode?.link_m3u8 || episode?.link_hls || '';
   const embedUrl = episode?.link_embed || episode?.embed || '';
@@ -43,7 +43,8 @@ export default function MovieStreamPlayer({ episode, movieSlug, onNextEpisode, o
         onTimeUpdate={handleTimeUpdate}
         onNextEpisode={onNextEpisode}
         onCinemaMode={onCinemaMode}
-        title={episode?.name || 'Tập phim'}
+        title={movie?.name || 'Phim'}
+        subTitle={episode?.name || 'Tập phim'}
         autoplay={true}
         className="w-full h-full"
       />
