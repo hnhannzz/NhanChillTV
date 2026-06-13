@@ -509,12 +509,18 @@ export default function UnifiedPlayer({
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  const handleMouseMove = () => {
-    setShowControls(true);
+  const triggerControlsTimeout = () => {
     if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
     controlsTimeoutRef.current = setTimeout(() => {
-      if (isPlaying) setShowControls(false);
+      if (videoRef.current && !videoRef.current.paused) {
+        setShowControls(false);
+      }
     }, 3000);
+  };
+
+  const handleMouseMove = () => {
+    setShowControls(true);
+    triggerControlsTimeout();
   };
 
   const continueWatching = () => {
@@ -620,7 +626,15 @@ export default function UnifiedPlayer({
         onClick={(e) => {
           if (e.target !== e.currentTarget) return;
           if (isMobile) {
-            setShowControls(prev => !prev);
+            setShowControls(prev => {
+              const nextVal = !prev;
+              if (nextVal) {
+                triggerControlsTimeout();
+              } else {
+                if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+              }
+              return nextVal;
+            });
           } else {
             togglePlay();
           }
@@ -691,6 +705,7 @@ export default function UnifiedPlayer({
 
       {/* Custom Controls UI */}
       <div 
+        onClick={triggerControlsTimeout}
         className={`absolute inset-0 z-20 pointer-events-none transition-opacity duration-300 flex flex-col justify-between ${showControls || !isPlaying ? 'opacity-100' : 'opacity-0'}`}
       >
         {/* Top Gradient & Title */}
