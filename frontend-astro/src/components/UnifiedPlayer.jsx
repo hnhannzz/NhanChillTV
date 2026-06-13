@@ -38,6 +38,10 @@ export default function UnifiedPlayer({
   const controlsTimeoutRef = useRef(null);
   const [showContinuePrompt, setShowContinuePrompt] = useState(initialTime > 0);
 
+  // Seeking optimizations
+  const [isSeeking, setIsSeeking] = useState(false);
+  const [seekingTime, setSeekingTime] = useState(0);
+
   // Settings & Custom Features State
   const [isPipSupported, setIsPipSupported] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -51,6 +55,14 @@ export default function UnifiedPlayer({
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
 
   const isLiveStream = duration === Infinity || !isFinite(duration) || subTitle === 'Live TV';
+
+  // Mobile/touch detection
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setIsMobile('ontouchstart' in window || navigator.maxTouchPoints > 0);
+    }
+  }, []);
 
   // Detect iOS Safari or macOS Safari
   const isSafariOrIOS = typeof navigator !== 'undefined' && (
@@ -75,15 +87,42 @@ export default function UnifiedPlayer({
 
     let shakaPlayer = null;
     let mpegtsPlayer = null;
+    let doSeek = null;
+    let retryCount = 0;
+    const maxRetries = 5;
+    let retryTimeoutId = null;
 
     const lowerUrl = String(url).toLowerCase();
     const isMpegTs = !isMpd && !lowerUrl.includes('.m3u8') && !lowerUrl.includes('.mpd') && !lowerUrl.includes('.mp4');
 
-    // 1. Block DRM MPD streams on iOS Safari
-    if (isMpd && clearKey && isSafariOrIOS) {
-      setError('Kênh DRM MPD này chưa hỗ trợ iOS, iPadOS hoặc Safari. Vui lòng dùng Chrome/Edge trên Windows hoặc Android.');
+    // 1. Block all MPD (DASH) streams on iOS/Safari (since iOS Safari lacks MSE)
+    if (isMpd && isSafariOrIOS) {
+      setError('Kênh/phim định dạng MPD (DASH) này chưa hỗ trợ iOS, iPadOS hoặc Safari. Vui lòng dùng Chrome/Edge trên Windows hoặc Android.');
       return;
     }
+
+    const handleNativeError = (e) => {
+      const videoEl = videoRef.current;
+      if (!videoEl) return;
+      const mediaError = videoEl.error;
+      console.warn('[Player] Native playback error:', mediaError?.code, mediaError?.message);
+
+      if (isSafariOrIOS && !isMpd && retryCount < maxRetries) {
+        retryCount++;
+        console.log(`[Player] Retrying native HLS source in 3s (Attempt ${retryCount}/${maxRetries})...`);
+        setError(`Đang kết nối lại luồng phát (Thử lại ${retryCount}/${maxRetries})...`);
+        
+        retryTimeoutId = setTimeout(() => {
+          if (videoRef.current && url) {
+            videoRef.current.src = url;
+            videoRef.current.load();
+            videoRef.current.play().catch(() => {});
+          }
+        }, 3000);
+      } else {
+        setError(mediaError ? `Lỗi trình phát: ${mediaError.message || 'Lỗi tải luồng video'}` : 'Lỗi tải luồng video');
+      }
+    };
 
     if (isMpegTs && mpegts.isSupported()) {
       const absoluteUrl = new URL(url, window.location.href).href;
@@ -116,18 +155,24 @@ export default function UnifiedPlayer({
         onError?.(errorInfo);
       });
     } else if (isSafariOrIOS && !isMpd) {
-      // 2. Dùng native player của iOS/Safari cho tất cả các luồng non-DRM (HLS/VOD) để tránh lỗi Shaka MSE
+      // 2. Dùng native HLS player cho iOS/Safari
       console.log('[Player] Using native Safari HLS/VOD engine');
       videoRef.current.src = url;
+      videoRef.current.load();
       
-      const onMetadataLoaded = () => {
-        if (initialTime > 0) {
+      let seeked = false;
+      doSeek = () => {
+        if (seeked) return;
+        if (initialTime > 0 && videoRef.current && videoRef.current.duration > 0) {
           videoRef.current.currentTime = initialTime;
+          seeked = true;
+          console.log('[Player] Native HLS seeked to:', initialTime);
         }
-        videoRef.current.removeEventListener('loadedmetadata', onMetadataLoaded);
       };
       
-      videoRef.current.addEventListener('loadedmetadata', onMetadataLoaded);
+      videoRef.current.addEventListener('loadedmetadata', doSeek);
+      videoRef.current.addEventListener('loadeddata', doSeek);
+      videoRef.current.addEventListener('canplay', doSeek);
 
       if (autoplay) {
         videoRef.current.play().catch(err => {
@@ -162,11 +207,10 @@ export default function UnifiedPlayer({
         clearKeys: clearKeysObj
       } : undefined;
 
-      // 3. Tối ưu hóa ABR & Buffering để phát mượt mà nhất
       shakaPlayer.configure({
         streaming: {
-          bufferingGoal: 45, // Tăng lên 45 giây để tránh buffering khi mạng chập chờn
-          rebufferingGoal: 5, // Bắt đầu phát lại khi có 5 giây buffer
+          bufferingGoal: 45,
+          rebufferingGoal: 5,
           bufferBehind: 15,
           retryParameters: {
             maxAttempts: 5,
@@ -174,8 +218,8 @@ export default function UnifiedPlayer({
           },
           abr: {
             enabled: true,
-            defaultBandwidthEstimate: 1500000, // 1.5 Mbps mặc định ban đầu
-            switchInterval: 4, // Switch chất lượng nhạy hơn (4 giây)
+            defaultBandwidthEstimate: 1500000,
+            switchInterval: 4,
           }
         },
         drm: drmConfig
@@ -251,6 +295,7 @@ export default function UnifiedPlayer({
     video.addEventListener('loadedmetadata', handleLoadedMetadata);
     video.addEventListener('webkitbeginfullscreen', handleWebKitBeginFullscreen);
     video.addEventListener('webkitendfullscreen', handleWebKitEndFullscreen);
+    video.addEventListener('error', handleNativeError);
 
     return () => {
       if (shakaPlayer) {
@@ -259,6 +304,16 @@ export default function UnifiedPlayer({
       if (mpegtsPlayer) {
         mpegtsPlayer.destroy();
       }
+
+      // Stop source load and clean memory on iOS/Safari
+      video.src = '';
+      try {
+        video.removeAttribute('src');
+        video.load();
+      } catch (e) {}
+
+      if (retryTimeoutId) clearTimeout(retryTimeoutId);
+
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('pause', handlePause);
       video.removeEventListener('volumechange', handleVolumeChange);
@@ -266,6 +321,13 @@ export default function UnifiedPlayer({
       video.removeEventListener('loadedmetadata', handleLoadedMetadata);
       video.removeEventListener('webkitbeginfullscreen', handleWebKitBeginFullscreen);
       video.removeEventListener('webkitendfullscreen', handleWebKitEndFullscreen);
+      video.removeEventListener('error', handleNativeError);
+      
+      if (doSeek) {
+        video.removeEventListener('loadedmetadata', doSeek);
+        video.removeEventListener('loadeddata', doSeek);
+        video.removeEventListener('canplay', doSeek);
+      }
     };
   }, [url]);
 
@@ -356,7 +418,7 @@ export default function UnifiedPlayer({
   const togglePlay = () => {
     if (videoRef.current) {
       if (isPlaying) videoRef.current.pause();
-      else videoRef.current.play();
+      else videoRef.current.play().catch(e => console.warn('Play request failed/blocked:', e));
     }
   };
 
@@ -388,6 +450,8 @@ export default function UnifiedPlayer({
         document.exitFullscreen();
       } else if (document.webkitExitFullscreen) {
         document.webkitExitFullscreen();
+      } else if (video.webkitExitFullscreen) {
+        video.webkitExitFullscreen();
       }
     }
   };
@@ -404,12 +468,18 @@ export default function UnifiedPlayer({
     }
   };
 
-  const handleSeek = (e) => {
-    const newTime = parseFloat(e.target.value);
+  const handleSeekChange = (e) => {
+    const val = parseFloat(e.target.value);
+    setSeekingTime(val);
+  };
+
+  const handleSeekEnd = (e) => {
+    const val = parseFloat(e.target.value);
     if (videoRef.current) {
-      videoRef.current.currentTime = newTime;
-      setCurrentTime(newTime);
+      videoRef.current.currentTime = val;
+      setCurrentTime(val);
     }
+    setIsSeeking(false);
   };
 
   const formatTime = (seconds) => {
@@ -431,14 +501,14 @@ export default function UnifiedPlayer({
 
   const continueWatching = () => {
     setShowContinuePrompt(false);
-    videoRef.current?.play();
+    videoRef.current?.play().catch(() => {});
   };
 
   const restartWatching = () => {
     setShowContinuePrompt(false);
     if (videoRef.current) {
       videoRef.current.currentTime = 0;
-      videoRef.current.play();
+      videoRef.current.play().catch(() => {});
     }
   };
 
@@ -518,11 +588,45 @@ export default function UnifiedPlayer({
     >
       <video
         ref={videoRef}
-        className="w-full h-full max-h-screen object-contain cursor-pointer"
+        className="w-full h-full max-h-screen object-contain"
         poster={poster}
-        onClick={togglePlay}
-        playsInline
+        playsInline={true}
+        {...{
+          "webkit-playsinline": "true"
+        }}
       />
+
+      {/* Click/Touch Overlay */}
+      <div 
+        className="absolute inset-0 z-10 cursor-pointer"
+        onClick={(e) => {
+          if (e.target !== e.currentTarget) return;
+          if (isMobile) {
+            setShowControls(prev => !prev);
+          } else {
+            togglePlay();
+          }
+        }}
+      />
+
+      {/* Center Play Button Overlay */}
+      {(!isPlaying || showControls) && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              togglePlay();
+            }}
+            className="pointer-events-auto flex items-center justify-center h-16 w-16 md:h-20 md:w-20 rounded-full bg-black/50 border border-white/20 text-white hover:bg-[#ED2C25] hover:border-[#ED2C25] hover:scale-110 active:scale-95 transition-all duration-300 backdrop-blur-md shadow-2xl"
+          >
+            {isPlaying ? (
+              <Pause fill="currentColor" size={28} className="md:h-8 md:w-8" />
+            ) : (
+              <Play fill="currentColor" size={28} className="translate-x-0.5 md:h-8 md:w-8" />
+            )}
+          </button>
+        </div>
+      )}
 
       {/* Continue Watching Prompt */}
       {showContinuePrompt && (
@@ -551,7 +655,7 @@ export default function UnifiedPlayer({
 
       {/* Custom Controls UI */}
       <div 
-        className={`absolute inset-0 pointer-events-none transition-opacity duration-300 flex flex-col justify-between ${showControls || !isPlaying ? 'opacity-100' : 'opacity-0'}`}
+        className={`absolute inset-0 z-20 pointer-events-none transition-opacity duration-300 flex flex-col justify-between ${showControls || !isPlaying ? 'opacity-100' : 'opacity-0'}`}
       >
         {/* Top Gradient & Title */}
         <div className="bg-gradient-to-b from-black/80 to-transparent pt-4 pb-12 px-6 flex justify-between items-start pointer-events-auto">
@@ -570,19 +674,23 @@ export default function UnifiedPlayer({
                 type="range"
                 min="0"
                 max={duration || 100}
-                value={currentTime}
-                onChange={handleSeek}
+                value={isSeeking ? seekingTime : currentTime}
+                onMouseDown={() => { setIsSeeking(true); setSeekingTime(currentTime); }}
+                onTouchStart={() => { setIsSeeking(true); setSeekingTime(currentTime); }}
+                onChange={handleSeekChange}
+                onMouseUp={handleSeekEnd}
+                onTouchEnd={handleSeekEnd}
                 className="absolute w-full h-1.5 opacity-0 cursor-pointer z-20"
               />
               <div className="w-full h-1.5 bg-white/30 rounded-full overflow-hidden absolute z-0 pointer-events-none">
                 <div 
                   className="h-full bg-[#ED2C25] transition-all duration-100 ease-linear pointer-events-none" 
-                  style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
+                  style={{ width: `${duration > 0 ? ((isSeeking ? seekingTime : currentTime) / duration) * 100 : 0}%` }}
                 />
               </div>
               <div 
                 className="absolute h-3.5 w-3.5 bg-[#ED2C25] rounded-full z-10 pointer-events-none transform -translate-x-1/2 shadow-sm scale-0 group-hover/progress:scale-100 transition-transform"
-                style={{ left: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
+                style={{ left: `${duration > 0 ? ((isSeeking ? seekingTime : currentTime) / duration) * 100 : 0}%` }}
               />
             </div>
           )}
@@ -659,7 +767,7 @@ export default function UnifiedPlayer({
                 </span>
               ) : (
                 <span className="text-white/90 text-sm font-medium tracking-wide">
-                  {formatTime(currentTime)} <span className="text-white/40 mx-1">/</span> {formatTime(duration)}
+                  {formatTime(isSeeking ? seekingTime : currentTime)} <span className="text-white/40 mx-1">/</span> {formatTime(duration)}
                 </span>
               )}
             </div>
