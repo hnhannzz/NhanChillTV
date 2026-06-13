@@ -48,11 +48,14 @@ export default function UnifiedPlayer({
     const isMpegTs = !isMpd && !lowerUrl.includes('.m3u8') && !lowerUrl.includes('.mpd') && !lowerUrl.includes('.mp4');
 
     if (isMpegTs && mpegts.isSupported()) {
+      // mpegts.js sử dụng Web Worker (blob URI), nên url tương đối (/api/proxy/...) sẽ bị lỗi Failed to parse URL. Bắt buộc phải là URL tuyệt đối.
+      const absoluteUrl = new URL(url, window.location.href).href;
+
       // Dùng mpegts.js cho các luồng UDP/HTTP MPEG-TS (udpxy)
       mpegtsPlayer = mpegts.createPlayer({
         type: 'mpegts', // Quan trọng: phải là mpegts chứ không phải mse
         isLive: true,
-        url: url
+        url: absoluteUrl
       }, {
         enableWorker: true,
         lazyLoad: false,
