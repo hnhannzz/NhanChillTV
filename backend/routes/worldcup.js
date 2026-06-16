@@ -9,6 +9,7 @@ const router = express.Router();
 const API_BASE = process.env.WORLDCUP_API_BASE || 'https://worldcup26.ir';
 const VN_TIME_ZONE = 'Asia/Ho_Chi_Minh';
 const CACHE_FILE = process.env.WORLDCUP_CACHE_FILE || path.join(config.projectRoot, 'nginx/temp/worldcup-cache.json');
+const SEED_FILE = path.join(config.projectRoot, 'backend/data/worldcup-seed.json');
 
 const RESOURCE_CONFIG = {
   teams: { url: '/get/teams', ttlMs: 24 * 60 * 60 * 1000 },
@@ -114,9 +115,16 @@ function ensureDiskCacheLoaded() {
   if (diskCacheLoaded) return;
   diskCacheLoaded = true;
   try {
-    if (!fs.existsSync(CACHE_FILE)) return;
-    const parsed = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
-    Object.assign(memoryCache, parsed);
+    if (fs.existsSync(SEED_FILE)) {
+      const seed = JSON.parse(fs.readFileSync(SEED_FILE, 'utf8'));
+      for (const name of Object.keys(RESOURCE_CONFIG)) {
+        if (seed[name]?.data) memoryCache[name] = seed[name];
+      }
+    }
+    if (fs.existsSync(CACHE_FILE)) {
+      const parsed = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
+      Object.assign(memoryCache, parsed);
+    }
   } catch (err) {
     console.warn('[WorldCup] Could not load disk cache:', err.message);
   }
@@ -171,6 +179,18 @@ async function getResource(name, options = {}) {
   const age = cached ? Date.now() - cached.fetchedAt : Infinity;
   if (!options.force && cached?.data && age < resource.ttlMs) return cached.data;
 
+  if (options.force) {
+    try {
+      return await refreshResource(name);
+    } catch (err) {
+      if (cached?.data) {
+        console.warn(`[WorldCup] Forced refresh failed for ${name}, using cached data:`, err.message);
+        return cached.data;
+      }
+      throw err;
+    }
+  }
+
   if (!options.force && cached?.data) {
     refreshResource(name).catch(err => {
       console.warn(`[WorldCup] Background refresh failed for ${name}:`, err.message);
@@ -178,7 +198,15 @@ async function getResource(name, options = {}) {
     return cached.data;
   }
 
-  return refreshResource(name);
+  try {
+    return await refreshResource(name);
+  } catch (err) {
+    if (cached?.data) {
+      console.warn(`[WorldCup] Refresh failed for ${name}, using cached data:`, err.message);
+      return cached.data;
+    }
+    throw err;
+  }
 }
 
 async function getAllResources(options = {}) {
