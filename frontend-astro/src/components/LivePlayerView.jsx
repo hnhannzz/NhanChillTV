@@ -26,7 +26,7 @@ function isUnsupportedAppleDrmBrowser() {
   return isIOS || isSafari;
 }
 
-export default function LivePlayerView({ channelId, streamParam, channelName }) {
+export default function LivePlayerView({ channelId, streamParam, channelName, isLive = true }) {
   const [streamUrl, setStreamUrl] = useState(null);
   const [fallbackUrls, setFallbackUrls] = useState([]);
   const [clearKey, setClearKey] = useState(null);
@@ -60,7 +60,11 @@ export default function LivePlayerView({ channelId, streamParam, channelName }) 
       .catch(err => console.error('Failed to load system settings:', err));
 
     const useDirectWithProxyFallback = (rawUrl, proxyUrl) => {
-      if (canUseDirectUrl(rawUrl)) {
+      const hasInternalProxy = typeof proxyUrl === 'string' && proxyUrl.startsWith('/api/proxy/');
+      if (hasInternalProxy) {
+        setStreamUrl(proxyUrl);
+        setFallbackUrls(canUseDirectUrl(rawUrl) && rawUrl !== proxyUrl ? [rawUrl] : []);
+      } else if (canUseDirectUrl(rawUrl)) {
         setStreamUrl(rawUrl);
         setFallbackUrls(proxyUrl && proxyUrl !== rawUrl ? [proxyUrl] : []);
       } else {
@@ -198,10 +202,11 @@ export default function LivePlayerView({ channelId, streamParam, channelName }) 
           streamType={streamType}
           className="w-full h-full"
           title={channelName || channelId || streamParam}
-          subTitle="Live TV"
+          subTitle={isLive ? 'Live TV' : 'Highlight'}
+          isLive={isLive}
         />
       </Suspense>
-      <div className="pointer-events-none absolute right-4 top-4 z-50 flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+      {isLive && <div className="pointer-events-none absolute right-4 top-4 z-50 flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
         <div className="flex items-center gap-2 rounded-md border border-white/10 bg-black/65 px-3 py-1.5 text-xs font-bold text-white backdrop-blur-sm">
           <Users size={14} className="text-blue-400" />
           <span>{viewers} <span className="font-normal text-white/60">đang xem</span></span>
@@ -210,7 +215,7 @@ export default function LivePlayerView({ channelId, streamParam, channelName }) 
           <span className="h-2 w-2 animate-pulse rounded-full bg-white" />
           TRỰC TIẾP
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

@@ -441,7 +441,7 @@ export default function TvPageContainer() {
 function WorldCupHighlightPlayer({ highlight, title }) {
   const isM3u8 = highlight?.sourceType === 'm3u8';
   if (isM3u8) {
-    return <LivePlayerView key={highlight.url} streamParam={highlight.url} channelName={`${title} - ${highlight.title || 'Highlight'}`} />;
+    return <LivePlayerView key={highlight.url} streamParam={highlight.url} channelName={`${title} - ${highlight.title || 'Highlight'}`} isLive={false} />;
   }
 
   return (

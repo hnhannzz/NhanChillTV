@@ -47,6 +47,17 @@ function appendProxyUa(url, customUa) {
   return url + (url.includes('?') ? '&' : '?') + `ua=${encodeURIComponent(customUa)}`;
 }
 
+function resolveAbsoluteUrl(baseUrl, origin, url) {
+  if (!url) return url;
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  if (url.startsWith('/')) return origin + url;
+  try {
+    return new URL(url, baseUrl).href;
+  } catch (e) {
+    return origin + '/' + url;
+  }
+}
+
 function decodeManifestBuffer(buffer, encoding) {
   const normalized = String(encoding || '').toLowerCase();
   if (normalized.includes('gzip')) return zlib.gunzipSync(buffer);
@@ -253,6 +264,9 @@ function rewriteM3u8(content, baseUrl, proxyBase, origin, customUa) {
  * Rewrite MPD manifest: chuyển mọi URL (BaseURL, SegmentTemplate, ...) qua proxy
  */
 function rewriteMpd(content, baseUrl, proxyBase, origin, customUa) {
+  const firstBaseUrl = (content.match(/<BaseURL>([^<]+)<\/BaseURL>/) || [])[1];
+  const segmentBaseUrl = firstBaseUrl ? resolveAbsoluteUrl(baseUrl, origin, firstBaseUrl) : baseUrl;
+
   // 1. Rewrite <BaseURL> tags
   content = content.replace(/<BaseURL>([^<]+)<\/BaseURL>/g, (match, url) => {
     const absUrl = resolveUrl(baseUrl, origin, url);
@@ -261,14 +275,16 @@ function rewriteMpd(content, baseUrl, proxyBase, origin, customUa) {
 
   // 2. Rewrite initialization="..." và media="..." trong SegmentTemplate
   content = content.replace(/initialization="([^"]+)"/g, (match, url) => {
-    const absUrl = resolveUrl(baseUrl, origin, url);
+    const base = (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/')) ? baseUrl : segmentBaseUrl;
+    const absUrl = resolveUrl(base, origin, url);
     return `initialization="${appendProxyUa(proxyBase + absUrl, customUa)}"`;
   });
 
   content = content.replace(/media="([^"]+)"/g, (match, url) => {
     // Chỉ rewrite nếu chứa dấu / (là path, không phải template variable thuần)
     if (url.startsWith('$') && !url.includes('/')) return match;
-    const absUrl = resolveUrl(baseUrl, origin, url);
+    const base = (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/')) ? baseUrl : segmentBaseUrl;
+    const absUrl = resolveUrl(base, origin, url);
     return `media="${appendProxyUa(proxyBase + absUrl, customUa)}"`;
   });
 
@@ -285,18 +301,7 @@ function rewriteMpd(content, baseUrl, proxyBase, origin, customUa) {
  * Giải quyết URL tương đối thành tuyệt đối và mã hóa nó
  */
 function resolveUrl(baseUrl, origin, url) {
-  let absUrl = url;
-  if (!url.startsWith('http://') && !url.startsWith('https://')) {
-    if (url.startsWith('/')) {
-      absUrl = origin + url;
-    } else {
-      try {
-        absUrl = new URL(url, baseUrl).href;
-      } catch (e) {
-        absUrl = origin + '/' + url;
-      }
-    }
-  }
+  let absUrl = resolveAbsoluteUrl(baseUrl, origin, url);
   
   // Mã hóa URL truyệt đối
   let encrypted;
@@ -317,5 +322,11 @@ function resolveUrl(baseUrl, origin, url) {
   
   return encrypted || absUrl; // fallback nếu mã hóa lỗi
 }
+
+router._private = {
+  rewriteMpd,
+  resolveAbsoluteUrl,
+  resolveUrl,
+};
 
 module.exports = router;

@@ -211,7 +211,7 @@ export default function MovieDetailContainer() {
       <div className="w-full bg-black rounded-xl overflow-hidden shadow-2xl border border-white/5 relative mx-auto">
         {currentEpisode ? (
           <div className="aspect-video w-full bg-[#0A0A0A]">
-            <MovieStreamPlayer episode={currentEpisode} movie={movie} />
+            <MovieStreamPlayer episode={currentEpisode} movie={movie} movieSlug={slug} />
           </div>
         ) : (
           <div className="aspect-video flex items-center justify-center text-white/50 bg-[#121212]">

@@ -18,6 +18,7 @@ export default function LegacyPlayer({
   clearKey,
   isMpd: isMpdProp,
   streamType,
+  isLive,
 }) {
   const containerRef = useRef(null);
   const playerRef = useRef(null);

@@ -22,6 +22,7 @@ export default function UnifiedPlayer({
   onTimeUpdate,
   onReady,
   onError,
+  isLive,
 }) {
   const videoRef = useRef(null);
   const videoContainerRef = useRef(null);
@@ -56,7 +57,7 @@ export default function UnifiedPlayer({
   const [showCodecModal, setShowCodecModal] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
 
-  const isLiveStream = duration === Infinity || !isFinite(duration) || subTitle === 'Live TV';
+  const isLiveStream = isLive ?? (duration === Infinity || !isFinite(duration) || subTitle === 'Live TV');
 
   // Mobile/touch detection
   const [isMobile, setIsMobile] = useState(false);

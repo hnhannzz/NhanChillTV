@@ -8,14 +8,19 @@ export default function MovieStreamPlayer({ episode, movie, movieSlug, onNextEpi
   const streamUrl = episode?.link_m3u8 || episode?.link_hls || '';
   const embedUrl = episode?.link_embed || episode?.embed || '';
   
-  const progressKey = `progress_${movieSlug}_${episode?.slug || episode?.name}`;
+  const resolvedMovieSlug = movieSlug || movie?.slug || movie?._id || movie?.id || 'unknown-movie';
+  const resolvedEpisodeKey = episode?.slug || episode?.filename || episode?.name || episode?.link_m3u8 || episode?.link_embed || 'unknown-episode';
+  const [progressKey, setProgressKey] = useState('');
   const [initialTime, setInitialTime] = useState(0);
   const [playerType, setPlayerType] = useState('shaka');
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const savedTime = localStorage.getItem(progressKey);
-      if (savedTime) setInitialTime(parseFloat(savedTime));
+      const userId = localStorage.getItem('userToken') || 'guest';
+      const key = `movie_progress_${userId}_${resolvedMovieSlug}_${resolvedEpisodeKey}`;
+      setProgressKey(key);
+      const savedTime = localStorage.getItem(key);
+      setInitialTime(savedTime ? parseFloat(savedTime) || 0 : 0);
       
       fetch('/api/admin/system/status')
         .then(res => res.json())
@@ -26,10 +31,10 @@ export default function MovieStreamPlayer({ episode, movie, movieSlug, onNextEpi
         })
         .catch(err => console.error('Failed to load system settings:', err));
     }
-  }, [progressKey]);
+  }, [resolvedMovieSlug, resolvedEpisodeKey]);
 
   const handleTimeUpdate = (currentTime) => {
-    if (currentTime > 5 && typeof window !== 'undefined') {
+    if (currentTime > 5 && progressKey && typeof window !== 'undefined') {
       localStorage.setItem(progressKey, currentTime.toString());
     }
   };
@@ -39,7 +44,7 @@ export default function MovieStreamPlayer({ episode, movie, movieSlug, onNextEpi
     return (
       <Suspense fallback={<div className="flex h-full w-full items-center justify-center bg-black text-sm font-semibold text-white/55">Đang tải trình phát...</div>}>
         <PlayerComponent
-          key={`${streamUrl}_${playerType}`}
+          key={`${streamUrl}_${playerType}_${progressKey}_${initialTime}`}
           url={streamUrl}
           initialTime={initialTime}
           onTimeUpdate={handleTimeUpdate}
