@@ -237,15 +237,23 @@ class EpgService {
       addAlias(displayName, id);
     });
 
+    const now = Date.now();
+    const keepStart = now - 6 * 60 * 60 * 1000;  // 6 hours ago
+    const keepEnd = now + 48 * 60 * 60 * 1000;   // 48 hours from now
+
     const programmeList = Array.isArray(tv.programme) ? tv.programme : tv.programme ? [tv.programme] : [];
     programmeList.forEach((programme) => {
       const channelId = programme['@_channel'];
       if (!channelId) return;
 
-      if (!nextPrograms[channelId]) nextPrograms[channelId] = [];
       const start = parseEpgTime(programme['@_start']);
       const stop = parseEpgTime(programme['@_stop']);
       if (!start || !stop || stop <= start) return;
+
+      // Discard past or far future listings to save memory
+      if (stop <= keepStart || start >= keepEnd) return;
+
+      if (!nextPrograms[channelId]) nextPrograms[channelId] = [];
       latestProgramStop = Math.max(latestProgramStop, stop);
 
       nextPrograms[channelId].push({
@@ -264,6 +272,15 @@ class EpgService {
     }
 
     if (!Object.keys(nextPrograms).length) throw new Error('XMLTV contains no valid programmes');
+
+    // Break references to help GC release memory
+    if (tv) {
+      tv.channel = null;
+      tv.programme = null;
+    }
+    if (result) {
+      result.tv = null;
+    }
 
     const parsed = {
       channels: nextChannels,

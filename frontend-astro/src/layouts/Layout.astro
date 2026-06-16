@@ -20,6 +20,130 @@ const { title } = Astro.props;
 		<title>{title}</title>
 	</head>
 	<body class="bg-[#050505] text-white min-h-screen overflow-x-hidden flex flex-col">
+		<!-- Global Loading Splash Page -->
+		<div id="global-loader" class="loader-container">
+			<div class="loader-content">
+				<img src="/logo/logo.png?v=1.65" alt="NhanChillTV Logo" class="loader-logo" />
+				<div class="loader-subtitle">Xem Truyền Hình & Bóng Đá</div>
+				<div class="loader-bar-bg">
+					<div class="loader-bar-fill"></div>
+				</div>
+			</div>
+		</div>
+
+		<style>
+			.loader-container {
+				position: fixed;
+				inset: 0;
+				z-index: 99999;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				background-color: #050505;
+				transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+				opacity: 1;
+				pointer-events: auto;
+			}
+			.loader-container.fade-out {
+				opacity: 0;
+				pointer-events: none;
+			}
+			.loader-content {
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				gap: 12px;
+			}
+			.loader-logo {
+				height: 64px;
+				width: auto;
+				object-fit: contain;
+				animation: loader-pulse 1.8s infinite ease-in-out;
+			}
+			@media (min-width: 768px) {
+				.loader-logo {
+					height: 80px;
+				}
+			}
+			.loader-subtitle {
+				font-size: 12px;
+				font-weight: 700;
+				color: #ED2C25;
+				letter-spacing: 0.1em;
+				text-transform: uppercase;
+			}
+			.loader-bar-bg {
+				width: 180px;
+				height: 3px;
+				background-color: rgba(255, 255, 255, 0.1);
+				border-radius: 9999px;
+				overflow: hidden;
+				margin-top: 6px;
+			}
+			.loader-bar-fill {
+				height: 100%;
+				width: 100%;
+				background-color: #ED2C25;
+				border-radius: 9999px;
+				transform-origin: left;
+				animation: loader-slide 2s infinite ease-in-out;
+			}
+			@keyframes loader-pulse {
+				0%, 100% {
+					transform: scale(1);
+					opacity: 0.8;
+				}
+				50% {
+					transform: scale(1.06);
+					opacity: 1;
+				}
+			}
+			@keyframes loader-slide {
+				0% {
+					transform: translateX(-100%) scaleX(0.2);
+				}
+				50% {
+					transform: translateX(0) scaleX(0.55);
+				}
+				100% {
+					transform: translateX(100%) scaleX(0.2);
+				}
+			}
+		</style>
+
+		<script is:inline>
+			(function() {
+				const start = Date.now();
+				const checkInterval = setInterval(checkReady, 100);
+
+				function checkReady() {
+					const elapsed = Date.now() - start;
+					
+					// Wait at least 600ms to allow React hydration to inject image elements
+					if (elapsed < 600) return;
+
+					const imgs = Array.from(document.querySelectorAll('img'));
+					const uncompleted = imgs.filter(img => !img.complete);
+
+					// If all images are fully resolved, or if we hit the safe fallback timeout (4.5s)
+					if (uncompleted.length === 0 || elapsed > 4500) {
+						clearInterval(checkInterval);
+						hideLoader();
+					}
+				}
+
+				function hideLoader() {
+					const loader = document.getElementById('global-loader');
+					if (loader && !loader.classList.contains('fade-out')) {
+						loader.classList.add('fade-out');
+						setTimeout(function() {
+							loader.remove();
+						}, 450);
+					}
+				}
+			})();
+		</script>
+
 		<MaintenanceGuard client:only="react">
 			<slot />
 		</MaintenanceGuard>
