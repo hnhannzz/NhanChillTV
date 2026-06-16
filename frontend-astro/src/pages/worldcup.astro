@@ -1,0 +1,13 @@
+---
+import Layout from '../layouts/Layout.astro';
+import MainLayout from '../components/MainLayout.jsx';
+import WorldCupPortal from '../components/WorldCupPortal.jsx';
+---
+
+<Layout title="World Cup 2026 - NhanChillTV">
+  <MainLayout client:load>
+    <main class="mx-auto mt-4 w-full max-w-[1600px] px-4 pb-10 pt-2 md:px-8">
+      <WorldCupPortal client:only="react" />
+    </main>
+  </MainLayout>
+</Layout>

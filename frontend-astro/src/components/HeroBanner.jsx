@@ -64,7 +64,16 @@ export default function HeroBanner() {
         })
       );
 
-      setSlides([...pinnedEvents, ...movies]);
+      const wcSlide = {
+        id: 'worldcup2026_banner',
+        isEvent: false,
+        isWorldCupBanner: true,
+        name: 'FIFA World Cup 2026',
+        original_name: '🇺🇸 🇨🇦 🇲🇽 Đường tới vinh quang',
+        description: 'Xem trực tiếp toàn bộ 104 trận đấu kịch tính của giải vô địch bóng đá thế giới World Cup 2026 diễn ra tại Mỹ, Canada và Mexico. Theo dõi lịch thi đấu, bảng xếp hạng realtime và tham gia bình chọn tỷ số cùng cộng đồng NhanChillTV!',
+        poster_url: 'https://i.ibb.co/WvbwdPq4/image.webp'
+      };
+      setSlides([wcSlide, ...pinnedEvents, ...movies]);
     }).finally(() => setLoading(false));
   }, []);
 
@@ -90,9 +99,11 @@ export default function HeroBanner() {
 
   const currentSlide = slides[currentIndex] || slides[0];
   const description = String(currentSlide.description || 'Khám phá nội dung đang được nhiều khán giả quan tâm trên NhanChillTV.').replace(/<[^>]+>/g, ' ');
-  const watchUrl = currentSlide.isEvent
-    ? `/tv/?event=${encodeURIComponent(currentSlide.id)}${currentSlide.sourceChannelId ? `&channel=${encodeURIComponent(currentSlide.sourceChannelId)}` : ''}`
-    : `/movie-detail/?slug=${encodeURIComponent(currentSlide.slug)}`;
+  const watchUrl = currentSlide.isWorldCupBanner
+    ? '/worldcup/'
+    : currentSlide.isEvent
+      ? `/tv/?event=${encodeURIComponent(currentSlide.id)}${currentSlide.sourceChannelId ? `&channel=${encodeURIComponent(currentSlide.sourceChannelId)}` : ''}`
+      : `/movie-detail/?slug=${encodeURIComponent(currentSlide.slug)}`;
 
   return (
     <motion.section 
@@ -119,7 +130,7 @@ export default function HeroBanner() {
           className="absolute inset-0"
           style={{ willChange: 'transform, opacity' }}
         >
-          <img src={currentSlide.isEvent ? (currentSlide.poster_url || '/poster.jpg') : getOPhimImageUrl(currentSlide.poster_url || currentSlide.thumb_url)} alt={currentSlide.name} className="h-full w-full object-cover opacity-65 pointer-events-none" />
+          <img src={currentSlide.isWorldCupBanner ? currentSlide.poster_url : currentSlide.isEvent ? (currentSlide.poster_url || '/poster.jpg') : getOPhimImageUrl(currentSlide.poster_url || currentSlide.thumb_url)} alt={currentSlide.name} className="h-full w-full object-cover opacity-65 pointer-events-none" />
           <div className="absolute inset-0 bg-gradient-to-r from-black via-black/45 to-transparent pointer-events-none" />
           <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-transparent to-transparent pointer-events-none" />
         </motion.div>
@@ -135,16 +146,20 @@ export default function HeroBanner() {
             animate="visible"
           >
             <motion.span variants={fadeSlideUp} className="mb-3 inline-block rounded bg-[#ED2C25] px-2 py-1 text-[10px] font-bold tracking-wide text-white md:text-xs">
-              {currentSlide.isEvent ? (currentSlide.status === 'live' ? 'SỰ KIỆN TRỰC TIẾP' : 'SỰ KIỆN ĐÃ GHIM') : 'PHIM PHỔ BIẾN'}
+              {currentSlide.isWorldCupBanner ? '🏆 FIFA WORLD CUP 2026' : currentSlide.isEvent ? (currentSlide.status === 'live' ? 'SỰ KIỆN TRỰC TIẾP' : 'SỰ KIỆN ĐÃ GHIM') : 'PHIM PHỔ BIẾN'}
             </motion.span>
             <motion.h1 variants={fadeSlideUp} className="line-clamp-2 text-3xl font-black leading-tight text-white md:text-6xl">{currentSlide.name}</motion.h1>
             <motion.h2 variants={fadeIn} className="mt-2 text-sm font-bold text-white/60 md:text-xl">{currentSlide.original_name}</motion.h2>
             <motion.p variants={fadeIn} className="mb-6 mt-3 line-clamp-3 max-w-3xl text-xs text-white/80 md:text-base">{description}</motion.p>
             <motion.div variants={fadeSlideUp} className="flex items-center gap-3 pointer-events-auto">
-              <a href={watchUrl} className="flex items-center gap-2 rounded-md bg-[#ED2C25] px-5 py-3 text-sm font-bold text-white transition-transform hover:scale-105 hover:bg-red-700"><Play fill="currentColor" size={19} /> {currentSlide.isEvent ? 'Xem sự kiện' : 'Xem ngay'}</a>
-              {currentSlide.isEvent
-                ? <a href="/events/" className="flex items-center gap-2 rounded-md bg-white/20 px-5 py-3 text-sm font-bold text-white backdrop-blur-md transition-transform hover:scale-105 hover:bg-white/30"><Info size={19} /> Sự kiện</a>
-                : <button onClick={() => setModalSlug(currentSlide.slug)} className="flex items-center gap-2 rounded-md bg-white/20 px-5 py-3 text-sm font-bold text-white backdrop-blur-md transition-transform hover:scale-105 hover:bg-white/30"><Info size={19} /> Chi tiết</button>}
+              <a href={watchUrl} className="flex items-center gap-2 rounded-md bg-[#ED2C25] px-5 py-3 text-sm font-bold text-white transition-transform hover:scale-105 hover:bg-red-700"><Play fill="currentColor" size={19} /> {currentSlide.isWorldCupBanner ? 'Vào giải đấu' : currentSlide.isEvent ? 'Xem sự kiện' : 'Xem ngay'}</a>
+              {currentSlide.isWorldCupBanner ? (
+                <a href="/worldcup/" className="flex items-center gap-2 rounded-md bg-white/20 px-5 py-3 text-sm font-bold text-white backdrop-blur-md transition-transform hover:scale-105 hover:bg-white/30"><Info size={19} /> Lịch thi đấu</a>
+              ) : currentSlide.isEvent ? (
+                <a href="/events/" className="flex items-center gap-2 rounded-md bg-white/20 px-5 py-3 text-sm font-bold text-white backdrop-blur-md transition-transform hover:scale-105 hover:bg-white/30"><Info size={19} /> Sự kiện</a>
+              ) : (
+                <button onClick={() => setModalSlug(currentSlide.slug)} className="flex items-center gap-2 rounded-md bg-white/20 px-5 py-3 text-sm font-bold text-white backdrop-blur-md transition-transform hover:scale-105 hover:bg-white/30"><Info size={19} /> Chi tiết</button>
+              )}
             </motion.div>
           </motion.div>
         </AnimatePresence>

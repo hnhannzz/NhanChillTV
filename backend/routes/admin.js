@@ -501,4 +501,5 @@ router.get('/system/metrics', auth, async (req, res) => {
   }
 });
 
+router.adminSessions = adminSessions;
 module.exports = router;

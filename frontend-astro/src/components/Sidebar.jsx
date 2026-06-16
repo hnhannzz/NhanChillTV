@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Tv, Film, Medal, LogOut, X } from 'lucide-react';
+import { Home, Tv, Film, Medal, Trophy, LogOut, X } from 'lucide-react';
 import classNames from 'classnames';
 
 export default function Sidebar({ isOpen, toggleSidebar }) {
@@ -7,6 +7,7 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
     { icon: Home, label: 'Trang chủ', href: '/' },
     { icon: Tv, label: 'Truyền hình', href: '/tv/' },
     { icon: Medal, label: 'Sự kiện', href: '/events/' },
+    { icon: Trophy, label: 'World Cup 2026', href: '/worldcup/' },
     { icon: Film, label: 'Phim', href: '/movies/' }
   ];
 

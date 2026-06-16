@@ -5,6 +5,7 @@ import HeroBanner from '../components/HeroBanner.jsx';
 import HomeEvents from '../components/HomeEvents.jsx';
 import HomeChannels from '../components/HomeChannels.jsx';
 import HomeMovies from '../components/HomeMovies.jsx';
+import HomeWorldCupWidget from '../components/HomeWorldCupWidget.jsx';
 ---
 
 <Layout title="NhanChillTV - Xem Phim & Truyền Hình">
@@ -12,6 +13,19 @@ import HomeMovies from '../components/HomeMovies.jsx';
     <HeroBanner client:load />
 
     <div class="px-4 md:px-12 py-12 space-y-12 pb-32">
+
+      {/* World Cup Section */}
+      <section>
+        <div class="flex items-center justify-between mb-4 md:mb-6">
+          <h2 class="text-xl md:text-4xl font-black text-white flex items-center gap-2 md:gap-3">
+            <span class="w-1.5 md:w-2 h-6 md:h-12 bg-[#ED2C25] rounded-full inline-block"></span>
+            FIFA World Cup 2026
+          </h2>
+          <a href="/worldcup/" class="text-xs md:text-lg font-bold text-white bg-[#ED2C25] hover:bg-red-700 px-4 md:px-6 py-2 md:py-2.5 rounded-full transition-colors shadow-lg shadow-red-500/30 shrink-0">Lịch đấu & BXH</a>
+        </div>
+        
+        <HomeWorldCupWidget client:only="react" />
+      </section>
 
       {/* Live Events Section */}
       <section>

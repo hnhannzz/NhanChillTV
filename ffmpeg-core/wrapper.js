@@ -33,12 +33,19 @@ class FFmpegWrapper {
     const userAgent = channelObj.userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
     return new Promise((resolve) => {
-      // Fast timeout
       let isResolved = false;
+      let probe = null;
+
+      // Fast timeout
       const timeout = setTimeout(() => {
         if (!isResolved) {
           isResolved = true;
           console.warn(`[FFprobe] Timeout for ${channelId}, using fallback`);
+          if (probe) {
+            try {
+              probe.kill('SIGKILL');
+            } catch (e) {}
+          }
           resolve({ videoCodec: 'h264', audioCodec: 'unknown', fieldOrder: 'progressive', fps: 25 });
         }
       }, 2000);
@@ -59,46 +66,63 @@ class FFmpegWrapper {
         udpUrl
       ];
 
-      const probe = spawn(ffprobeExe, args);
-      let output = '';
+      try {
+        probe = spawn(ffprobeExe, args);
+        let output = '';
 
-      probe.stdout.on('data', (data) => output += data.toString());
-      
-      probe.on('close', (code) => {
-        if (isResolved) return;
-        isResolved = true;
-        clearTimeout(timeout);
+        probe.stdout.on('data', (data) => output += data.toString());
         
-        try {
-          const json = JSON.parse(output);
-          let vCodec = 'h264';
-          let aCodec = 'aac';
-          let fOrder = 'progressive';
-          let fps = 25;
+        probe.on('error', (err) => {
+          if (isResolved) return;
+          isResolved = true;
+          clearTimeout(timeout);
+          console.warn(`[FFprobe] Process error for ${channelId}:`, err.message);
+          resolve({ videoCodec: 'h264', audioCodec: 'unknown', fieldOrder: 'progressive', fps: 25 });
+        });
+
+        probe.on('close', (code) => {
+          if (isResolved) return;
+          isResolved = true;
+          clearTimeout(timeout);
           
-          if (json.streams) {
-            for (const s of json.streams) {
-              if (s.codec_name && ['h264', 'hevc', 'mpeg2video'].includes(s.codec_name)) {
-                vCodec = s.codec_name;
-                if (s.field_order && s.field_order !== 'progressive' && s.field_order !== 'unknown') {
-                  fOrder = 'interlaced';
+          try {
+            const json = JSON.parse(output);
+            let vCodec = 'h264';
+            let aCodec = 'aac';
+            let fOrder = 'progressive';
+            let fps = 25;
+            
+            if (json.streams) {
+              for (const s of json.streams) {
+                if (s.codec_name && ['h264', 'hevc', 'mpeg2video'].includes(s.codec_name)) {
+                  vCodec = s.codec_name;
+                  if (s.field_order && s.field_order !== 'progressive' && s.field_order !== 'unknown') {
+                    fOrder = 'interlaced';
+                  }
+                  if (s.r_frame_rate) {
+                    const parts = s.r_frame_rate.split('/');
+                    fps = parts.length === 2 ? parseInt(parts[0]) / (parseInt(parts[1]) || 1) : parseInt(s.r_frame_rate);
+                  }
+                } else if (s.codec_name && ['aac', 'mp2', 'mp3', 'ac3'].includes(s.codec_name)) {
+                  aCodec = s.codec_name;
                 }
-                if (s.r_frame_rate) {
-                  const parts = s.r_frame_rate.split('/');
-                  fps = parts.length === 2 ? parseInt(parts[0]) / (parseInt(parts[1]) || 1) : parseInt(s.r_frame_rate);
-                }
-              } else if (s.codec_name && ['aac', 'mp2', 'mp3', 'ac3'].includes(s.codec_name)) {
-                aCodec = s.codec_name;
               }
             }
+            console.log(`[FFprobe] ${channelId}: Video=${vCodec} (${fOrder}, ${fps}fps), Audio=${aCodec}`);
+            resolve({ videoCodec: vCodec, audioCodec: aCodec, fieldOrder: fOrder, fps: fps });
+          } catch (e) {
+            console.warn(`[FFprobe] Parse error for ${channelId}, using fallback`);
+            resolve({ videoCodec: 'h264', audioCodec: 'unknown', fieldOrder: 'progressive', fps: 25 });
           }
-          console.log(`[FFprobe] ${channelId}: Video=${vCodec} (${fOrder}, ${fps}fps), Audio=${aCodec}`);
-          resolve({ videoCodec: vCodec, audioCodec: aCodec, fieldOrder: fOrder, fps: fps });
-        } catch (e) {
-          console.warn(`[FFprobe] Parse error for ${channelId}, using fallback`);
+        });
+      } catch (err) {
+        if (!isResolved) {
+          isResolved = true;
+          clearTimeout(timeout);
+          console.warn(`[FFprobe] Spawn error for ${channelId}:`, err.message);
           resolve({ videoCodec: 'h264', audioCodec: 'unknown', fieldOrder: 'progressive', fps: 25 });
         }
-      });
+      }
     });
   }
 

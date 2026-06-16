@@ -45,6 +45,7 @@ app.use('/api/comments', require('./routes/comment'));
 app.use('/api/epg', require('./routes/epg'));
 app.use('/api/movies', require('./routes/movies'));
 app.use('/api/proxy', require('./routes/proxy'));
+app.use('/api/worldcup', require('./routes/worldcup'));
 
 // Health check & Metrics for Load Balancing
 app.get('/api/health', async (req, res) => {
@@ -61,7 +62,7 @@ app.get('/api/health', async (req, res) => {
         currentLoad: cpuLoad.currentLoad
       },
       memory: {
-        free: mem.free,
+        free: mem.available || mem.free,
         total: mem.total
       }
     });
@@ -126,9 +127,14 @@ setInterval(async () => {
       tx = netStats[0].tx_sec / (1024 * 1024); // MB/s
     }
 
+    const freeMem = mem.available || mem.free;
+    const usedMemPct = (((mem.total - freeMem) / mem.total) * 100).toFixed(2);
+
     const metrics = {
       cpu: cpu.currentLoad.toFixed(2),
-      memoryUsed: ((mem.active / mem.total) * 100).toFixed(2),
+      memoryUsed: usedMemPct,
+      memoryFree: freeMem,
+      memoryTotal: mem.total,
       networkRx: rx.toFixed(2),
       networkTx: tx.toFixed(2),
       activeStreams: ffmpegWrapper.getActiveStreams().length

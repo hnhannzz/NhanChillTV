@@ -2,8 +2,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Activity, CalendarDays, ChevronDown, ChevronUp, CircleStop, Eye, EyeOff,
   Copy, Gauge, ListVideo, LogOut, Pencil, Plus, Radio, RefreshCw, RotateCcw,
-  KeyRound, Save, Server, Settings, Trash2, UploadCloud, X, Cpu
+  KeyRound, Save, Server, Settings, Trash2, UploadCloud, X, Cpu, Trophy
 } from 'lucide-react';
+import { io } from 'socket.io-client';
 
 const API_BASE = '/api';
 
@@ -26,6 +27,7 @@ export default function AdminDashboard() {
   const [sourceForm, setSourceForm] = useState({ name: '', url: '', type: 'url' });
   const [channelSearch, setChannelSearch] = useState('');
   const [settingsDirty, setSettingsDirty] = useState(false);
+  const [realtimeMetrics, setRealtimeMetrics] = useState(null);
 
   const logout = useCallback(() => {
     localStorage.removeItem('adminToken');
@@ -78,6 +80,23 @@ export default function AdminDashboard() {
     const timer = setInterval(loadData, 15000);
     return () => clearInterval(timer);
   }, [loadData, token]);
+
+  useEffect(() => {
+    if (!token) return undefined;
+    const socket = io({ path: '/socket.io' });
+    
+    socket.on('connect', () => {
+      console.log('[Socket] Connected to backend for realtime metrics');
+    });
+    
+    socket.on('system_metrics', (data) => {
+      setRealtimeMetrics(data);
+    });
+    
+    return () => {
+      socket.disconnect();
+    };
+  }, [token]);
 
   const login = async event => {
     event.preventDefault();
@@ -140,7 +159,7 @@ export default function AdminDashboard() {
   }
 
   const tabs = [
-    ['dashboard', 'Tổng quan', Gauge], ['events', 'Sự kiện', CalendarDays], ['m3u', 'Nguồn M3U', Radio],
+    ['dashboard', 'Tổng quan', Gauge], ['events', 'Sự kiện', CalendarDays], ['worldcup', 'World Cup', Trophy], ['m3u', 'Nguồn M3U', Radio],
     ['channels', 'Kênh IPTV', ListVideo], ['transcode247', 'Chuyển mã 24/7', Cpu], ['streams', 'Luồng phát', Activity], ['system', 'Hệ thống', Settings], ['security', 'Mật khẩu', KeyRound],
   ];
 
@@ -158,12 +177,13 @@ export default function AdminDashboard() {
 
         <main className="min-w-0 flex-1 p-3 pb-8 sm:p-4 md:p-6">
           {notice && <div className={`mb-4 rounded-md border px-4 py-3 text-sm ${notice.startsWith('Lỗi:') ? 'border-red-500/30 bg-red-500/10 text-red-300' : 'border-green-500/30 bg-green-500/10 text-green-300'}`}>{notice}</div>}
-          {activeTab === 'dashboard' && <DashboardTab health={health} status={status} sources={sources} events={events} streams={streams} busy={busy} onRefresh={() => runAction(() => adminRequest('/admin/m3u-sources/refresh', { method: 'POST' }), 'Đã cập nhật danh sách M3U.')} onRestart={() => {
+          {activeTab === 'dashboard' && <DashboardTab health={health} status={status} sources={sources} events={events} streams={streams} busy={busy} realtimeMetrics={realtimeMetrics} onRefresh={() => runAction(() => adminRequest('/admin/m3u-sources/refresh', { method: 'POST' }), 'Đã cập nhật danh sách M3U.')} onRestart={() => {
             if (window.confirm('Khởi động lại dịch vụ backend và reload Nginx?')) runAction(() => adminRequest('/admin/system/restart', { method: 'POST' }), 'Đã gửi lệnh khởi động lại.');
           }} />}
           {activeTab === 'events' && <EventsTab events={events} onAdd={() => setEventModal({ mode: 'create', event: null })} onEdit={event => setEventModal({ mode: 'edit', event })} onDelete={event => {
             if (window.confirm(`Xóa sự kiện "${event.title}"?`)) runAction(() => adminRequest(`/admin/events/${event.id}`, { method: 'DELETE' }), 'Đã xóa sự kiện.');
           }} />}
+          {activeTab === 'worldcup' && <WorldCupTab channels={channels} adminRequest={adminRequest} runAction={runAction} busy={busy} />}
           {activeTab === 'm3u' && <M3uTab sources={sources} sourceForm={sourceForm} setSourceForm={setSourceForm} busy={busy} onAdd={event => {
             event.preventDefault();
             runAction(async () => {
@@ -186,17 +206,57 @@ export default function AdminDashboard() {
   );
 }
 
-function DashboardTab({ health, status, sources, events, streams, busy, onRefresh, onRestart }) {
+function ProgressBar({ value, color = 'bg-[#ED2C25]' }) {
+  const pct = Math.min(100, Math.max(0, Number(value || 0)));
+  return (
+    <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden mt-1">
+      <div className={`h-full ${color} transition-all duration-500`} style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
+function DashboardTab({ health, status, sources, events, streams, busy, realtimeMetrics, onRefresh, onRestart }) {
   const cards = [
     ['Kênh IPTV', status?.channelsCount ?? 0, ListVideo], ['Nguồn đang bật', sources.filter(source => source.active).length, Server],
     ['Sự kiện', events.length, CalendarDays], ['Luồng FFmpeg', streams.length, Activity],
   ];
+  
+  const cpuVal = realtimeMetrics ? Number(realtimeMetrics.cpu) : Number(health?.cpuLoad?.currentLoad || 0);
+  const memVal = realtimeMetrics ? Number(realtimeMetrics.memoryUsed) : 0;
+  
   return (
     <section>
       <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-xl font-bold sm:text-2xl">Tổng quan</h1><p className="text-xs text-white/45 sm:text-sm">Trạng thái backend và dữ liệu IPTV.</p></div><div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto"><button disabled={busy} onClick={onRefresh} className="flex items-center justify-center gap-2 rounded-md bg-white/10 px-2 py-2 text-xs hover:bg-white/15 sm:px-3 sm:text-sm"><RefreshCw size={16} className={busy ? 'animate-spin' : ''} /> Cập nhật M3U</button><button onClick={onRestart} className="flex items-center justify-center gap-2 rounded-md border border-red-500/30 px-2 py-2 text-xs text-red-300 hover:bg-red-500/10 sm:px-3 sm:text-sm"><RotateCcw size={16} /> Khởi động lại</button></div></div>
       <div className="mt-4 grid grid-cols-2 gap-2 sm:mt-5 sm:gap-3 lg:grid-cols-4">{cards.map(([label, value, Icon]) => <div key={label} className="rounded-lg border border-white/8 bg-[#151515] p-3 sm:p-4"><Icon size={18} className="mb-2 text-[#ED2C25] sm:mb-3" /><div className="text-xl font-black sm:text-2xl">{value}</div><div className="truncate text-[11px] text-white/45 sm:text-xs">{label}</div></div>)}</div>
       <div className="mt-5 grid gap-4 lg:grid-cols-2">
-        <Panel title="Tài nguyên máy chủ"><InfoRow label="CPU" value={`${Number(health?.cpuLoad?.currentLoad || 0).toFixed(1)}%`} /><InfoRow label="Bộ nhớ trống" value={formatBytes(health?.memory?.free)} /><InfoRow label="Chế độ" value={health?.mode || '--'} /><InfoRow label="FFmpeg" value={health?.ffmpegAvailable ? 'Sẵn sàng' : 'Không tìm thấy'} /></Panel>
+        <Panel title="Tài nguyên máy chủ (Realtime)">
+          <div className="space-y-4">
+            <div>
+              <div className="flex justify-between text-sm">
+                <span className="text-white/45">CPU Load</span>
+                <span className={`font-semibold ${cpuVal > 80 ? 'text-red-400' : cpuVal > 50 ? 'text-yellow-400' : 'text-green-400'}`}>{cpuVal.toFixed(1)}%</span>
+              </div>
+              <ProgressBar value={cpuVal} color={cpuVal > 80 ? 'bg-red-500' : cpuVal > 50 ? 'bg-yellow-500' : 'bg-green-500'} />
+            </div>
+
+            <div>
+              <div className="flex justify-between text-sm">
+                <span className="text-white/45">Sử dụng RAM</span>
+                <span className={`font-semibold ${memVal > 90 ? 'text-red-400' : memVal > 70 ? 'text-yellow-400' : 'text-green-400'}`}>{realtimeMetrics ? `${memVal}%` : '--'}</span>
+              </div>
+              <ProgressBar value={memVal} color={memVal > 90 ? 'bg-red-500' : memVal > 70 ? 'bg-yellow-500' : 'bg-green-500'} />
+            </div>
+
+            <div className="border-t border-white/5 my-2 pt-2">
+              <InfoRow label="RAM trống (khả dụng)" value={realtimeMetrics ? formatBytes(realtimeMetrics.memoryFree) : formatBytes(health?.memory?.free)} />
+              <InfoRow label="Tổng dung lượng RAM" value={realtimeMetrics ? formatBytes(realtimeMetrics.memoryTotal) : formatBytes(health?.memory?.total)} />
+              <InfoRow label="Băng thông Nhận (Rx)" value={realtimeMetrics ? `${realtimeMetrics.networkRx} MB/s` : '--'} />
+              <InfoRow label="Băng thông Truyền (Tx)" value={realtimeMetrics ? `${realtimeMetrics.networkTx} MB/s` : '--'} />
+              <InfoRow label="Chế độ chạy" value={health?.mode || '--'} />
+              <InfoRow label="FFmpeg Binary" value={health?.ffmpegAvailable ? 'Sẵn sàng' : 'Không tìm thấy'} />
+            </div>
+          </div>
+        </Panel>
         <Panel title="Cập nhật M3U"><InfoRow label="Lần cập nhật" value={status?.lastRefreshAt ? new Date(status.lastRefreshAt).toLocaleString('vi-VN') : 'Chưa có'} /><InfoRow label="Trạng thái" value={status?.isRefreshing ? 'Đang cập nhật' : 'Sẵn sàng'} /><InfoRow label="Chu kỳ" value="1 giờ/lần" />{status?.lastError && <div className="mt-3 rounded bg-red-500/10 p-2 text-xs text-red-300">{status.lastError}</div>}</Panel>
       </div>
     </section>
@@ -575,4 +635,411 @@ function InfoRow({ label, value }) { return <div className="flex justify-between
 function Empty({ text }) { return <div className="p-10 text-center text-sm text-white/45">{text}</div>; }
 function Field({ label, children }) { return <label className="block text-sm"><span className="mb-1.5 block text-white/55">{label}</span>{children}</label>; }
 function formatBytes(value) { const bytes = Number(value || 0); if (!bytes) return '--'; return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`; }
+
+function WorldCupTab({ channels, adminRequest, runAction, busy }) {
+  const [games, setGames] = useState([]);
+  const [teams, setTeams] = useState({});
+  const [search, setSearch] = useState('');
+  const [editingGame, setEditingGame] = useState(null);
+  const [filter, setFilter] = useState('all');
+
+  // Form states
+  const [homeScore, setHomeScore] = useState('0');
+  const [awayScore, setAwayScore] = useState('0');
+  const [finished, setFinished] = useState('FALSE');
+  const [timeElapsed, setTimeElapsed] = useState('not_started');
+  const [localDate, setLocalDate] = useState('');
+  const [streamType, setStreamType] = useState('none');
+  const [sourceChannelId, setSourceChannelId] = useState('');
+  const [customUrl, setCustomUrl] = useState('');
+
+  const loadGames = useCallback(async () => {
+    try {
+      const teamsData = await fetch('/api/worldcup/teams').then(r => r.json());
+      if (teamsData.success) {
+        const map = {};
+        teamsData.teams.forEach(t => { map[t.id] = t; });
+        setTeams(map);
+      }
+      
+      const gamesData = await fetch('/api/worldcup/games').then(r => r.json());
+      if (gamesData.success) {
+        setGames(gamesData.games || []);
+      }
+    } catch (err) {
+      console.error('Error loading worldcup games in admin:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadGames();
+  }, [loadGames]);
+
+  const startEdit = (game) => {
+    setEditingGame(game);
+    setHomeScore(game.home_score !== 'null' ? game.home_score : '0');
+    setAwayScore(game.away_score !== 'null' ? game.away_score : '0');
+    setFinished(game.finished || 'FALSE');
+    setTimeElapsed(game.time_elapsed || 'not_started');
+    setLocalDate(game.local_date || '');
+    
+    if (game.sourceType === 'iptv') {
+      setStreamType('iptv');
+      setSourceChannelId(game.sourceChannelId || '');
+      setCustomUrl('');
+    } else if (game.streamUrl) {
+      setStreamType('custom');
+      setCustomUrl(game.streamUrl);
+      setSourceChannelId('');
+    } else {
+      setStreamType('none');
+      setSourceChannelId('');
+      setCustomUrl('');
+    }
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    if (!editingGame) return;
+
+    await runAction(async () => {
+      const payload = {
+        id: editingGame.id,
+        home_score: homeScore,
+        away_score: awayScore,
+        finished: finished,
+        time_elapsed: timeElapsed,
+        local_date: localDate,
+        sourceType: streamType === 'none' ? null : streamType,
+        sourceChannelId: streamType === 'iptv' ? sourceChannelId : null,
+        streamUrl: streamType === 'custom' ? customUrl : (streamType === 'iptv' ? 'iptv' : null)
+      };
+
+      await adminRequest('/worldcup/admin/games', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      setEditingGame(null);
+      await loadGames();
+    }, 'Đã cập nhật đè thông tin trận đấu.');
+  };
+
+  const handleReset = async (gameId) => {
+    if (!window.confirm('Khôi phục trận đấu về dữ liệu gốc của FIFA?')) return;
+    await runAction(async () => {
+      await adminRequest(`/worldcup/admin/games/${gameId}`, {
+        method: 'DELETE'
+      });
+      setEditingGame(null);
+      await loadGames();
+    }, 'Đã xóa đè, khôi phục dữ liệu gốc.');
+  };
+
+  const filteredGames = games.filter(game => {
+    const homeName = (game.home_team_name_en || '').toLowerCase();
+    const awayName = (game.away_team_name_en || '').toLowerCase();
+    const matchesSearch = homeName.includes(search.toLowerCase()) || awayName.includes(search.toLowerCase()) || String(game.id).includes(search);
+    if (!matchesSearch) return false;
+
+    if (filter === 'live') return game.finished !== 'TRUE' && game.time_elapsed !== 'not_started';
+    if (filter === 'upcoming') return game.finished !== 'TRUE' && game.time_elapsed === 'not_started';
+    if (filter === 'finished') return game.finished === 'TRUE';
+    if (filter === 'streaming') return !!game.streamUrl && game.finished !== 'TRUE';
+    return true;
+  });
+
+  return (
+    <section>
+      <SectionHeader 
+        title="Quản lý World Cup 2026" 
+        subtitle="Thiết lập tỷ số, trạng thái và ánh xạ luồng trực tiếp cho 104 trận đấu" 
+      />
+
+      {/* Filters & Search */}
+      <div className="mt-5 flex flex-col md:flex-row gap-4 justify-between items-center">
+        <div className="flex flex-wrap gap-2 w-full md:w-auto">
+          {[
+            { id: 'all', label: 'Tất cả' },
+            { id: 'live', label: 'Đang trực tiếp 🔴' },
+            { id: 'streaming', label: 'Có luồng phát 📺' },
+            { id: 'upcoming', label: 'Sắp diễn ra' },
+            { id: 'finished', label: 'Đã kết thúc' }
+          ].map(opt => (
+            <button
+              key={opt.id}
+              onClick={() => setFilter(opt.id)}
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                filter === opt.id
+                  ? 'bg-[#ED2C25] text-white'
+                  : 'text-white/60 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Tìm quốc gia hoặc ID trận đấu..."
+          className="w-full md:w-[280px] rounded-md border border-white/10 bg-black/25 px-3 py-2 text-xs outline-none focus:border-[#ED2C25]"
+        />
+      </div>
+
+      {/* Games list table */}
+      <div className="mt-5 overflow-hidden rounded-lg border border-white/10 bg-[#151515]">
+        {filteredGames.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-white/10 bg-black/20 text-white/45 font-bold uppercase text-[10px]">
+                  <th className="p-3 w-12 text-center">ID</th>
+                  <th className="p-3">Trận đấu</th>
+                  <th className="p-3 text-center w-24">Tỷ số</th>
+                  <th className="p-3 text-center w-28">Trạng thái</th>
+                  <th className="p-3">Luồng phát</th>
+                  <th className="p-3 text-center w-28">Hành động</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredGames.map(game => {
+                  const isLive = game.finished !== 'TRUE' && game.time_elapsed !== 'not_started';
+                  const isFinished = game.finished === 'TRUE';
+                  const homeFlag = teams[game.home_team_id]?.flag;
+                  const awayFlag = teams[game.away_team_id]?.flag;
+
+                  return (
+                    <tr key={game.id} className="border-b border-white/5 hover:bg-white/5">
+                      <td className="p-3 text-center font-bold text-white/50">#{game.id}</td>
+                      <td className="p-3">
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5">
+                            {homeFlag && <img src={homeFlag} className="w-5 h-3.5 object-cover rounded-sm border border-white/10" />}
+                            <span className="font-semibold text-white">{game.home_team_name_en}</span>
+                          </div>
+                          <span className="text-white/30 font-bold">vs</span>
+                          <div className="flex items-center gap-1.5">
+                            {awayFlag && <img src={awayFlag} className="w-5 h-3.5 object-cover rounded-sm border border-white/10" />}
+                            <span className="font-semibold text-white">{game.away_team_name_en}</span>
+                          </div>
+                        </div>
+                        <div className="text-[10px] text-white/40 mt-1">{game.local_date} · {game.type}</div>
+                      </td>
+                      <td className="p-3 text-center font-black text-white bg-black/10 text-sm">
+                        {game.home_score !== 'null' ? game.home_score : '0'} - {game.away_score !== 'null' ? game.away_score : '0'}
+                      </td>
+                      <td className="p-3 text-center">
+                        {isLive ? (
+                          <span className="inline-block bg-[#ED2C25]/20 text-[#ED2C25] font-black px-2 py-0.5 rounded text-[10px] animate-pulse">
+                            {game.time_elapsed || 'LIVE'}
+                          </span>
+                        ) : isFinished ? (
+                          <span className="inline-block bg-white/5 text-white/45 font-semibold px-2 py-0.5 rounded text-[10px]">
+                            Đã kết thúc
+                          </span>
+                        ) : (
+                          <span className="inline-block bg-white/5 text-white/60 font-semibold px-2 py-0.5 rounded text-[10px]">
+                            Chưa đấu
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3">
+                        {game.streamUrl ? (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-xs font-bold text-[#FFD700] flex items-center gap-1">
+                              📺 {game.sourceType === 'iptv' ? 'Kênh IPTV' : 'Custom URL'}
+                            </span>
+                            <span className="text-[10px] text-white/45 truncate max-w-[200px]">
+                              {game.sourceType === 'iptv' 
+                                ? (channels.find(c => c.id === game.sourceChannelId)?.name || game.sourceChannelId)
+                                : game.streamUrl}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-white/30 italic">Không có luồng</span>
+                        )}
+                      </td>
+                      <td className="p-3 text-center">
+                        <div className="flex justify-center gap-1.5">
+                          <button
+                            onClick={() => startEdit(game)}
+                            className="bg-[#ED2C25] hover:bg-red-700 text-white font-bold py-1 px-2.5 rounded transition-colors text-[11px]"
+                          >
+                            Cấu hình
+                          </button>
+                          {game.streamUrl || game.home_score !== 'null' || game.finished !== 'FALSE' || game.time_elapsed !== 'not_started' ? (
+                            <button
+                              onClick={() => handleReset(game.id)}
+                              className="bg-white/5 hover:bg-white/10 text-white/80 py-1 px-2 rounded transition-colors text-[11px]"
+                              title="Khôi phục gốc"
+                            >
+                              Reset
+                            </button>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <Empty text="Không tìm thấy trận đấu nào." />
+        )}
+      </div>
+
+      {/* Override Edit Modal */}
+      {editingGame && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4">
+          <form 
+            onSubmit={handleSave} 
+            className="w-full max-w-md bg-[#151515] border border-white/10 rounded-lg overflow-hidden flex flex-col"
+          >
+            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 bg-black/20">
+              <div>
+                <h3 className="font-bold text-white">Cấu hình trận đấu #{editingGame.id}</h3>
+                <p className="text-[10px] text-white/40 mt-0.5">
+                  {editingGame.home_team_name_en} vs {editingGame.away_team_name_en}
+                </p>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setEditingGame(null)} 
+                className="rounded p-1 hover:bg-white/10 text-white/60 hover:text-white"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-4 overflow-y-auto max-h-[75vh]">
+              {/* Scores Grid */}
+              <div className="grid grid-cols-2 gap-3">
+                <Field label={`Tỷ số ${editingGame.home_team_name_en}`}>
+                  <input
+                    type="number"
+                    min="0"
+                    required
+                    value={homeScore}
+                    onChange={e => setHomeScore(e.target.value)}
+                    className="input-admin"
+                  />
+                </Field>
+                <Field label={`Tỷ số ${editingGame.away_team_name_en}`}>
+                  <input
+                    type="number"
+                    min="0"
+                    required
+                    value={awayScore}
+                    onChange={e => setAwayScore(e.target.value)}
+                    className="input-admin"
+                  />
+                </Field>
+              </div>
+
+              {/* Status & Elapsed minute */}
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Thời gian đã đấu (Ví dụ: 45', FT, or not_started)">
+                  <input
+                    type="text"
+                    required
+                    value={timeElapsed}
+                    onChange={e => setTimeElapsed(e.target.value)}
+                    className="input-admin"
+                  />
+                </Field>
+                <Field label="Trận đấu kết thúc?">
+                  <select
+                    value={finished}
+                    onChange={e => setFinished(e.target.value)}
+                    className="input-admin"
+                  >
+                    <option value="FALSE">Chưa kết thúc (FALSE)</option>
+                    <option value="TRUE">Đã kết thúc (TRUE)</option>
+                  </select>
+                </Field>
+              </div>
+
+              <Field label="Ngày giờ trận đấu (Địa phương)">
+                <input
+                  type="text"
+                  required
+                  value={localDate}
+                  onChange={e => setLocalDate(e.target.value)}
+                  className="input-admin"
+                  placeholder="MM/DD/YYYY HH:mm"
+                />
+              </Field>
+
+              {/* Stream Source Settings */}
+              <div className="border-t border-white/5 pt-3 mt-1 space-y-3">
+                <h4 className="text-xs font-bold text-white/50 uppercase">Ánh xạ luồng trực tiếp</h4>
+                
+                <Field label="Nguồn phát luồng">
+                  <select
+                    value={streamType}
+                    onChange={e => setStreamType(e.target.value)}
+                    className="input-admin"
+                  >
+                    <option value="none">Không phát (Đến phòng chờ)</option>
+                    <option value="iptv">Kênh IPTV Hệ thống</option>
+                    <option value="custom">Nhập URL tùy chọn (M3U8 / MPD)</option>
+                  </select>
+                </Field>
+
+                {streamType === 'iptv' && (
+                  <Field label="Chọn kênh IPTV">
+                    <select
+                      required
+                      value={sourceChannelId}
+                      onChange={e => setSourceChannelId(e.target.value)}
+                      className="input-admin"
+                    >
+                      <option value="">-- Chọn kênh --</option>
+                      {channels.map(channel => (
+                        <option key={channel.id} value={channel.id}>
+                          [{channel.group}] {channel.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+
+                {streamType === 'custom' && (
+                  <Field label="URL tùy chọn (M3U8 / MPD)">
+                    <input
+                      type="url"
+                      required
+                      value={customUrl}
+                      onChange={e => setCustomUrl(e.target.value)}
+                      className="input-admin"
+                      placeholder="https://domain.com/stream.m3u8"
+                    />
+                  </Field>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 border-t border-white/10 px-4 py-3 bg-black/10">
+              <button 
+                type="button" 
+                onClick={() => setEditingGame(null)} 
+                className="rounded-md px-4 py-2 hover:bg-white/5 text-xs text-white/70"
+              >
+                Hủy
+              </button>
+              <button 
+                disabled={busy} 
+                className="rounded-md bg-[#ED2C25] px-5 py-2 font-bold text-xs text-white hover:bg-red-700 transition-colors"
+              >
+                Lưu thay đổi
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </section>
+  );
+}
 

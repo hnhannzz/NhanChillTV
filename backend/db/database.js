@@ -69,6 +69,10 @@ class Database {
         };
         this.write(data);
       }
+      if (!data.worldcupMatches) {
+        data.worldcupMatches = [];
+        this.write(data);
+      }
       if (!Array.isArray(data.favorites)) {
         data.favorites = [];
         this.write(data);
@@ -202,6 +206,31 @@ class Database {
       updatedAt: new Date().toISOString()
     };
     this.write(data);
+  }
+
+  getWorldcupMatches() {
+    return this.read().worldcupMatches || [];
+  }
+
+  saveWorldcupMatch(match) {
+    const data = this.read();
+    if (!data.worldcupMatches) data.worldcupMatches = [];
+    const idx = data.worldcupMatches.findIndex(m => String(m.id) === String(match.id));
+    if (idx !== -1) {
+      data.worldcupMatches[idx] = { ...data.worldcupMatches[idx], ...match };
+    } else {
+      data.worldcupMatches.push(match);
+    }
+    this.write(data);
+    return match;
+  }
+
+  deleteWorldcupMatch(id) {
+    const data = this.read();
+    if (data.worldcupMatches) {
+      data.worldcupMatches = data.worldcupMatches.filter(m => String(m.id) !== String(id));
+      this.write(data);
+    }
   }
 }
 

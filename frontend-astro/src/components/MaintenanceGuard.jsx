@@ -17,9 +17,11 @@ export default function MaintenanceGuard({ children }) {
   }, []);
 
   if (loading) {
-    return <div className="min-h-screen bg-[#050505] flex items-center justify-center">
-      <div className="animate-pulse flex flex-col items-center">
-        <div className="w-16 h-16 border-4 border-[#ED2C25] border-t-transparent rounded-full animate-spin"></div>
+    return <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center gap-3">
+      <img src="/logo/logo.png?v=1.65" alt="NhanChillTV" className="h-16 md:h-20 object-contain animate-pulse" />
+      <div className="text-xs font-bold text-[#ED2C25] tracking-widest uppercase">Xem Truyền Hình & Bóng Đá</div>
+      <div className="w-44 h-[3px] bg-white/10 rounded-full overflow-hidden mt-1">
+        <div className="h-full bg-[#ED2C25] rounded-full animate-[loader-slide_2s_infinite_ease-in-out]" style={{transformOrigin:'left'}} />
       </div>
     </div>;
   }

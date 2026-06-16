@@ -12,8 +12,12 @@ export default function TvPageContainer() {
   const [currentChannelId, setCurrentChannelId] = useState(null);
   const [streamParam, setStreamParam] = useState(null);
   const [eventId, setEventId] = useState(() => new URLSearchParams(window.location.search).get('event'));
+  const [matchId, setMatchId] = useState(() => new URLSearchParams(window.location.search).get('matchId'));
   const [eventData, setEventData] = useState(null);
+  const [matchData, setMatchData] = useState(null);
+  const [teams, setTeams] = useState({});
   const [activeEventStream, setActiveEventStream] = useState(0);
+  const [activeMatchStream, setActiveMatchStream] = useState(0);
   const [epgData, setEpgData] = useState(null);
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
@@ -49,7 +53,9 @@ export default function TvPageContainer() {
     let initialChannelId = params.get('channel');
     let initialStreamUrl = params.get('stream');
     const initialEventId = params.get('event');
+    const initialMatchId = params.get('matchId');
     setEventId(initialEventId);
+    setMatchId(initialMatchId);
 
     const load = async () => {
       try {
@@ -59,7 +65,42 @@ export default function TvPageContainer() {
         const loadedChannels = Array.isArray(channelsData.data) ? channelsData.data : [];
         setChannels(loadedChannels);
 
-        if (initialEventId) {
+        // Fetch teams map
+        const teamsRes = await fetch(`${API_BASE}/worldcup/teams`).then(r => r.json()).catch(() => null);
+        if (teamsRes && teamsRes.success && teamsRes.teams) {
+          const map = {};
+          teamsRes.teams.forEach(t => { map[t.id] = t; });
+          setTeams(map);
+        }
+
+        if (initialMatchId) {
+          const gamesRes = await fetch(`${API_BASE}/worldcup/games`).then(r => r.json()).catch(() => null);
+          const game = gamesRes?.success ? gamesRes.games.find(g => String(g.id) === String(initialMatchId)) : null;
+          if (game) {
+            setMatchData(game);
+            // Don't start player for finished matches
+            if (game.finished !== 'TRUE') {
+              const matchStreams = game.streams || [];
+              if (matchStreams.length > 0) {
+                const firstStream = matchStreams[0];
+                if (firstStream.sourceType === 'iptv' && firstStream.sourceChannelId) {
+                  initialChannelId = firstStream.sourceChannelId;
+                  initialStreamUrl = null;
+                } else {
+                  initialStreamUrl = firstStream.streamUrl || firstStream.stream;
+                  initialChannelId = null;
+                }
+              } else {
+                initialChannelId = null;
+                initialStreamUrl = null;
+              }
+            } else {
+              // Match finished — no stream
+              initialChannelId = null;
+              initialStreamUrl = null;
+            }
+          }
+        } else if (initialEventId) {
           const eventsRes = await fetch(`${API_BASE}/admin/events`);
           const eventsData = await eventsRes.json();
           const event = eventsData.success ? eventsData.data.find(item => item.id === initialEventId) : null;
@@ -79,7 +120,7 @@ export default function TvPageContainer() {
 
         if (initialChannelId) setCurrentChannelId(initialChannelId);
         if (initialStreamUrl) setStreamParam(initialStreamUrl);
-        if (!initialEventId && !initialChannelId && !initialStreamUrl && loadedChannels.length) setCurrentChannelId(loadedChannels[0].id);
+        if (!initialMatchId && !initialEventId && !initialChannelId && !initialStreamUrl && loadedChannels.length) setCurrentChannelId(loadedChannels[0].id);
 
         const token = localStorage.getItem('userToken');
         if (token) {
@@ -139,6 +180,19 @@ export default function TvPageContainer() {
     }
   };
 
+  const selectMatchStream = index => {
+    const stream = matchData?.streams?.[index];
+    if (!stream) return;
+    setActiveMatchStream(index);
+    if (stream.sourceType === 'iptv') {
+      setCurrentChannelId(stream.sourceChannelId || null);
+      setStreamParam(null);
+    } else {
+      setCurrentChannelId(null);
+      setStreamParam(stream.streamUrl || stream.stream || null);
+    }
+  };
+
   const playChannel = (id) => {
     setCurrentChannelId(id);
     setStreamParam(null);
@@ -193,6 +247,117 @@ export default function TvPageContainer() {
       {eventData.streams.length > 1 && <div className="hide-scrollbar flex max-w-full gap-2 overflow-x-auto pb-1">{eventData.streams.map((stream, index) => <button key={stream.id || index} onClick={() => selectEventStream(index)} className={`shrink-0 rounded-md px-3 py-2 text-sm font-semibold ${activeEventStream === index ? 'bg-[#ED2C25] text-white' : 'bg-white/8 text-white/65 hover:bg-white/12'}`}>{stream.name || `Luồng ${index + 1}`}</button>)}</div>}
     </div>
   );
+
+  if (matchId) {
+    const matchHeading = matchData && (
+      <div className="flex flex-col gap-4 bg-[#121212] p-4 rounded-xl border border-white/5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3 min-w-0 w-full justify-between sm:justify-start">
+          <div className="flex items-center gap-2 min-w-0 shrink">
+            {teams[matchData.home_team_id]?.flag && (
+              <img src={teams[matchData.home_team_id].flag} className="w-8 h-5 object-cover rounded shadow border border-white/10 shrink-0" />
+            )}
+            <span className="font-bold text-white text-sm sm:text-base md:text-lg truncate">{matchData.home_team_name_en}</span>
+          </div>
+
+          <div className="bg-black/45 px-3 py-1 rounded text-white font-black text-sm sm:text-base md:text-lg shrink-0 whitespace-nowrap">
+            {matchData.finished === 'TRUE' || (matchData.time_elapsed !== 'not_started' && matchData.time_elapsed !== 'notstarted' && matchData.time_elapsed) ? (
+              `${matchData.home_score !== 'null' ? matchData.home_score : '0'} - ${matchData.away_score !== 'null' ? matchData.away_score : '0'}`
+            ) : (
+              'VS'
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 min-w-0 shrink">
+            {teams[matchData.away_team_id]?.flag && (
+              <img src={teams[matchData.away_team_id].flag} className="w-8 h-5 object-cover rounded shadow border border-white/10 shrink-0" />
+            )}
+            <span className="font-bold text-white text-sm sm:text-base md:text-lg truncate">{matchData.away_team_name_en}</span>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          {matchData.streams && matchData.streams.length > 1 && (
+            <div className="hide-scrollbar flex max-w-full gap-2 overflow-x-auto">
+              {matchData.streams.map((stream, index) => (
+                <button
+                  key={stream.id || index}
+                  onClick={() => selectMatchStream(index)}
+                  className={`shrink-0 rounded-md px-3 py-1.5 text-xs font-semibold ${
+                    activeMatchStream === index
+                      ? 'bg-[#ED2C25] text-white font-bold shadow-md shadow-[#ED2C25]/20'
+                      : 'bg-white/5 text-white/65 hover:bg-white/10'
+                  }`}
+                >
+                  {stream.name}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 text-xs text-white/55 font-medium shrink-0">
+            <span>{matchData.local_date}</span>
+            {matchData.finished !== 'TRUE' && matchData.time_elapsed !== 'not_started' && matchData.time_elapsed !== 'notstarted' && (
+              <span className="animate-pulse bg-[#ED2C25] text-white text-[10px] font-black px-2 py-0.5 rounded">
+                LIVE {matchData.time_elapsed}
+              </span>
+            )}
+            {matchData.finished !== 'TRUE' && (matchData.time_elapsed === 'not_started' || matchData.time_elapsed === 'notstarted') && (
+              <span className="bg-white/10 text-white/70 text-[10px] font-bold px-2 py-0.5 rounded">
+                Chưa Bắt Đầu
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+
+    return (
+      <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-0 pb-8 pt-0 lg:px-8 lg:pt-6">
+        <div className="hidden lg:block">{matchHeading}</div>
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,68fr)_minmax(340px,32fr)]">
+          <div className={`fixed left-0 right-0 z-50 w-full overflow-hidden bg-black shadow-2xl transition-[top] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] lg:static lg:z-auto lg:rounded-lg lg:border lg:border-white/10 ${isHeaderHidden ? 'top-0' : 'top-[102px]'}`} style={{ willChange: 'top' }}>
+            {(currentChannelId || streamParam) ? (
+              <LivePlayerView 
+                key={`${currentChannelId || streamParam}-${activeMatchStream}`} 
+                channelId={currentChannelId} 
+                streamParam={streamParam} 
+                channelName={matchData ? `${matchData.home_team_name_en} vs ${matchData.away_team_name_en}` : currentChannel?.name} 
+              />
+            ) : matchData ? (
+              <div className="flex aspect-video w-full flex-col items-center justify-center bg-gradient-to-br from-slate-950 via-[#0a0a0a] to-[#1a0505] text-white p-6 border border-white/10 lg:rounded-lg">
+                <span className="inline-flex items-center gap-1 rounded-full bg-[#FFD700]/10 border border-[#FFD700]/30 px-3 py-1 text-xs font-bold text-[#FFD700] uppercase tracking-wider mb-4">
+                  🏆 FIFA World Cup 2026
+                </span>
+                <h3 className="text-lg md:text-xl font-black text-white/95 text-center">Trận đấu chưa phát sóng trực tiếp</h3>
+                <p className="mt-2 text-xs md:text-sm text-white/60 text-center max-w-md px-4">
+                  Vui lòng chờ ban quản trị cấp nguồn phát kênh hoặc quay lại sát giờ bóng lăn ({matchData.local_date}). Bạn vẫn có thể bình chọn dự đoán và tham gia chat trực tiếp!
+                </p>
+                <div className="mt-6 flex items-center gap-6 bg-white/5 border border-white/5 px-6 py-3 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    {teams[matchData.home_team_id]?.flag && <img src={teams[matchData.home_team_id]?.flag} className="w-8 h-5 object-cover rounded border border-white/10" />}
+                    <span className="font-bold text-sm">{matchData.home_team_name_en}</span>
+                  </div>
+                  <span className="text-white/40 font-bold text-xs">VS</span>
+                  <div className="flex items-center gap-2">
+                    {teams[matchData.away_team_id]?.flag && <img src={teams[matchData.away_team_id]?.flag} className="w-8 h-5 object-cover rounded border border-white/10" />}
+                    <span className="font-bold text-sm">{matchData.away_team_name_en}</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="aspect-video w-full animate-pulse bg-[#121212]" />
+            )}
+          </div>
+          <div className="aspect-video w-full lg:hidden" />
+          <div className="px-4 lg:hidden">{matchHeading}</div>
+          <div className="px-4 lg:px-0 space-y-4">
+            {matchData && <WorldCupMatchPoll matchId={matchId} matchData={matchData} teams={teams} />}
+            <EventChat eventId={`wc_${matchId}`} />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (eventId) {
     return (
@@ -327,5 +492,147 @@ function ChannelCard({ channel, active, favorite, onPlay, onFavorite }) {
       </span>
       <span className="absolute bottom-1.5 left-2 right-2 truncate text-center text-[11px] font-medium text-white/70">{channel.name}</span>
     </button>
+  );
+}
+
+function WorldCupMatchPoll({ matchId, matchData, teams }) {
+  const [pollResults, setPollResults] = useState({ home: 0, draw: 0, away: 0, total: 0 });
+  const [votedOption, setVotedOption] = useState(null);
+  const [voting, setVoting] = useState(false);
+  const [voteError, setVoteError] = useState(null);
+
+  useEffect(() => {
+    const savedVote = localStorage.getItem(`worldcup_vote_${matchId}`);
+    if (savedVote) {
+      setVotedOption(savedVote);
+    }
+
+    const loadPoll = () => {
+      fetch(`/api/worldcup/poll/results?matchId=${matchId}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            setPollResults(data.results);
+          }
+        })
+        .catch(err => console.error('Error fetching poll:', err));
+    };
+
+    loadPoll();
+    const interval = setInterval(loadPoll, 5000);
+    return () => clearInterval(interval);
+  }, [matchId]);
+
+  const handleVote = async (option) => {
+    if (votedOption || voting) return;
+    setVoting(true);
+    setVoteError(null);
+    try {
+      const res = await fetch('/api/worldcup/poll/vote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ matchId, option })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPollResults(data.results);
+        setVotedOption(option);
+        localStorage.setItem(`worldcup_vote_${matchId}`, option);
+      } else {
+        setVoteError(data.error || 'Bình chọn thất bại');
+      }
+    } catch (err) {
+      setVoteError('Lỗi kết nối máy chủ');
+    } finally {
+      setVoting(false);
+    }
+  };
+
+  const total = pollResults.total || 0;
+  const homePercent = total > 0 ? Math.round((pollResults.home / total) * 100) : 0;
+  const drawPercent = total > 0 ? Math.round((pollResults.draw / total) * 100) : 0;
+  const awayPercent = total > 0 ? Math.round((pollResults.away / total) * 100) : 0;
+
+  return (
+    <div className="rounded-lg border border-white/10 bg-[#151515] p-4 text-white">
+      <h3 className="font-extrabold text-sm border-b border-white/5 pb-2 mb-4">
+        📊 DỰ ĐOÁN KẾT QUẢ TRẬN ĐẤU
+      </h3>
+      
+      {voteError && (
+        <p className="text-xs text-red-500 mb-3">{voteError}</p>
+      )}
+
+      {!votedOption ? (
+        <div className="grid grid-cols-3 gap-3">
+          <button
+            onClick={() => handleVote('home')}
+            disabled={voting}
+            className="flex flex-col items-center gap-2 p-3 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 transition-all text-center"
+          >
+            {teams[matchData.home_team_id]?.flag && (
+              <img src={teams[matchData.home_team_id].flag} className="h-8 w-12 object-cover rounded border border-white/10" />
+            )}
+            <span className="text-xs font-bold truncate max-w-full text-white/95">{matchData.home_team_name_en} thắng</span>
+          </button>
+          
+          <button
+            onClick={() => handleVote('draw')}
+            disabled={voting}
+            className="flex flex-col items-center justify-center gap-2 p-3 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 transition-all text-center"
+          >
+            <div className="h-8 flex items-center justify-center font-bold text-white/60">HÒA</div>
+            <span className="text-xs font-bold text-white/60 font-semibold">Hòa</span>
+          </button>
+
+          <button
+            onClick={() => handleVote('away')}
+            disabled={voting}
+            className="flex flex-col items-center gap-2 p-3 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 transition-all text-center"
+          >
+            {teams[matchData.away_team_id]?.flag && (
+              <img src={teams[matchData.away_team_id].flag} className="h-8 w-12 object-cover rounded border border-white/10" />
+            )}
+            <span className="text-xs font-bold truncate max-w-full text-white/95">{matchData.away_team_name_en} thắng</span>
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div>
+            <div className="flex justify-between text-xs font-bold mb-1.5">
+              <span>{votedOption === 'home' ? '✅ ' : ''}{matchData.home_team_name_en}</span>
+              <span>{homePercent}% ({pollResults.home})</span>
+            </div>
+            <div className="w-full bg-white/10 rounded-full h-2.5 overflow-hidden">
+              <div className="bg-[#ED2C25] h-full transition-all duration-500" style={{ width: `${homePercent}%` }} />
+            </div>
+          </div>
+
+          <div>
+            <div className="flex justify-between text-xs font-bold mb-1.5">
+              <span>{votedOption === 'draw' ? '✅ ' : ''}Hòa</span>
+              <span>{drawPercent}% ({pollResults.draw})</span>
+            </div>
+            <div className="w-full bg-white/10 rounded-full h-2.5 overflow-hidden">
+              <div className="bg-gray-500 h-full transition-all duration-500" style={{ width: `${drawPercent}%` }} />
+            </div>
+          </div>
+
+          <div>
+            <div className="flex justify-between text-xs font-bold mb-1.5">
+              <span>{votedOption === 'away' ? '✅ ' : ''}{matchData.away_team_name_en}</span>
+              <span>{awayPercent}% ({pollResults.away})</span>
+            </div>
+            <div className="w-full bg-white/10 rounded-full h-2.5 overflow-hidden">
+              <div className="bg-blue-600 h-full transition-all duration-500" style={{ width: `${awayPercent}%` }} />
+            </div>
+          </div>
+
+          <p className="text-[10px] text-white/40 text-center pt-1">
+            Tổng số bình chọn: {total} lượt
+          </p>
+        </div>
+      )}
+    </div>
   );
 }

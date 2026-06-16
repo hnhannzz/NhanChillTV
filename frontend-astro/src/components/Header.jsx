@@ -2,8 +2,33 @@ import React, { useEffect, useRef, useState } from 'react';
 import { LogOut, Menu, Search, User, X } from 'lucide-react';
 import classNames from 'classnames';
 import AuthModal from './AuthModal';
-import { fetchOPhimJson, getOPhimItems } from '../lib/OPhimApi';
+import { fetchOPhimJson, getOPhimItems, getOPhimImageUrl } from '../lib/OPhimApi';
 import AvatarPicker from './AvatarPicker';
+
+function removeAccents(str) {
+  return String(str || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D');
+}
+
+function matchesQuery(movie, query) {
+  const normalize = (str) => {
+    return String(str || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .replace(/Đ/g, 'D')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+  };
+  const normalizedQuery = normalize(query);
+  if (!normalizedQuery) return true;
+  
+  const targetStr = normalize(`${movie.name} ${movie.original_name || ''} ${movie.slug || ''}`);
+  return targetStr.includes(normalizedQuery);
+}
 
 export default function Header({ toggleSidebar }) {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -75,7 +100,8 @@ export default function Header({ toggleSidebar }) {
   }, [isMobileSearchOpen]);
 
   useEffect(() => {
-    const query = searchQuery.trim();
+    const query = searchQuery.trim().replace(/\s+/g, ' ');
+    const unaccentedQuery = removeAccents(query);
     const requestId = ++searchRequestRef.current;
     if (query.length < 2) {
       setSearchResults([]);
@@ -88,21 +114,56 @@ export default function Header({ toggleSidebar }) {
       setSearchOpen(true);
       try {
         const [moviesResult, channelsResult] = await Promise.allSettled([
-          fetchOPhimJson(`/films/search?keyword=${encodeURIComponent(query)}`),
+          (async () => {
+            let res = await fetchOPhimJson(`/films/search?keyword=${encodeURIComponent(query)}`);
+            let items = getOPhimItems(res);
+
+            // Fallback 1: unaccented if accented returned nothing
+            if (items.length === 0 && unaccentedQuery !== query) {
+              res = await fetchOPhimJson(`/films/search?keyword=${encodeURIComponent(unaccentedQuery)}`);
+              items = getOPhimItems(res);
+            }
+
+            // Fallback 2: first word client-side filter
+            if (items.length === 0 && query.includes(' ')) {
+              const words = query.split(' ').filter(Boolean);
+              if (words.length > 0) {
+                const firstWord = words[0];
+                const fbRes = await fetchOPhimJson(`/films/search?keyword=${encodeURIComponent(firstWord)}`);
+                const fbItems = getOPhimItems(fbRes);
+                items = fbItems.filter(item => matchesQuery(item, query));
+              }
+            }
+
+            // Fallback 3: first word client-side filter for unaccented
+            if (items.length === 0 && unaccentedQuery.includes(' ')) {
+              const words = unaccentedQuery.split(' ').filter(Boolean);
+              if (words.length > 0) {
+                const firstWord = words[0];
+                const fbRes = await fetchOPhimJson(`/films/search?keyword=${encodeURIComponent(firstWord)}`);
+                const fbItems = getOPhimItems(fbRes);
+                items = fbItems.filter(item => matchesQuery(item, unaccentedQuery));
+              }
+            }
+
+            return items;
+          })(),
           fetch('/api/iptv/channels').then(response => response.ok ? response.json() : Promise.reject(new Error(`HTTP ${response.status}`))),
         ]);
+
         if (requestId !== searchRequestRef.current) return;
 
         const movies = moviesResult.status === 'fulfilled'
-          ? getOPhimItems(moviesResult.value).slice(0, 5).map(movie => ({
+          ? moviesResult.value.slice(0, 5).map(movie => ({
             name: movie.name,
             subtitle: movie.original_name || movie.year || 'Phim',
-            image: movie.thumb_url || movie.poster_url || '/poster.jpg',
+            image: getOPhimImageUrl(movie.thumb_url || movie.poster_url),
             key: `movie-${movie.slug}`,
             type: 'movie',
             link: `/movie-detail/?slug=${encodeURIComponent(movie.slug)}`,
           }))
           : [];
+
         const channels = channelsResult.status === 'fulfilled' && channelsResult.value.success
           ? channelsResult.value.data
             .filter(channel => `${channel.name} ${channel.group || ''}`.toLowerCase().includes(query.toLowerCase()))
@@ -116,6 +177,7 @@ export default function Header({ toggleSidebar }) {
               link: `/tv/?channel=${encodeURIComponent(channel.id)}`,
             }))
           : [];
+
         setSearchResults([...movies, ...channels]);
       } catch (err) {
         if (requestId === searchRequestRef.current) setSearchResults([]);
@@ -154,6 +216,7 @@ export default function Header({ toggleSidebar }) {
           <a href="/" className="font-semibold text-white/80 hover:text-[#ED2C25]">Trang chủ</a>
           <a href="/tv/" className="font-semibold text-white/80 hover:text-[#ED2C25]">Truyền hình</a>
           <a href="/events/" className="font-semibold text-white/80 hover:text-[#ED2C25]">Sự kiện</a>
+          <a href="/worldcup/" className="font-semibold text-[#FFD700] hover:text-[#ED2C25]">⚽ World Cup</a>
           <a href="/movies/" className="font-semibold text-white/80 hover:text-[#ED2C25]">Phim</a>
         </nav>
       </div>
