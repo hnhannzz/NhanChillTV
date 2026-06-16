@@ -21,6 +21,21 @@ function formatDateKey(dateKey) {
   }).format(date);
 }
 
+function formatUpdatedAt(value) {
+  if (!value) return 'chưa có';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'chưa có';
+  return new Intl.DateTimeFormat('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    timeZone: 'Asia/Ho_Chi_Minh',
+  }).format(date);
+}
+
 function filterMatches(matches, query) {
   const text = query.trim().toLowerCase();
   if (!text) return matches;
@@ -141,6 +156,7 @@ export default function WorldCupPortal() {
             <p className="mt-2 max-w-2xl text-sm text-white/55">
               Tất cả thời gian đã đổi sang giờ Việt Nam GMT+7. Lịch và kết quả được đồng bộ theo ngày thi đấu tại Việt Nam.
             </p>
+            <p className="mt-2 text-xs font-semibold text-white/40">Dữ liệu cập nhật lần cuối: {formatUpdatedAt(data?.updatedAt)}</p>
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -163,6 +179,12 @@ export default function WorldCupPortal() {
             </button>
           </div>
         </div>
+
+        {error && data && (
+          <div className="mt-4 rounded-md border border-[#FFD166]/20 bg-[#FFD166]/10 px-4 py-3 text-sm text-[#ffe0a3]">
+            API World Cup đang chập chờn, website tạm dùng dữ liệu cache. Dữ liệu cập nhật lần cuối: {formatUpdatedAt(data.updatedAt)}.
+          </div>
+        )}
 
         <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
           <StatItem icon={CalendarDays} label="Trận hôm nay" value={todayMatches.length} />

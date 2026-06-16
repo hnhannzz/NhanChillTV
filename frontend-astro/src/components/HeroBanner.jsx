@@ -1,8 +1,9 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Info, Play, Trophy } from 'lucide-react';
-import MovieModal from './MovieModal';
 import { fetchOPhimJson, getOPhimItems, getOPhimImageUrl } from '../lib/OPhimApi';
+
+const MovieModal = lazy(() => import('./MovieModal.jsx'));
 
 const staggerContainer = {
   hidden: {},
@@ -186,7 +187,11 @@ export default function HeroBanner() {
         ))}
       </div>
 
-      {modalSlug && <MovieModal slug={modalSlug} onClose={() => setModalSlug(null)} />}
+      {modalSlug && (
+        <Suspense fallback={null}>
+          <MovieModal slug={modalSlug} onClose={() => setModalSlug(null)} />
+        </Suspense>
+      )}
     </motion.section>
   );
 }

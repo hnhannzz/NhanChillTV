@@ -1,11 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { Loader2, Users } from 'lucide-react';
 import { io } from 'socket.io-client';
-import UnifiedPlayer from './UnifiedPlayer';
-import LegacyPlayer from './LegacyPlayer';
 import { resolveProxyPlaybackUrl } from '../lib/playbackUrl';
 
 const API_BASE = '/api';
+const UnifiedPlayer = lazy(() => import('./UnifiedPlayer.jsx'));
+const LegacyPlayer = lazy(() => import('./LegacyPlayer.jsx'));
 
 function canUseDirectUrl(url) {
   if (!url || typeof window === 'undefined') return false;
@@ -181,17 +181,19 @@ export default function LivePlayerView({ channelId, streamParam, channelName }) 
 
   return (
     <div className="group relative aspect-video w-full overflow-hidden rounded-lg bg-black shadow-2xl">
-      <PlayerComponent
-        key={`${streamUrl}-${fallbackUrls.join('|')}-${playerType}`}
-        url={streamUrl}
-        autoplay={true}
-        muted={false}
-        clearKey={clearKey}
-        isMpd={isMpd}
-        className="w-full h-full"
-        title={channelName || channelId || streamParam}
-        subTitle="Live TV"
-      />
+      <Suspense fallback={<div className="flex h-full w-full items-center justify-center bg-black text-sm font-semibold text-white/55">Đang tải trình phát...</div>}>
+        <PlayerComponent
+          key={`${streamUrl}-${fallbackUrls.join('|')}-${playerType}`}
+          url={streamUrl}
+          autoplay={true}
+          muted={false}
+          clearKey={clearKey}
+          isMpd={isMpd}
+          className="w-full h-full"
+          title={channelName || channelId || streamParam}
+          subTitle="Live TV"
+        />
+      </Suspense>
       <div className="pointer-events-none absolute right-4 top-4 z-50 flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
         <div className="flex items-center gap-2 rounded-md border border-white/10 bg-black/65 px-3 py-1.5 text-xs font-bold text-white backdrop-blur-sm">
           <Users size={14} className="text-blue-400" />

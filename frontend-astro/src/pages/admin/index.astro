@@ -1,5 +1,5 @@
 ---
-import AdminDashboard from '../../components/AdminDashboard.jsx';
+import LazyAdminDashboard from '../../components/LazyAdminDashboard.jsx';
 import '../../styles/global.css';
 ---
 
@@ -13,6 +13,6 @@ import '../../styles/global.css';
 		<title>Admin - NhanChillTV</title>
 	</head>
 	<body class="bg-[#0A0A0A] text-white m-0 p-0 overflow-hidden">
-		<AdminDashboard client:only="react" />
+		<LazyAdminDashboard client:only="react" />
 	</body>
 </html>

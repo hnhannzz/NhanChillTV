@@ -1,13 +1,13 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import MainLayout from '../components/MainLayout.jsx';
-import TvPageContainer from '../components/TvPageContainer.jsx';
+import LazyTvPageContainer from '../components/LazyTvPageContainer.jsx';
 ---
 
 <Layout title="Truyền hình - NhanChillTV">
   <MainLayout client:load>
     <div className="px-0 py-4 md:p-8 max-w-[1600px] mx-auto w-full">
-      <TvPageContainer client:only="react" />
+      <LazyTvPageContainer client:only="react" />
     </div>
   </MainLayout>
 </Layout>

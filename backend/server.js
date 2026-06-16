@@ -12,6 +12,16 @@ const worldCupRouter = require('./routes/worldcup');
 
 const app = express();
 const server = http.createServer(app);
+const recentErrorLogs = [];
+const originalConsoleError = console.error.bind(console);
+
+console.error = (...args) => {
+  const message = args.map(item => item instanceof Error ? item.stack || item.message : String(item)).join(' ');
+  recentErrorLogs.unshift({ at: new Date().toISOString(), message });
+  recentErrorLogs.splice(20);
+  originalConsoleError(...args);
+};
+
 server.keepAliveTimeout = Number(process.env.HTTP_KEEP_ALIVE_TIMEOUT_MS || 65000);
 server.headersTimeout = Number(process.env.HTTP_HEADERS_TIMEOUT_MS || 70000);
 server.requestTimeout = Number(process.env.HTTP_REQUEST_TIMEOUT_MS || 0);
@@ -20,6 +30,8 @@ server.timeout = Number(process.env.HTTP_SOCKET_TIMEOUT_MS || 0);
 const io = new Server(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] }
 });
+app.set('io', io);
+app.set('recentErrorLogs', recentErrorLogs);
 
 // Middleware
 app.use(cors({

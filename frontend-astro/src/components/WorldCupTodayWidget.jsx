@@ -2,6 +2,19 @@ import React, { useEffect, useState } from 'react';
 import { CalendarDays, ChevronRight, RefreshCw, Trophy } from 'lucide-react';
 import WorldCupMatchCard from './WorldCupMatchCard';
 
+function formatUpdatedAt(value) {
+  if (!value) return 'chưa có';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'chưa có';
+  return new Intl.DateTimeFormat('vi-VN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: 'Asia/Ho_Chi_Minh',
+  }).format(date);
+}
+
 export default function WorldCupTodayWidget() {
   const [payload, setPayload] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -53,7 +66,7 @@ export default function WorldCupTodayWidget() {
             World Cup 2026
           </div>
           <h2 className="mt-2 text-xl font-black text-white md:text-3xl">Trận đấu hôm nay</h2>
-          <p className="mt-1 text-sm text-white/50">Theo ngày Việt Nam GMT+7: {payload?.date}</p>
+          <p className="mt-1 text-sm text-white/50">Theo ngày Việt Nam GMT+7: {payload?.date} · Dữ liệu cập nhật lần cuối: {formatUpdatedAt(payload?.updatedAt)}</p>
         </div>
         <a href="/worldcup/" className="inline-flex items-center gap-2 self-start rounded-md bg-[#ED2C25] px-4 py-2 text-sm font-extrabold text-white transition-colors hover:bg-red-700 md:self-auto">
           Lịch đầy đủ

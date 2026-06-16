@@ -3,6 +3,7 @@ backend/node_modules/
 frontend-astro/node_modules/
 frontend-astro/dist/
 frontend-astro/.astro/
+nginx/html/
 nginx/temp/
 nginx/m3u_iptv/*.m3u
 !nginx/m3u_iptv/*.example.m3u

@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import UnifiedPlayer from './UnifiedPlayer';
-import LegacyPlayer from './LegacyPlayer';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
+
+const UnifiedPlayer = lazy(() => import('./UnifiedPlayer.jsx'));
+const LegacyPlayer = lazy(() => import('./LegacyPlayer.jsx'));
 
 export default function MovieStreamPlayer({ episode, movie, movieSlug, onNextEpisode, onCinemaMode }) {
   // Ưu tiên m3u8 từ OPhim, nếu không có fallback sang embed
@@ -36,18 +37,20 @@ export default function MovieStreamPlayer({ episode, movie, movieSlug, onNextEpi
   if (streamUrl) {
     const PlayerComponent = playerType === 'legacy' ? LegacyPlayer : UnifiedPlayer;
     return (
-      <PlayerComponent
-        key={`${streamUrl}_${playerType}`}
-        url={streamUrl}
-        initialTime={initialTime}
-        onTimeUpdate={handleTimeUpdate}
-        onNextEpisode={onNextEpisode}
-        onCinemaMode={onCinemaMode}
-        title={movie?.name || 'Phim'}
-        subTitle={episode?.name || 'Tập phim'}
-        autoplay={true}
-        className="w-full h-full"
-      />
+      <Suspense fallback={<div className="flex h-full w-full items-center justify-center bg-black text-sm font-semibold text-white/55">Đang tải trình phát...</div>}>
+        <PlayerComponent
+          key={`${streamUrl}_${playerType}`}
+          url={streamUrl}
+          initialTime={initialTime}
+          onTimeUpdate={handleTimeUpdate}
+          onNextEpisode={onNextEpisode}
+          onCinemaMode={onCinemaMode}
+          title={movie?.name || 'Phim'}
+          subTitle={episode?.name || 'Tập phim'}
+          autoplay={true}
+          className="w-full h-full"
+        />
+      </Suspense>
     );
   }
 

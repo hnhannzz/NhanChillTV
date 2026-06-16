@@ -8,6 +8,7 @@ const axios = require('axios');
 const Database = require('../db/database');
 const config = require('../config');
 const pidusage = require('pidusage');
+const si = require('systeminformation');
 const { execFile } = require('child_process');
 const ffmpegWrapper = require('../../ffmpeg-core/wrapper');
 const m3uManager = require('../services/m3uManager');
@@ -535,6 +536,65 @@ router.get('/system/metrics', auth, async (req, res) => {
     }));
     
     res.json({ success: true, data: result });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+function getViewerStats(io) {
+  if (!io?.sockets?.adapter) return { total: 0, rooms: [] };
+  const socketIds = new Set(io.sockets.sockets.keys());
+  const rooms = [];
+  let total = 0;
+  for (const [room, sockets] of io.sockets.adapter.rooms.entries()) {
+    if (socketIds.has(room)) continue;
+    const count = sockets.size || 0;
+    total += count;
+    rooms.push({ id: room, count });
+  }
+  rooms.sort((a, b) => b.count - a.count);
+  return { total, rooms: rooms.slice(0, 12) };
+}
+
+router.get('/system/overview', auth, async (req, res) => {
+  try {
+    const [cpu, mem, disks, processes] = await Promise.all([
+      si.currentLoad(),
+      si.mem(),
+      si.fsSize().catch(() => []),
+      si.processes().catch(() => ({ list: [] })),
+    ]);
+    const disk = (Array.isArray(disks) ? disks : []).find(item => item.mount === '/' || item.mount === 'C:') || disks?.[0] || null;
+    const activeStreams = ffmpegWrapper.getActiveStreams();
+    const ffmpegProcesses = (processes?.list || []).filter(item => /ffmpeg/i.test(`${item.name || ''} ${item.command || ''}`)).length;
+    const io = req.app.get('io');
+    const recentErrors = req.app.get('recentErrorLogs') || [];
+
+    res.json({
+      success: true,
+      data: {
+        cpu: {
+          currentLoad: cpu.currentLoad,
+        },
+        memory: {
+          free: mem.free,
+          total: mem.total,
+          used: mem.active,
+          usedPercent: mem.total ? (mem.active / mem.total) * 100 : 0,
+        },
+        disk: disk ? {
+          fs: disk.fs,
+          mount: disk.mount,
+          size: disk.size,
+          used: disk.used,
+          available: disk.available,
+          usedPercent: disk.use,
+        } : null,
+        ffmpegProcesses: ffmpegProcesses || activeStreams.length,
+        viewers: getViewerStats(io),
+        recentErrors: recentErrors.slice(0, 5),
+      },
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
