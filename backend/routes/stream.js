@@ -11,18 +11,33 @@ const clusterService = require('../services/clusterService');
 const { encryptUrl } = require('../utils/cryptoHelper');
 const { detectChannelPlaybackType } = require('../services/streamTypeDetector');
 
-function buildDirectProxyTarget(channel) {
-  // Bỏ qua proxy cho các luồng FPT Play/VTV vì họ chặn IP Datacenter và có hỗ trợ CORS
-  if (channel.url.includes('fptplay') || channel.url.includes('vtv') || channel.url.includes('cvtv') || channel.url.includes('vtvprime')) {
+function shouldProxyChannel(channel) {
+  const searchable = [
+    channel?.id,
+    channel?.name,
+    channel?.group,
+    channel?.url
+  ].map(value => String(value || '').toLowerCase()).join(' ');
+
+  return searchable.includes('tv360') || searchable.includes('vtvcab');
+}
+
+function buildDirectProxyTarget(channel, playbackType = null) {
+  if (!shouldProxyChannel(channel)) {
     return channel.url;
   }
 
+  // Bỏ qua proxy cho các luồng FPT Play/VTV vì họ chặn IP Datacenter và có hỗ trợ CORS
   const encryptedUrl = encryptUrl(channel.url);
   let finalTarget = encryptedUrl ? `/api/proxy/${encryptedUrl}` : `/api/proxy/${channel.url}`;
 
   if (channel.userAgent) {
     const encodedUa = encodeURIComponent(channel.userAgent);
     finalTarget += finalTarget.includes('?') ? `&ua=${encodedUa}` : `?ua=${encodedUa}`;
+  }
+
+  if (playbackType) {
+    finalTarget += finalTarget.includes('?') ? `&pt=${encodeURIComponent(playbackType)}` : `?pt=${encodeURIComponent(playbackType)}`;
   }
 
   return finalTarget;
@@ -81,7 +96,8 @@ router.post('/start/:channelId', async (req, res) => {
     }
 
     if (shouldGoDirect) {
-      const finalTarget = buildDirectProxyTarget(channel);
+      const manifestType = isMpd ? 'mpd' : isHls ? 'hls' : null;
+      const finalTarget = buildDirectProxyTarget(channel, manifestType);
       const clearKey = isMpd ? channel.clearKey : null;
 
       return res.json({

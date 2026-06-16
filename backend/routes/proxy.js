@@ -29,7 +29,7 @@ function getAbsoluteUrl(baseUrl, targetUrl) {
   }
 }
 
-const INTERNAL_QUERY_PARAMS = new Set(['ua']);
+const INTERNAL_QUERY_PARAMS = new Set(['ua', 'pt']);
 
 function appendForwardedQuery(targetUrl, req) {
   const params = new URLSearchParams(req.query);
@@ -66,6 +66,59 @@ function decodeManifestBuffer(buffer, encoding) {
   return buffer;
 }
 
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function isValidManifestContent(content, expectedType) {
+  if (expectedType === 'mpd') return content.includes('<MPD');
+  if (expectedType === 'hls') return content.includes('#EXTM3U');
+  return true;
+}
+
+function readStreamToBuffer(stream) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    stream.on('data', chunk => chunks.push(chunk));
+    stream.on('end', () => resolve(Buffer.concat(chunks)));
+    stream.on('error', reject);
+  });
+}
+
+function createProxyHeaders(targetUrl, req, customUa) {
+  return {
+    'User-Agent': (targetUrl.includes('fptplay') || targetUrl.includes('vtv') || targetUrl.includes('vtvgo'))
+                    ? 'VLC/3.0.16 LibVLC/3.0.16'
+                    : (customUa ? customUa : (req.headers['user-agent']?.includes('Mozilla') ? 'Dalvik/2.1.0 (Linux; U; Android 10; TV Box Build/QQ3A.200805.001)' : (req.headers['user-agent'] || 'Dalvik/2.1.0 (Linux; U; Android 10; TV Box Build/QQ3A.200805.001)'))),
+    'Accept': '*/*',
+    'Accept-Encoding': 'identity',
+    'X-Requested-With': (targetUrl.includes('fptplay') || targetUrl.includes('vtv')) ? undefined : 'org.xbmc.kodi',
+    'Origin': (targetUrl.includes('fptplay') || targetUrl.includes('vtv')) ? undefined : undefined,
+    'Referer': (targetUrl.includes('fptplay') || targetUrl.includes('vtv')) ? undefined : (new URL(targetUrl).origin + '/'),
+    'X-Forwarded-For': `14.169.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`,
+    'X-Real-IP': `14.169.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`,
+    'Range': req.headers.range
+  };
+}
+
+function fetchProxyResponse(targetUrl, req, customUa, controller) {
+  return axios({
+    method: 'GET',
+    url: targetUrl,
+    signal: controller.signal,
+    httpAgent: httpKeepAliveAgent,
+    httpsAgent: httpsKeepAliveAgent,
+    headers: createProxyHeaders(targetUrl, req, customUa),
+    responseType: 'stream',
+    decompress: false,
+    maxRedirects: 10,
+    timeout: PROXY_TIMEOUT_MS,
+    maxBodyLength: Infinity,
+    maxContentLength: Infinity,
+    validateStatus: () => true
+  });
+}
+
 // Xử lý OPTIONS (preflight CORS)
 router.options('/*', (req, res) => {
   res.set({
@@ -94,17 +147,13 @@ router.get('/resolve', (req, res) => {
 });
 
 router.get('/*', async (req, res) => {
+  let targetUrl = req.params[0];
   try {
-    let targetUrl = req.params[0];
-    
-    // Fix dấu // bị mất do Express normalize
     targetUrl = targetUrl.replace(/^(https?):\/+/, '$1://');
 
-    // Cố gắng giải mã nếu URL không bắt đầu bằng http
     if (!targetUrl.startsWith('http')) {
       const parts = targetUrl.split('/');
       if (parts.length > 1) {
-        // Trường hợp URL chứa template variables (ENCRYPTED_BASE/file_part)
         const decryptedBase = decryptUrl(parts[0]);
         if (decryptedBase && decryptedBase.startsWith('http')) {
           targetUrl = decryptedBase + '/' + parts.slice(1).join('/');
@@ -116,9 +165,7 @@ router.get('/*', async (req, res) => {
       }
     }
 
-    // Kế thừa query parameters
     targetUrl = appendForwardedQuery(targetUrl, req);
-
     if (!targetUrl.startsWith('http')) {
       return res.status(400).send('Invalid URL');
     }
@@ -128,102 +175,88 @@ router.get('/*', async (req, res) => {
     }
 
     const controller = new AbortController();
-    req.on('close', () => {
-      controller.abort();
-    });
+    req.on('close', () => controller.abort());
 
     const customUa = req.query.ua;
+    const expectedType = ['mpd', 'hls'].includes(req.query.pt) ? req.query.pt : null;
+    let response = await fetchProxyResponse(targetUrl, req, customUa, controller);
+    let contentType = response.headers['content-type'] || '';
+    let finalUrl = response.request?.res?.responseUrl || targetUrl;
 
-    const response = await axios({
-      method: 'GET',
-      url: targetUrl,
-      signal: controller.signal,
-      httpAgent: httpKeepAliveAgent,
-      httpsAgent: httpsKeepAliveAgent,
-      headers: {
-        'User-Agent': (targetUrl.includes('fptplay') || targetUrl.includes('vtv') || targetUrl.includes('vtvgo'))
-                        ? 'VLC/3.0.16 LibVLC/3.0.16' 
-                        : (customUa ? customUa : (req.headers['user-agent']?.includes('Mozilla') ? 'Dalvik/2.1.0 (Linux; U; Android 10; TV Box Build/QQ3A.200805.001)' : (req.headers['user-agent'] || 'Dalvik/2.1.0 (Linux; U; Android 10; TV Box Build/QQ3A.200805.001)'))),
-        'Accept': '*/*',
-        'Accept-Encoding': 'identity',
-        'X-Requested-With': (targetUrl.includes('fptplay') || targetUrl.includes('vtv')) ? undefined : 'org.xbmc.kodi',
-        'Origin': (targetUrl.includes('fptplay') || targetUrl.includes('vtv')) ? undefined : undefined,
-        'Referer': (targetUrl.includes('fptplay') || targetUrl.includes('vtv')) ? undefined : (new URL(targetUrl).origin + '/'),
-        'X-Forwarded-For': `14.169.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`,
-        'X-Real-IP': `14.169.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`,
-        'Range': req.headers.range
-      },
-      responseType: 'stream',
-      decompress: false,
-      maxRedirects: 10,
-      timeout: PROXY_TIMEOUT_MS,
-      maxBodyLength: Infinity,
-      maxContentLength: Infinity,
-      validateStatus: () => true
-    });
-
-    const contentType = response.headers['content-type'] || '';
-    const finalUrl = response.request.res.responseUrl || targetUrl;
-
-    // Xác định loại file
     const lowerUrl = targetUrl.toLowerCase();
-    const isM3u8 = lowerUrl.includes('.m3u8') || contentType.includes('mpegurl');
-    const isMpd = lowerUrl.includes('.mpd') || contentType.includes('dash+xml');
+    const isM3u8 = expectedType === 'hls' || lowerUrl.includes('.m3u8') || contentType.includes('mpegurl');
+    const isMpd = expectedType === 'mpd' || lowerUrl.includes('.mpd') || contentType.includes('dash+xml');
     const isManifest = isM3u8 || isMpd;
 
-    // CORS and Cache headers
+    if (isManifest) {
+      const proxyBase = `/api/proxy/`;
+      let content = '';
+      let manifestStatus = response.status;
+      let manifestContentType = contentType;
+      let manifestFinalUrl = finalUrl;
+
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const decoded = decodeManifestBuffer(await readStreamToBuffer(response.data), response.headers['content-encoding']);
+        content = decoded.toString('utf-8');
+        manifestStatus = response.status;
+        manifestContentType = response.headers['content-type'] || '';
+        manifestFinalUrl = response.request?.res?.responseUrl || targetUrl;
+
+        if (!expectedType || isValidManifestContent(content, expectedType) || attempt === 2) {
+          break;
+        }
+
+        console.warn(`[Proxy] ${expectedType.toUpperCase()} manifest retry ${attempt + 1} for transient upstream response: ${manifestContentType || 'unknown'}`);
+        await delay(250 + attempt * 250);
+        response = await fetchProxyResponse(targetUrl, req, customUa, controller);
+      }
+
+      if (expectedType && !isValidManifestContent(content, expectedType)) {
+        res.set({
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+          'Access-Control-Allow-Headers': 'Origin, X-Requested-With, Content-Type, Accept, Range',
+          'Content-Type': expectedType === 'mpd' ? 'application/dash+xml' : 'application/vnd.apple.mpegurl',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        });
+        return res.status(502).send(`Invalid ${expectedType.toUpperCase()} manifest from upstream`);
+      }
+
+      const originOfFinalUrl = new URL(manifestFinalUrl).origin;
+      if (isM3u8) {
+        content = rewriteM3u8(content, manifestFinalUrl, proxyBase, originOfFinalUrl, customUa);
+      } else if (isMpd) {
+        content = rewriteMpd(content, manifestFinalUrl, proxyBase, originOfFinalUrl, customUa);
+      }
+
+      res.set({
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+        'Access-Control-Allow-Headers': 'Origin, X-Requested-With, Content-Type, Accept, Range',
+        'Content-Type': manifestContentType || (isMpd ? 'application/dash+xml' : 'application/vnd.apple.mpegurl'),
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+      });
+      return res.status(manifestStatus).send(content);
+    }
+
     res.set({
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
       'Access-Control-Allow-Headers': 'Origin, X-Requested-With, Content-Type, Accept, Range',
-      'Content-Type': contentType || (isMpd ? 'application/dash+xml' : isM3u8 ? 'application/vnd.apple.mpegurl' : 'application/octet-stream'),
-      'Cache-Control': isManifest ? 'no-cache, no-store, must-revalidate' : 'public, max-age=3600'
+      'Content-Type': contentType || 'application/octet-stream',
+      'Cache-Control': 'public, max-age=3600'
     });
+    if (response.headers['content-length']) res.set('Content-Length', response.headers['content-length']);
+    if (response.headers['content-range']) res.set('Content-Range', response.headers['content-range']);
+    if (response.headers['accept-ranges']) res.set('Accept-Ranges', response.headers['accept-ranges']);
+    res.status(response.status);
+    response.data.pipe(res);
 
-    if (isManifest) {
-      // Buffer manifest để rewrite URLs
-      const chunks = [];
-      response.data.on('data', chunk => chunks.push(chunk));
-      response.data.on('end', () => {
-        try {
-        const decoded = decodeManifestBuffer(Buffer.concat(chunks), response.headers['content-encoding']);
-        let content = decoded.toString('utf-8');
-        
-        // Sử dụng Relative Path (bắt đầu bằng /) để Browser tự động map đúng HTTPS và Host hiện tại (lách Cloudflare SSL issues)
-        const proxyBase = `/api/proxy/`;
-        const originOfFinalUrl = new URL(finalUrl).origin;
-
-        if (isM3u8) {
-          content = rewriteM3u8(content, finalUrl, proxyBase, originOfFinalUrl, customUa);
-        } else if (isMpd) {
-          content = rewriteMpd(content, finalUrl, proxyBase, originOfFinalUrl, customUa);
-        }
-
-        res.status(response.status).send(content);
-        } catch (err) {
-          console.error('[Proxy] Manifest rewrite error:', err.message);
-          if (!res.headersSent) res.status(502).send('Proxy manifest error');
-        }
-      });
-      response.data.on('error', (err) => {
-        console.error('[Proxy] Stream read error:', err.message);
-        if (!res.headersSent) res.status(502).send('Proxy stream error');
-      });
-    } else {
-      // Pipe trực tiếp (segments .ts, .m4s, .mp4, .key, ...)
-      if (response.headers['content-length']) res.set('Content-Length', response.headers['content-length']);
-      if (response.headers['content-range']) res.set('Content-Range', response.headers['content-range']);
-      if (response.headers['accept-ranges']) res.set('Accept-Ranges', response.headers['accept-ranges']);
-      res.status(response.status);
-      response.data.pipe(res);
-      
-      req.on('close', () => {
-        if (response.data && typeof response.data.destroy === 'function') {
-          response.data.destroy();
-        }
-      });
-    }
-
+    req.on('close', () => {
+      if (response.data && typeof response.data.destroy === 'function') {
+        response.data.destroy();
+      }
+    });
   } catch (error) {
     console.error(`[Proxy] Error fetching ${targetUrl || req.params[0]}:`, error.message, error.response?.status);
     if (!res.headersSent) {
