@@ -1,5 +1,5 @@
 import React from 'react';
-import { CalendarClock, MapPin, Play, Radio, Shield, Timer } from 'lucide-react';
+import { CalendarClock, Info, MapPin, Play, Radio, Shield, Timer } from 'lucide-react';
 
 function scoreText(match) {
   if (match.isUpcoming) return 'VS';
@@ -14,9 +14,7 @@ function statusLabel(match) {
 }
 
 function streamHref(match) {
-  const directChannel = match.sourceChannelId || match.streams?.find(stream => stream.sourceChannelId)?.sourceChannelId;
-  if (directChannel) return `/tv/?channel=${encodeURIComponent(directChannel)}`;
-  return null;
+  return match?.id ? `/tv/?matchId=${encodeURIComponent(match.id)}` : null;
 }
 
 function TeamBlock({ name, flag, align = 'left' }) {
@@ -83,10 +81,10 @@ export default function WorldCupMatchCard({ match, compact = false }) {
             <span className="truncate">{match.stadium_name ? `${match.stadium_name}, ${match.stadium_country_vi}` : 'Đang cập nhật sân'}</span>
           </span>
         )}
-        {href && !match.isFinished && (
+        {href && (
           <a href={href} className="inline-flex items-center gap-1.5 rounded-md bg-[#ED2C25] px-3 py-1.5 text-[11px] font-extrabold text-white transition-colors hover:bg-red-700">
-            <Play size={12} fill="currentColor" />
-            Xem
+            {match.isFinished ? <Info size={12} /> : <Play size={12} fill="currentColor" />}
+            {match.isFinished ? (compact ? 'Chi tiết' : 'Xem chi tiết trận đấu') : 'Xem'}
           </a>
         )}
       </div>

@@ -186,7 +186,7 @@ export default function WorldCupPortal() {
         )}
       </section>
 
-      <div className="flex gap-2 overflow-x-auto border-b border-white/10">
+      <div className="hide-scrollbar flex gap-2 overflow-x-auto border-b border-white/10">
         {tabs.map(tab => {
           const Icon = tab.icon;
           const selected = activeTab === tab.id;
@@ -262,7 +262,7 @@ function Standings({ groups }) {
       {groups.map(group => (
         <section key={group.name} className="overflow-hidden rounded-lg border border-white/8 bg-[#111111]">
           <h3 className="border-b border-white/8 px-4 py-3 text-sm font-black text-white">Bảng {group.name}</h3>
-          <div className="overflow-x-auto p-3">
+          <div className="hide-scrollbar overflow-x-auto p-3">
             <table className="w-full text-left text-xs text-white/75">
               <thead className="text-[10px] uppercase text-white/35">
                 <tr>

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Activity, CalendarDays, ChevronDown, ChevronUp, CircleStop, Eye, EyeOff,
   Copy, Gauge, ListVideo, LogOut, Pencil, Plus, Radio, RefreshCw, RotateCcw,
-  KeyRound, Save, Server, Settings, Trash2, UploadCloud, X, Cpu
+  KeyRound, Save, Server, Settings, Trash2, Trophy, UploadCloud, X, Cpu
 } from 'lucide-react';
 
 const API_BASE = '/api';
@@ -20,6 +20,8 @@ export default function AdminDashboard() {
   const [status, setStatus] = useState(null);
   const [streams, setStreams] = useState([]);
   const [health, setHealth] = useState(null);
+  const [worldCupData, setWorldCupData] = useState(null);
+  const [worldCupStreams, setWorldCupStreams] = useState({ matchStreams: {} });
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const [eventModal, setEventModal] = useState(null);
@@ -61,6 +63,8 @@ export default function AdminDashboard() {
       adminRequest('/admin/active-streams'),
       adminRequest('/admin/system-settings'),
       fetch(`${API_BASE}/health`).then(response => response.json()),
+      adminRequest('/admin/worldcup-streams'),
+      fetch(`${API_BASE}/worldcup/summary`).then(response => response.json()),
     ]);
     if (requests[0].status === 'fulfilled') setEvents(requests[0].value.data || []);
     if (requests[1].status === 'fulfilled') setSources(requests[1].value.data || []);
@@ -70,6 +74,8 @@ export default function AdminDashboard() {
     if (requests[5].status === 'fulfilled') setStreams(requests[5].value.data || []);
     if (requests[6].status === 'fulfilled') setSystemSettings(requests[6].value.data || { playerType: 'shaka', maintenanceMode: false });
     if (requests[7].status === 'fulfilled') setHealth(requests[7].value || null);
+    if (requests[8].status === 'fulfilled') setWorldCupStreams(requests[8].value.data || { matchStreams: {} });
+    if (requests[9].status === 'fulfilled' && requests[9].value.success) setWorldCupData(requests[9].value);
   }, [adminRequest, settingsDirty, token]);
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -144,6 +150,8 @@ export default function AdminDashboard() {
     ['channels', 'Kênh IPTV', ListVideo], ['transcode247', 'Chuyển mã 24/7', Cpu], ['streams', 'Luồng phát', Activity], ['system', 'Hệ thống', Settings], ['security', 'Mật khẩu', KeyRound],
   ];
 
+  tabs.splice(4, 0, ['worldcup', 'World Cup', Trophy]);
+
   return (
     <div className="min-h-screen bg-[#090909] text-white">
       <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-white/10 bg-[#111] px-3 md:h-16 md:px-6">
@@ -174,6 +182,7 @@ export default function AdminDashboard() {
             if (window.confirm(`Xóa nguồn "${source.name}"?`)) runAction(() => adminRequest(`/admin/m3u-sources/${source.id}`, { method: 'DELETE' }), 'Đã xóa nguồn M3U.');
           }} onRefresh={() => runAction(() => adminRequest('/admin/m3u-sources/refresh', { method: 'POST' }), 'Đã cập nhật danh sách M3U.')} />}
           {activeTab === 'channels' && <ChannelsTab channels={channels} settings={settings} setSettings={updater => { setSettings(updater); setSettingsDirty(true); }} search={channelSearch} setSearch={setChannelSearch} busy={busy} onSave={() => runAction(async () => { await adminRequest('/admin/iptv-settings', { method: 'POST', body: JSON.stringify(settings) }); setSettingsDirty(false); }, 'Đã lưu cấu hình IPTV.')} />}
+          {activeTab === 'worldcup' && <WorldCupStreamsTab matches={worldCupData?.games || []} channels={channels} streamsConfig={worldCupStreams} busy={busy} adminRequest={adminRequest} runAction={runAction} />}
           {activeTab === 'transcode247' && <Transcode247Tab channels={channels} settings={settings} setSettings={setSettings} busy={busy} adminRequest={adminRequest} runAction={runAction} streams={streams} />}
           {activeTab === 'streams' && <StreamsTab streams={streams} onStop={stream => runAction(() => adminRequest('/admin/active-streams/kill', { method: 'POST', body: JSON.stringify({ id: stream.id }) }), 'Đã dừng luồng phát.')} />}
           {activeTab === 'system' && <SystemTab settings={systemSettings} setSettings={setSystemSettings} busy={busy} onSave={() => runAction(async () => { await adminRequest('/admin/system-settings', { method: 'POST', body: JSON.stringify(systemSettings) }); }, 'Đã lưu cấu hình hệ thống.')} />}
@@ -415,6 +424,80 @@ function EventModal({ event, channels, token, onClose, onSaved }) {
   </div><div className="grid shrink-0 grid-cols-2 gap-2 border-t border-white/10 px-4 py-3 sm:flex sm:justify-end sm:px-5 sm:py-4"><button type="button" onClick={onClose} className="rounded-md px-4 py-2 hover:bg-white/5">Hủy</button><button disabled={saving} className="rounded-md bg-[#ED2C25] px-5 py-2 font-bold disabled:opacity-50">{saving ? 'Đang lưu...' : 'Lưu sự kiện'}</button></div></form></div>;
 }
 
+function WorldCupStreamsTab({ matches, channels, streamsConfig, busy, adminRequest, runAction }) {
+  const sortedMatches = useMemo(() => [...matches].sort((a, b) => new Date(a.kickoffAt || 0) - new Date(b.kickoffAt || 0)), [matches]);
+  const [selectedMatchId, setSelectedMatchId] = useState('');
+  const [form, setForm] = useState({ name: '', sourceType: 'iptv', sourceChannelId: '', stream: '' });
+
+  useEffect(() => {
+    if (!selectedMatchId && sortedMatches[0]?.id) setSelectedMatchId(String(sortedMatches[0].id));
+  }, [selectedMatchId, sortedMatches]);
+
+  const hlsChannels = useMemo(() => channels.filter(channel => String(channel.url || '').toLowerCase().includes('.m3u8')), [channels]);
+  const selectedMatch = sortedMatches.find(match => String(match.id) === String(selectedMatchId));
+  const customStreams = streamsConfig?.matchStreams?.[String(selectedMatchId)] || [];
+  const submit = event => {
+    event.preventDefault();
+    runAction(async () => {
+      await adminRequest(`/admin/worldcup-streams/${encodeURIComponent(selectedMatchId)}`, {
+        method: 'POST',
+        body: JSON.stringify(form),
+      });
+      setForm({ name: '', sourceType: 'iptv', sourceChannelId: '', stream: '' });
+    }, 'Đã thêm luồng World Cup.');
+  };
+
+  return (
+    <section>
+      <SectionHeader title="World Cup" subtitle="Luồng mặc định: VTV3, VTV6, VTV9, VTV10 từ M3U và chỉ nhận nguồn M3U8." />
+      <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(280px,380px)_1fr]">
+        <Panel title="Chọn trận">
+          <select value={selectedMatchId} onChange={event => setSelectedMatchId(event.target.value)} className="input-admin">
+            {sortedMatches.map(match => (
+              <option key={match.id} value={match.id}>
+                #{match.id} {match.home_team_display} vs {match.away_team_display} - {match.kickoffAtVN || 'GMT+7'}
+              </option>
+            ))}
+          </select>
+          {selectedMatch && (
+            <div className="mt-4 rounded-md bg-black/25 p-3 text-sm text-white/60">
+              <div className="font-bold text-white">{selectedMatch.home_team_display} vs {selectedMatch.away_team_display}</div>
+              <div className="mt-1 text-xs">{selectedMatch.stage_vi}{selectedMatch.group ? ` - Bảng ${selectedMatch.group}` : ''}</div>
+              <div className="mt-1 text-xs">{selectedMatch.kickoffAtVN || 'Đang cập nhật giờ Việt Nam'}</div>
+              <a href={`/tv/?matchId=${encodeURIComponent(selectedMatch.id)}`} className="mt-3 inline-flex rounded-md bg-white/10 px-3 py-2 text-xs font-bold text-white hover:bg-white/15">Mở trang trận đấu</a>
+            </div>
+          )}
+        </Panel>
+
+        <Panel title="Thêm luồng bổ sung">
+          <form onSubmit={submit} className="grid gap-3 md:grid-cols-[1fr_160px]">
+            <Field label="Tên luồng"><input required value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} className="input-admin" placeholder="Luồng bình luận riêng" /></Field>
+            <Field label="Loại nguồn"><select value={form.sourceType} onChange={event => setForm({ ...form, sourceType: event.target.value })} className="input-admin"><option value="iptv">Kênh IPTV</option><option value="custom">URL M3U8</option></select></Field>
+            {form.sourceType === 'iptv' ? (
+              <div className="md:col-span-2"><Field label="Kênh IPTV M3U8"><select required value={form.sourceChannelId} onChange={event => setForm({ ...form, sourceChannelId: event.target.value })} className="input-admin"><option value="">Chọn kênh</option>{hlsChannels.map(channel => <option key={channel.id} value={channel.id}>{channel.name} ({channel.id})</option>)}</select></Field></div>
+            ) : (
+              <div className="md:col-span-2"><Field label="URL M3U8"><input required value={form.stream} onChange={event => setForm({ ...form, stream: event.target.value })} className="input-admin" placeholder="https://.../index.m3u8" /></Field></div>
+            )}
+            <button disabled={busy || !selectedMatchId} className="inline-flex items-center justify-center gap-2 rounded-md bg-[#ED2C25] px-4 py-2 font-bold disabled:opacity-50 md:col-span-2"><Plus size={16} /> Thêm luồng</button>
+          </form>
+        </Panel>
+      </div>
+
+      <div className="mt-4 overflow-hidden rounded-lg border border-white/10 bg-[#151515]">
+        {customStreams.length ? customStreams.map(stream => (
+          <div key={stream.id} className="flex flex-col gap-3 border-b border-white/5 p-4 last:border-0 sm:flex-row sm:items-center">
+            <div className="min-w-0 flex-1">
+              <div className="truncate font-bold">{stream.name}</div>
+              <div className="mt-1 truncate text-xs text-white/40">{stream.sourceType === 'iptv' ? `IPTV: ${stream.sourceChannelId}` : stream.stream}</div>
+            </div>
+            <button onClick={() => runAction(() => adminRequest(`/admin/worldcup-streams/${encodeURIComponent(selectedMatchId)}/${encodeURIComponent(stream.id)}`, { method: 'DELETE' }), 'Đã xóa luồng World Cup.')} className="inline-flex items-center justify-center gap-2 rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-300 hover:bg-red-500/20"><Trash2 size={16} /> Xóa</button>
+          </div>
+        )) : <Empty text="Chưa có luồng bổ sung cho trận này. Bốn luồng VTV mặc định vẫn tự áp dụng nếu M3U có nguồn M3U8." />}
+      </div>
+    </section>
+  );
+}
+
 function Transcode247Tab({ channels, settings, setSettings, busy, adminRequest, runAction, streams }) {
   const [search, setSearch] = useState('');
   const transcode247List = settings.transcode247 || [];
@@ -575,4 +658,3 @@ function InfoRow({ label, value }) { return <div className="flex justify-between
 function Empty({ text }) { return <div className="p-10 text-center text-sm text-white/45">{text}</div>; }
 function Field({ label, children }) { return <label className="block text-sm"><span className="mb-1.5 block text-white/55">{label}</span>{children}</label>; }
 function formatBytes(value) { const bytes = Number(value || 0); if (!bytes) return '--'; return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`; }
-

@@ -3,8 +3,11 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const config = require('../config');
+const Database = require('../db/database');
+const m3uManager = require('../services/m3uManager');
 
 const router = express.Router();
+const db = new Database(config.dbPath);
 
 const API_BASE = process.env.WORLDCUP_API_BASE || 'https://worldcup26.ir';
 const VN_TIME_ZONE = 'Asia/Ho_Chi_Minh';
@@ -17,6 +20,13 @@ const RESOURCE_CONFIG = {
   groups: { url: '/get/groups', ttlMs: 60 * 1000 },
   games: { url: '/get/games', ttlMs: 25 * 1000 },
 };
+
+const DEFAULT_WORLDCUP_STREAMS = [
+  { id: 'vtv3hd', name: 'Luồng bình luận miền bắc', sourceType: 'iptv', sourceChannelId: 'vtv3hd' },
+  { id: 'vtv6hd', name: 'Luồng bình luận miền bắc (dự phòng)', sourceType: 'iptv', sourceChannelId: 'vtv6hd' },
+  { id: 'vtv9hd', name: 'Luồng bình luận nam bộ', sourceType: 'iptv', sourceChannelId: 'vtv9hd' },
+  { id: 'vtv10hd', name: 'Luồng bình luận nam bộ (dự phòng)', sourceType: 'iptv', sourceChannelId: 'vtv10hd' },
+];
 
 const STADIUM_TIME_ZONES = {
   1: 'America/Mexico_City',
@@ -91,6 +101,78 @@ const COUNTRY_TRANSLATIONS = {
   'United States': 'Mỹ',
   Uzbekistan: 'Uzbekistan',
 };
+
+const COUNTRY_TRANSLATION_OVERRIDES = {
+  Algeria: 'Algeria',
+  Argentina: 'Argentina',
+  Australia: 'Úc',
+  Austria: 'Áo',
+  Belgium: 'Bỉ',
+  'Bosnia and Herzegovina': 'Bosnia và Herzegovina',
+  Brazil: 'Brazil',
+  Canada: 'Canada',
+  'Cape Verde': 'Cabo Verde',
+  Colombia: 'Colombia',
+  'Congo DR': 'CHDC Congo',
+  Croatia: 'Croatia',
+  Curaçao: 'Curaçao',
+  Curacao: 'Curaçao',
+  'Czech Republic': 'Séc',
+  Ecuador: 'Ecuador',
+  Egypt: 'Ai Cập',
+  England: 'Anh',
+  France: 'Pháp',
+  Germany: 'Đức',
+  Ghana: 'Ghana',
+  Haiti: 'Haiti',
+  Iran: 'Iran',
+  Iraq: 'Iraq',
+  'Ivory Coast': 'Bờ Biển Ngà',
+  Japan: 'Nhật Bản',
+  Jordan: 'Jordan',
+  Mexico: 'Mexico',
+  Morocco: 'Ma Rốc',
+  Netherlands: 'Hà Lan',
+  'New Zealand': 'New Zealand',
+  Norway: 'Na Uy',
+  Panama: 'Panama',
+  Paraguay: 'Paraguay',
+  Portugal: 'Bồ Đào Nha',
+  Qatar: 'Qatar',
+  'Saudi Arabia': 'Ả Rập Xê Út',
+  Scotland: 'Scotland',
+  Senegal: 'Senegal',
+  'South Africa': 'Nam Phi',
+  'South Korea': 'Hàn Quốc',
+  Spain: 'Tây Ban Nha',
+  Sweden: 'Thụy Điển',
+  Switzerland: 'Thụy Sĩ',
+  Tunisia: 'Tunisia',
+  Turkey: 'Thổ Nhĩ Kỳ',
+  Turkiye: 'Thổ Nhĩ Kỳ',
+  Türkiye: 'Thổ Nhĩ Kỳ',
+  Uruguay: 'Uruguay',
+  USA: 'Mỹ',
+  'United States': 'Mỹ',
+  Uzbekistan: 'Uzbekistan',
+};
+
+function normalizeTranslationKey(name) {
+  return String(name || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+const COUNTRY_TRANSLATION_INDEX = Object.entries({
+  ...COUNTRY_TRANSLATIONS,
+  ...COUNTRY_TRANSLATION_OVERRIDES,
+}).reduce((acc, [key, value]) => {
+  acc[normalizeTranslationKey(key)] = value;
+  return acc;
+}, {});
 
 const STAGE_TRANSLATIONS = {
   group: 'Vòng bảng',
@@ -221,7 +303,45 @@ async function getAllResources(options = {}) {
 
 function translateCountry(name) {
   if (!name) return '';
-  return COUNTRY_TRANSLATIONS[String(name).trim()] || String(name).trim();
+  const trimmed = String(name).trim();
+  return COUNTRY_TRANSLATION_INDEX[normalizeTranslationKey(trimmed)] || trimmed;
+}
+
+function isM3u8Url(url) {
+  return String(url || '').toLowerCase().includes('.m3u8');
+}
+
+function resolveIptvStream(stream) {
+  const channel = stream.sourceChannelId ? m3uManager.getChannelById(stream.sourceChannelId) : null;
+  if (!channel || !isM3u8Url(channel.url)) return null;
+  return {
+    ...stream,
+    sourceType: 'iptv',
+    stream: channel.url,
+    channelName: channel.name,
+    logo: channel.logo || null,
+    available: true,
+  };
+}
+
+function normalizeCustomWorldCupStream(stream) {
+  const sourceType = ['iptv', 'custom'].includes(stream.sourceType) ? stream.sourceType : 'custom';
+  const normalized = {
+    id: String(stream.id || `wc_${Date.now()}`).replace(/[^a-zA-Z0-9_-]/g, '_'),
+    name: String(stream.name || 'Luồng bổ sung').trim(),
+    sourceType,
+    sourceChannelId: sourceType === 'iptv' ? String(stream.sourceChannelId || '').trim() : null,
+    stream: sourceType === 'custom' ? String(stream.stream || '').trim() : null,
+  };
+  if (normalized.sourceType === 'iptv') return resolveIptvStream(normalized);
+  if (normalized.sourceType === 'custom' && isM3u8Url(normalized.stream)) return { ...normalized, available: true };
+  return null;
+}
+
+function getWorldCupStreams(matchId) {
+  const defaults = DEFAULT_WORLDCUP_STREAMS.map(resolveIptvStream).filter(Boolean);
+  const custom = db.getWorldCupStreams(matchId).map(normalizeCustomWorldCupStream).filter(Boolean);
+  return [...defaults, ...custom];
 }
 
 function parseScore(value) {
@@ -381,6 +501,21 @@ function byKickoffDesc(a, b) {
   return new Date(b.kickoffAt || 0).getTime() - new Date(a.kickoffAt || 0).getTime();
 }
 
+function standingNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function sortStandings(rows) {
+  return [...rows].sort((a, b) => (
+    standingNumber(b.pts) - standingNumber(a.pts)
+    || standingNumber(b.gd) - standingNumber(a.gd)
+    || standingNumber(b.gf) - standingNumber(a.gf)
+    || standingNumber(a.ga) - standingNumber(b.ga)
+    || String(a.team_name_vi || '').localeCompare(String(b.team_name_vi || ''), 'vi')
+  )).map((row, index) => ({ ...row, rank: index + 1 }));
+}
+
 function groupByDate(games) {
   return games.reduce((acc, game) => {
     const key = game.vnDateKey || 'unknown';
@@ -401,6 +536,7 @@ function normalizeWorldCupData(raw) {
   const stadiumMap = Object.fromEntries(stadiums.map(stadium => [String(stadium.id), stadium]));
   const games = (raw.games || [])
     .map(game => normalizeGame(game, teamMap, stadiumMap))
+    .map(game => ({ ...game, streams: getWorldCupStreams(game.id) }))
     .sort(byKickoffAsc);
 
   const todayKey = getTodayKey();
@@ -414,11 +550,11 @@ function normalizeWorldCupData(raw) {
     .sort(byKickoffDesc);
   const groups = (raw.groups || []).map(group => ({
     ...group,
-    teams: (group.teams || []).map(row => ({
+    teams: sortStandings((group.teams || []).map(row => ({
       ...row,
       team: teamMap[String(row.team_id)] || null,
       team_name_vi: teamMap[String(row.team_id)]?.name_vi || `Đội #${row.team_id}`,
-    })),
+    }))),
   }));
 
   return {
@@ -487,6 +623,24 @@ router.get('/today', async (req, res) => {
   } catch (err) {
     console.error('[WorldCup] today error:', err.message);
     res.status(502).json({ success: false, error: 'Không thể tải lịch World Cup hôm nay.' });
+  }
+});
+
+router.get('/matches/:id', async (req, res) => {
+  try {
+    const normalized = normalizeWorldCupData(await getAllResources({ force: req.query.refresh === '1' }));
+    const match = normalized.games.find(game => String(game.id) === String(req.params.id));
+    if (!match) return res.status(404).json({ success: false, error: 'Không tìm thấy trận đấu World Cup.' });
+    setWorldCupCacheHeaders(res, 10);
+    return res.json({
+      success: true,
+      timezone: normalized.timezone,
+      updatedAt: normalized.updatedAt,
+      match,
+    });
+  } catch (err) {
+    console.error('[WorldCup] match error:', err.message);
+    return res.status(502).json({ success: false, error: 'Không thể tải chi tiết trận World Cup.' });
   }
 });
 

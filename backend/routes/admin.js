@@ -362,6 +362,45 @@ router.get('/iptv-channels', auth, (req, res) => {
   res.json({ success: true, data: m3uManager.getChannels() });
 });
 
+function isM3u8Url(url) {
+  return String(url || '').toLowerCase().includes('.m3u8');
+}
+
+router.get('/worldcup-streams', auth, (req, res) => {
+  res.json({ success: true, data: db.getWorldCupSettings() });
+});
+
+router.post('/worldcup-streams/:matchId', auth, (req, res) => {
+  const matchId = String(req.params.matchId || '').trim();
+  const sourceType = ['iptv', 'custom'].includes(req.body?.sourceType) ? req.body.sourceType : 'iptv';
+  const stream = {
+    id: `wc_${Date.now()}`,
+    name: String(req.body?.name || 'Luồng bổ sung').trim(),
+    sourceType,
+    sourceChannelId: sourceType === 'iptv' ? String(req.body?.sourceChannelId || '').trim() : null,
+    stream: sourceType === 'custom' ? String(req.body?.stream || '').trim() : null,
+  };
+
+  if (!matchId) return res.status(400).json({ success: false, error: 'Match ID is required' });
+  if (!stream.name) return res.status(400).json({ success: false, error: 'Stream name is required' });
+  if (sourceType === 'iptv') {
+    const channel = m3uManager.getChannelById(stream.sourceChannelId);
+    if (!channel) return res.status(400).json({ success: false, error: 'IPTV channel not found' });
+    if (!isM3u8Url(channel.url)) return res.status(400).json({ success: false, error: 'World Cup stream must be an M3U8 source' });
+  }
+  if (sourceType === 'custom' && !isM3u8Url(stream.stream)) {
+    return res.status(400).json({ success: false, error: 'Custom stream must be an M3U8 URL' });
+  }
+
+  const added = db.addWorldCupStream(matchId, stream);
+  res.json({ success: true, data: added });
+});
+
+router.delete('/worldcup-streams/:matchId/:streamId', auth, (req, res) => {
+  db.deleteWorldCupStream(req.params.matchId, req.params.streamId);
+  res.json({ success: true });
+});
+
 // Favorites
 router.get('/favorites', (req, res) => {
   res.json({ success: true, data: db.getFavorites() });

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Clock, Heart, Radio, Search } from 'lucide-react';
+import { CalendarClock, Clock, Heart, Info, Radio, Search, Trophy } from 'lucide-react';
 import LivePlayerView from './LivePlayerView';
 import EventChat from './EventChat';
 import { getBrowserEpgSchedule } from '../lib/browserEpg';
@@ -14,6 +14,10 @@ export default function TvPageContainer() {
   const [eventId, setEventId] = useState(() => new URLSearchParams(window.location.search).get('event'));
   const [eventData, setEventData] = useState(null);
   const [activeEventStream, setActiveEventStream] = useState(0);
+  const [matchId, setMatchId] = useState(() => new URLSearchParams(window.location.search).get('matchId'));
+  const [matchData, setMatchData] = useState(null);
+  const [activeMatchStream, setActiveMatchStream] = useState(0);
+  const [matchError, setMatchError] = useState('');
   const [epgData, setEpgData] = useState(null);
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
@@ -49,7 +53,9 @@ export default function TvPageContainer() {
     let initialChannelId = params.get('channel');
     let initialStreamUrl = params.get('stream');
     const initialEventId = params.get('event');
+    const initialMatchId = params.get('matchId');
     setEventId(initialEventId);
+    setMatchId(initialMatchId);
 
     const load = async () => {
       try {
@@ -77,9 +83,28 @@ export default function TvPageContainer() {
           }
         }
 
+        if (initialMatchId) {
+          setMatchError('');
+          const matchRes = await fetch(`${API_BASE}/worldcup/matches/${encodeURIComponent(initialMatchId)}`);
+          const matchPayload = await matchRes.json();
+          if (!matchRes.ok || !matchPayload.success) throw new Error(matchPayload.error || `HTTP ${matchRes.status}`);
+          const match = matchPayload.match;
+          setMatchData(match);
+          const firstStream = match.streams?.[0];
+          if (firstStream?.sourceType === 'iptv' && firstStream.sourceChannelId) {
+            initialChannelId = firstStream.sourceChannelId;
+            initialStreamUrl = null;
+          } else if (firstStream?.stream) {
+            initialStreamUrl = firstStream.stream;
+            initialChannelId = null;
+          } else {
+            setMatchError('Chưa có luồng M3U8 khả dụng cho trận này.');
+          }
+        }
+
         if (initialChannelId) setCurrentChannelId(initialChannelId);
         if (initialStreamUrl) setStreamParam(initialStreamUrl);
-        if (!initialEventId && !initialChannelId && !initialStreamUrl && loadedChannels.length) setCurrentChannelId(loadedChannels[0].id);
+        if (!initialEventId && !initialMatchId && !initialChannelId && !initialStreamUrl && loadedChannels.length) setCurrentChannelId(loadedChannels[0].id);
 
         const token = localStorage.getItem('userToken');
         if (token) {
@@ -95,7 +120,7 @@ export default function TvPageContainer() {
   }, []);
 
   useEffect(() => {
-    if (!currentChannelId || eventId) {
+    if (!currentChannelId || eventId || matchId) {
       setEpgData(null);
       return;
     }
@@ -124,7 +149,7 @@ export default function TvPageContainer() {
 
     loadEpg();
     return () => { cancelled = true; };
-  }, [channels, currentChannelId, eventId]);
+  }, [channels, currentChannelId, eventId, matchId]);
 
   const selectEventStream = index => {
     const stream = eventData?.streams?.[index];
@@ -139,10 +164,25 @@ export default function TvPageContainer() {
     }
   };
 
+  const selectMatchStream = index => {
+    const stream = matchData?.streams?.[index];
+    if (!stream) return;
+    setActiveMatchStream(index);
+    if (stream.sourceType === 'iptv') {
+      setCurrentChannelId(stream.sourceChannelId || null);
+      setStreamParam(null);
+    } else {
+      setCurrentChannelId(null);
+      setStreamParam(stream.stream || null);
+    }
+  };
+
   const playChannel = (id) => {
     setCurrentChannelId(id);
     setStreamParam(null);
     setEventId(null);
+    setMatchId(null);
+    setMatchData(null);
     window.history.pushState({}, '', `?channel=${encodeURIComponent(id)}`);
     document.getElementById('main-scroll-container')?.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -194,6 +234,58 @@ export default function TvPageContainer() {
     </div>
   );
 
+  const matchScore = matchData?.has_score
+    ? `${matchData.home_score_value} - ${matchData.away_score_value}`
+    : (matchData?.isUpcoming ? 'VS' : '--');
+  const matchHeading = matchData && (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase text-[#ED2C25]">
+          {matchData.isLive ? <Radio size={14} /> : <Trophy size={14} />}
+          {matchData.isLive ? 'Đang trực tiếp' : matchData.isFinished ? 'Chi tiết trận đấu' : 'Phòng chờ trận đấu'}
+        </div>
+        <h1 className="mt-1 truncate text-xl font-black text-white md:text-2xl">
+          {matchData.home_team_display} vs {matchData.away_team_display}
+        </h1>
+        <div className="mt-1 flex flex-wrap gap-2 text-xs text-white/45">
+          <span>Match #{matchData.id}</span>
+          <span>{matchData.stage_vi}{matchData.group ? ` - Bảng ${matchData.group}` : ''}</span>
+          <span>{matchData.kickoffAtVN || 'GMT+7'}</span>
+        </div>
+      </div>
+      {matchData.streams?.length > 0 && (
+        <div className="hide-scrollbar flex max-w-full gap-2 overflow-x-auto pb-1">
+          {matchData.streams.map((stream, index) => (
+            <button key={stream.id || index} onClick={() => selectMatchStream(index)} className={`shrink-0 rounded-md px-3 py-2 text-sm font-semibold ${activeMatchStream === index ? 'bg-[#ED2C25] text-white' : 'bg-white/8 text-white/65 hover:bg-white/12'}`}>
+              {stream.name || `Luồng ${index + 1}`}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  const matchStats = matchData && (
+    <div className="space-y-3 rounded-lg border border-white/10 bg-[#151515] p-4">
+      <div className="flex items-center gap-2 font-black text-white"><Info size={16} /> Thông số trận</div>
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-md bg-black/25 p-3">
+        <div className="min-w-0 truncate text-sm font-bold text-white">{matchData.home_team_display}</div>
+        <div className="rounded-md bg-white/10 px-3 py-2 text-lg font-black text-white">{matchScore}</div>
+        <div className="min-w-0 truncate text-right text-sm font-bold text-white">{matchData.away_team_display}</div>
+      </div>
+      <InfoRowCompact icon={CalendarClock} label="Giờ Việt Nam" value={matchData.kickoffAtVN || 'Đang cập nhật'} />
+      <InfoRowCompact icon={Trophy} label="Vòng đấu" value={`${matchData.stage_vi || '--'}${matchData.group ? ` - Bảng ${matchData.group}` : ''}`} />
+      {matchData.stadium_name && <InfoRowCompact icon={Info} label="Sân" value={`${matchData.stadium_name}${matchData.stadium_country_vi ? `, ${matchData.stadium_country_vi}` : ''}`} />}
+      {(matchData.home_scorers_list?.length > 0 || matchData.away_scorers_list?.length > 0) && (
+        <div className="rounded-md bg-white/5 p-3 text-xs text-white/60">
+          <div className="truncate">{matchData.home_scorers_list?.join(', ')}</div>
+          <div className="mt-1 truncate text-right">{matchData.away_scorers_list?.join(', ')}</div>
+        </div>
+      )}
+      {matchError && <div className="rounded-md bg-yellow-500/10 p-3 text-xs text-yellow-200">{matchError}</div>}
+    </div>
+  );
+
   if (eventId) {
     return (
       <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-0 pb-8 pt-0 lg:px-8 lg:pt-6">
@@ -206,6 +298,25 @@ export default function TvPageContainer() {
           <div className="px-4 lg:hidden">{eventHeading}</div>
           <div className="px-4 lg:px-0">
             <EventChat eventId={eventId} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (matchId) {
+    return (
+      <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-0 pb-8 pt-0 lg:px-8 lg:pt-6">
+        <div className="hidden lg:block">{matchHeading}</div>
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,68fr)_minmax(340px,32fr)]">
+          <div className={`fixed left-0 right-0 z-50 w-full overflow-hidden bg-black shadow-2xl transition-[top] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] lg:static lg:z-auto lg:rounded-lg lg:border lg:border-white/10 ${isHeaderHidden ? 'top-0' : 'top-[64px]'}`} style={{ willChange: 'top' }}>
+            {(currentChannelId || streamParam) ? <LivePlayerView key={`${currentChannelId || streamParam}-${activeMatchStream}`} channelId={currentChannelId} streamParam={streamParam} channelName={matchData ? `${matchData.home_team_display} vs ${matchData.away_team_display} - ${matchData.streams?.[activeMatchStream]?.name || 'World Cup'}` : currentChannel?.name} /> : <div className="flex aspect-video items-center justify-center text-sm text-white/45">Đang chờ nguồn phát World Cup...</div>}
+          </div>
+          <div className="aspect-video w-full lg:hidden" />
+          <div className="px-4 lg:hidden">{matchHeading}</div>
+          <div className="space-y-4 px-4 lg:px-0">
+            {matchStats}
+            <EventChat eventId={`worldcup-${matchId}`} />
           </div>
         </div>
       </div>
@@ -315,6 +426,15 @@ function FilterButton({ active, onClick, children }) {
     >
       {children}
     </button>
+  );
+}
+
+function InfoRowCompact({ icon: Icon, label, value }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-white/6 py-2 text-sm last:border-0">
+      <span className="inline-flex shrink-0 items-center gap-2 text-white/45"><Icon size={14} /> {label}</span>
+      <span className="min-w-0 truncate text-right font-semibold text-white/75">{value}</span>
+    </div>
   );
 }
 

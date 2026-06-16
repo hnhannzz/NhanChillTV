@@ -69,6 +69,25 @@
   }
 }
 
+@media (min-width: 768px) {
+  .mobile-scroll,
+  .custom-scrollbar,
+  .mobile-horizontal-scroll,
+  .mobile-search-results {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .mobile-scroll::-webkit-scrollbar,
+  .custom-scrollbar::-webkit-scrollbar,
+  .mobile-horizontal-scroll::-webkit-scrollbar,
+  .mobile-search-results::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+}
+
 @layer components {
   .input-admin {
     @apply w-full rounded-md border border-white/10 bg-black/25 px-3 py-2 text-white outline-none focus:border-[#ED2C25];

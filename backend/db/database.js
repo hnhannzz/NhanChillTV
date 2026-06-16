@@ -32,6 +32,9 @@ class Database {
           hiddenChannels: [],
           groupOrder: [],
           transcode247: []
+        },
+        worldcupSettings: {
+          matchStreams: {}
         }
       });
     } else {
@@ -67,6 +70,13 @@ class Database {
           playerType: 'shaka',
           maintenanceMode: false
         };
+        this.write(data);
+      }
+      if (!data.worldcupSettings) {
+        data.worldcupSettings = { matchStreams: {} };
+        this.write(data);
+      } else if (!data.worldcupSettings.matchStreams) {
+        data.worldcupSettings.matchStreams = {};
         this.write(data);
       }
       if (!Array.isArray(data.favorites)) {
@@ -181,6 +191,42 @@ class Database {
     data.systemSettings = { ...data.systemSettings, ...settings };
     this.write(data);
     return data.systemSettings;
+  }
+
+  getWorldCupSettings() {
+    const data = this.read();
+    return data.worldcupSettings || { matchStreams: {} };
+  }
+
+  getWorldCupStreams(matchId) {
+    const settings = this.getWorldCupSettings();
+    return settings.matchStreams?.[String(matchId)] || [];
+  }
+
+  addWorldCupStream(matchId, stream) {
+    const data = this.read();
+    if (!data.worldcupSettings) data.worldcupSettings = { matchStreams: {} };
+    if (!data.worldcupSettings.matchStreams) data.worldcupSettings.matchStreams = {};
+    const key = String(matchId);
+    const streams = data.worldcupSettings.matchStreams[key] || [];
+    const item = {
+      ...stream,
+      id: stream.id || `wc_${Date.now()}`,
+      createdAt: new Date().toISOString()
+    };
+    data.worldcupSettings.matchStreams[key] = [...streams, item];
+    this.write(data);
+    return item;
+  }
+
+  deleteWorldCupStream(matchId, streamId) {
+    const data = this.read();
+    const key = String(matchId);
+    const streams = data.worldcupSettings?.matchStreams?.[key] || [];
+    if (!data.worldcupSettings) data.worldcupSettings = { matchStreams: {} };
+    if (!data.worldcupSettings.matchStreams) data.worldcupSettings.matchStreams = {};
+    data.worldcupSettings.matchStreams[key] = streams.filter(stream => stream.id !== streamId);
+    this.write(data);
   }
 
   verifyAdminPassword(password, fallbackPassword) {
