@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { LogOut, Menu, Search, User, X } from 'lucide-react';
+import { LogOut, Menu, Search, Trophy, User, X } from 'lucide-react';
 import classNames from 'classnames';
 import AuthModal from './AuthModal';
 import { fetchOPhimJson, getOPhimItems } from '../lib/OPhimApi';
@@ -154,6 +154,7 @@ export default function Header({ toggleSidebar }) {
           <a href="/" className="font-semibold text-white/80 hover:text-[#ED2C25]">Trang chủ</a>
           <a href="/tv/" className="font-semibold text-white/80 hover:text-[#ED2C25]">Truyền hình</a>
           <a href="/events/" className="font-semibold text-white/80 hover:text-[#ED2C25]">Sự kiện</a>
+          <a href="/worldcup/" className="inline-flex items-center gap-1.5 font-semibold text-white/80 hover:text-[#ED2C25]"><Trophy size={16} /> World Cup</a>
           <a href="/movies/" className="font-semibold text-white/80 hover:text-[#ED2C25]">Phim</a>
         </nav>
       </div>

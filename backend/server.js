@@ -8,6 +8,7 @@ const config = require('./config');
 const ffmpegWrapper = require('../ffmpeg-core/wrapper');
 const m3uManager = require('./services/m3uManager');
 const transcode247Manager = require('./services/transcode247Manager');
+const worldCupRouter = require('./routes/worldcup');
 
 const app = express();
 const server = http.createServer(app);
@@ -44,6 +45,7 @@ app.use('/api/user', require('./routes/user'));
 app.use('/api/comments', require('./routes/comment'));
 app.use('/api/epg', require('./routes/epg'));
 app.use('/api/movies', require('./routes/movies'));
+app.use('/api/worldcup', worldCupRouter);
 app.use('/api/proxy', require('./routes/proxy'));
 
 // Health check & Metrics for Load Balancing
@@ -150,5 +152,6 @@ m3uManager.refreshAll().then(() => {
   server.listen(config.apiPort, () => {
     console.log(`[Server] NhanChillTV ${config.version} running in ${config.mode} mode on port ${config.apiPort}`);
     console.log(`[FFmpeg] Binary check: ${ffmpegWrapper.checkFFmpegExists()}`);
+    worldCupRouter._prewarm?.();
   });
 });

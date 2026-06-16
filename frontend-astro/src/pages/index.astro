@@ -2,6 +2,7 @@
 import Layout from '../layouts/Layout.astro';
 import MainLayout from '../components/MainLayout.jsx';
 import HeroBanner from '../components/HeroBanner.jsx';
+import WorldCupTodayWidget from '../components/WorldCupTodayWidget.jsx';
 import HomeEvents from '../components/HomeEvents.jsx';
 import HomeChannels from '../components/HomeChannels.jsx';
 import HomeMovies from '../components/HomeMovies.jsx';
@@ -12,6 +13,11 @@ import HomeMovies from '../components/HomeMovies.jsx';
     <HeroBanner client:load />
 
     <div class="px-4 md:px-12 py-12 space-y-12 pb-32">
+
+      {/* World Cup Today Widget */}
+      <section>
+        <WorldCupTodayWidget client:only="react" />
+      </section>
 
       {/* Live Events Section */}
       <section>

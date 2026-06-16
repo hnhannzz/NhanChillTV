@@ -1,0 +1,83 @@
+import React, { useEffect, useState } from 'react';
+import { CalendarDays, ChevronRight, RefreshCw, Trophy } from 'lucide-react';
+import WorldCupMatchCard from './WorldCupMatchCard';
+
+export default function WorldCupTodayWidget() {
+  const [payload, setPayload] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch('/api/worldcup/today', { signal: controller.signal })
+      .then(response => response.ok ? response.json() : Promise.reject(new Error(`HTTP ${response.status}`)))
+      .then(data => {
+        if (!data.success) throw new Error(data.error || 'World Cup API error');
+        setPayload(data);
+      })
+      .catch(err => {
+        if (err.name !== 'AbortError') setError('Không tải được lịch World Cup hôm nay.');
+      })
+      .finally(() => setLoading(false));
+    return () => controller.abort();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="grid gap-4 md:grid-cols-3">
+        {[1, 2, 3].map(item => <div key={item} className="h-36 animate-pulse rounded-lg bg-white/5" />)}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-lg border border-white/10 bg-[#111111] p-5 text-sm text-white/55">
+        <div className="flex items-center gap-2 text-white">
+          <RefreshCw size={16} />
+          {error}
+        </div>
+      </div>
+    );
+  }
+
+  const todayMatches = payload?.matches || [];
+  const fallbackMatches = todayMatches.length ? [] : (payload?.nextGames || []).slice(0, 3);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div>
+          <div className="inline-flex items-center gap-2 rounded-md border border-[#FFD166]/25 bg-[#FFD166]/10 px-3 py-1 text-xs font-extrabold uppercase tracking-wide text-[#FFD166]">
+            <Trophy size={14} />
+            World Cup 2026
+          </div>
+          <h2 className="mt-2 text-xl font-black text-white md:text-3xl">Trận đấu hôm nay</h2>
+          <p className="mt-1 text-sm text-white/50">Theo ngày Việt Nam GMT+7: {payload?.date}</p>
+        </div>
+        <a href="/worldcup/" className="inline-flex items-center gap-2 self-start rounded-md bg-[#ED2C25] px-4 py-2 text-sm font-extrabold text-white transition-colors hover:bg-red-700 md:self-auto">
+          Lịch đầy đủ
+          <ChevronRight size={16} />
+        </a>
+      </div>
+
+      {todayMatches.length ? (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {todayMatches.slice(0, 6).map(match => <WorldCupMatchCard key={match.id} match={match} compact />)}
+        </div>
+      ) : (
+        <div className="rounded-lg border border-white/10 bg-[#111111] p-5">
+          <div className="flex items-center gap-2 text-sm font-extrabold text-white">
+            <CalendarDays size={16} />
+            Không có trận trong hôm nay
+          </div>
+          {fallbackMatches.length > 0 && (
+            <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {fallbackMatches.map(match => <WorldCupMatchCard key={match.id} match={match} compact />)}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
