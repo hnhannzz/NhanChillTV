@@ -367,6 +367,12 @@ function isM3u8Url(url) {
   return String(url || '').toLowerCase().includes('.m3u8');
 }
 
+function normalizeEmbedUrl(value) {
+  const raw = String(value || '').trim();
+  const iframeMatch = raw.match(/src=["']([^"']+)["']/i);
+  return (iframeMatch ? iframeMatch[1] : raw).trim();
+}
+
 router.get('/worldcup-streams', auth, (req, res) => {
   res.json({ success: true, data: db.getWorldCupSettings() });
 });
@@ -399,6 +405,27 @@ router.post('/worldcup-streams/:matchId', auth, (req, res) => {
 
 router.delete('/worldcup-streams/:matchId/:streamId', auth, (req, res) => {
   db.deleteWorldCupStream(req.params.matchId, req.params.streamId);
+  res.json({ success: true });
+});
+
+router.put('/worldcup-highlights/:matchId', auth, (req, res) => {
+  const matchId = String(req.params.matchId || '').trim();
+  const sourceType = ['embed', 'm3u8'].includes(req.body?.sourceType) ? req.body.sourceType : 'embed';
+  const url = sourceType === 'embed' ? normalizeEmbedUrl(req.body?.url) : String(req.body?.url || '').trim();
+  const title = String(req.body?.title || 'Highlight trận đấu').trim();
+
+  if (!matchId) return res.status(400).json({ success: false, error: 'Match ID is required' });
+  if (!/^https?:\/\//i.test(url)) return res.status(400).json({ success: false, error: 'Highlight URL must start with http or https' });
+  if (sourceType === 'm3u8' && !isM3u8Url(url)) {
+    return res.status(400).json({ success: false, error: 'Highlight M3U8 must be an .m3u8 URL' });
+  }
+
+  const saved = db.setWorldCupHighlight(matchId, { sourceType, url, title });
+  res.json({ success: true, data: saved });
+});
+
+router.delete('/worldcup-highlights/:matchId', auth, (req, res) => {
+  db.deleteWorldCupHighlight(req.params.matchId);
   res.json({ success: true });
 });
 

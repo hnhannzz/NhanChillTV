@@ -34,7 +34,8 @@ class Database {
           transcode247: []
         },
         worldcupSettings: {
-          matchStreams: {}
+          matchStreams: {},
+          matchHighlights: {}
         }
       });
     } else {
@@ -73,10 +74,14 @@ class Database {
         this.write(data);
       }
       if (!data.worldcupSettings) {
-        data.worldcupSettings = { matchStreams: {} };
+        data.worldcupSettings = { matchStreams: {}, matchHighlights: {} };
         this.write(data);
       } else if (!data.worldcupSettings.matchStreams) {
         data.worldcupSettings.matchStreams = {};
+        this.write(data);
+      }
+      if (!data.worldcupSettings.matchHighlights) {
+        data.worldcupSettings.matchHighlights = {};
         this.write(data);
       }
       if (!Array.isArray(data.favorites)) {
@@ -195,7 +200,7 @@ class Database {
 
   getWorldCupSettings() {
     const data = this.read();
-    return data.worldcupSettings || { matchStreams: {} };
+    return data.worldcupSettings || { matchStreams: {}, matchHighlights: {} };
   }
 
   getWorldCupStreams(matchId) {
@@ -226,6 +231,35 @@ class Database {
     if (!data.worldcupSettings) data.worldcupSettings = { matchStreams: {} };
     if (!data.worldcupSettings.matchStreams) data.worldcupSettings.matchStreams = {};
     data.worldcupSettings.matchStreams[key] = streams.filter(stream => stream.id !== streamId);
+    this.write(data);
+  }
+
+  getWorldCupHighlight(matchId) {
+    const settings = this.getWorldCupSettings();
+    return settings.matchHighlights?.[String(matchId)] || null;
+  }
+
+  setWorldCupHighlight(matchId, highlight) {
+    const data = this.read();
+    if (!data.worldcupSettings) data.worldcupSettings = { matchStreams: {}, matchHighlights: {} };
+    if (!data.worldcupSettings.matchHighlights) data.worldcupSettings.matchHighlights = {};
+    const key = String(matchId);
+    const item = {
+      sourceType: highlight.sourceType,
+      url: String(highlight.url || '').trim(),
+      title: String(highlight.title || 'Highlight trận đấu').trim(),
+      updatedAt: new Date().toISOString(),
+    };
+    data.worldcupSettings.matchHighlights[key] = item;
+    this.write(data);
+    return item;
+  }
+
+  deleteWorldCupHighlight(matchId) {
+    const data = this.read();
+    if (!data.worldcupSettings) data.worldcupSettings = { matchStreams: {}, matchHighlights: {} };
+    if (!data.worldcupSettings.matchHighlights) data.worldcupSettings.matchHighlights = {};
+    delete data.worldcupSettings.matchHighlights[String(matchId)];
     this.write(data);
   }
 

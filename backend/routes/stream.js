@@ -3,17 +3,13 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
-const axios = require('axios');
 const ffmpegWrapper = require('../../ffmpeg-core/wrapper');
 const m3uManager = require('../services/m3uManager');
 const config = require('../config');
 const authService = require('../services/authService');
 const clusterService = require('../services/clusterService');
 const { encryptUrl } = require('../utils/cryptoHelper');
-
-function isMpdLikeChannel(channel) {
-  return Boolean(channel?.clearKey) || String(channel?.url || '').toLowerCase().includes('.mpd');
-}
+const { detectChannelPlaybackType } = require('../services/streamTypeDetector');
 
 function buildDirectProxyTarget(channel) {
   // Bỏ qua proxy cho các luồng FPT Play/VTV vì họ chặn IP Datacenter và có hỗ trợ CORS
@@ -60,14 +56,16 @@ router.post('/start/:channelId', async (req, res) => {
     }
 
     // Direct mode: bypass FFmpeg. MPD/ClearKey must stay direct so Shaka can handle DRM.
-    const isMpd = isMpdLikeChannel(channel);
+    const playbackType = await detectChannelPlaybackType(channel);
+    const isMpd = Boolean(playbackType.isMpd);
+    const isHls = Boolean(playbackType.isHls);
+    const isProgressive = Boolean(playbackType.isProgressive);
 
-    let shouldGoDirect = config.directMode || isMpd;
+    let shouldGoDirect = config.directMode || isMpd || isHls || isProgressive;
 
     // Nếu là stream MPEG-TS (có vẻ là UDP/HTTP-TS) và không phải MPD, kiểm tra xem có cần transcode không
-    if (shouldGoDirect && !isMpd) {
-      const lowerUrl = String(channel.url).toLowerCase();
-      const isMpegTs = !lowerUrl.includes('.m3u8') && !lowerUrl.includes('.mpd') && !lowerUrl.includes('.mp4');
+    if (shouldGoDirect && !isMpd && !isHls && !isProgressive) {
+      const isMpegTs = playbackType.kind === 'mpegts' || playbackType.kind === 'unknown';
       if (isMpegTs) {
         try {
           const info = await ffmpegWrapper.getStreamInfo(channelId, channel);
@@ -83,32 +81,8 @@ router.post('/start/:channelId', async (req, res) => {
     }
 
     if (shouldGoDirect) {
-      let finalIsMpd = isMpd;
-
-      // PRE-FETCH CHECK: Verify if the URL is actually MPD despite having m3u8 extension
-      if (String(channel.url).toLowerCase().includes('.m3u8')) {
-        try {
-          const headRes = await axios.get(channel.url, { 
-            headers: { 
-              'Range': 'bytes=0-1024',
-              'User-Agent': channel.userAgent || 'Dalvik/2.1.0 (Linux; U; Android 10; TV Box Build/QQ3A.200805.001)',
-              'X-Requested-With': 'org.xbmc.kodi'
-            },
-            timeout: 5000
-          });
-          
-          const contentType = headRes.headers['content-type'] || '';
-          const contentStr = (headRes.data || '').toString();
-          
-          if (contentType.includes('dash+xml') || contentStr.includes('<?xml') || contentStr.includes('<MPD')) {
-            finalIsMpd = true;
-          }
-        } catch (err) {
-          console.warn(`[Stream] Pre-fetch check failed for ${channelId}:`, err.message);
-        }
-      }
-
       const finalTarget = buildDirectProxyTarget(channel);
+      const clearKey = isMpd ? channel.clearKey : null;
 
       return res.json({
         success: true,
@@ -117,10 +91,13 @@ router.post('/start/:channelId', async (req, res) => {
           isDirect: true,
           hlsUrl: finalTarget,
           proxyUrl: finalTarget,
-          isMpd: finalIsMpd,
+          isMpd,
+          isHls,
+          streamType: playbackType.kind || (isMpd ? 'mpd' : isHls ? 'hls' : 'unknown'),
+          detectionSource: playbackType.source || 'unknown',
           rawUrl: channel.url,
           userAgent: channel.userAgent || null,
-          clearKey: channel.clearKey
+          clearKey
         }
       });
     }
@@ -132,7 +109,10 @@ router.post('/start/:channelId', async (req, res) => {
       data: {
         ...result,
         hlsUrl: `/hls/${auth.token}/${auth.expires}/${channelId}/${result.hlsFile}`,
-        clearKey: channel.clearKey
+        isMpd: false,
+        isHls: true,
+        streamType: 'hls',
+        clearKey: null
       }
     });
   } catch (err) {

@@ -97,3 +97,13 @@ test('finished World Cup matches do not render a player', async () => {
   assert.equal(shouldRenderWorldCupPlayer({ isFinished: true }), false);
   assert.equal(shouldRenderWorldCupPlayer({ isFinished: false }), true);
 });
+
+test('World Cup highlights are attached by match id', () => {
+  const highlight = { sourceType: 'embed', url: 'https://example.com/highlight', title: 'Highlight' };
+  const normalized = normalizeWorldCupData(sampleRawWorldCup(), {
+    getStreams: () => [],
+    getHighlight: matchId => String(matchId) === '2' ? highlight : null,
+  });
+
+  assert.deepEqual(normalized.games[0].highlight, highlight);
+});

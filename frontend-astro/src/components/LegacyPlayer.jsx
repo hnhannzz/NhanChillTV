@@ -16,6 +16,8 @@ export default function LegacyPlayer({
   onReady,
   onError,
   clearKey,
+  isMpd: isMpdProp,
+  streamType,
 }) {
   const containerRef = useRef(null);
   const playerRef = useRef(null);
@@ -59,8 +61,8 @@ export default function LegacyPlayer({
     containerRef.current.innerHTML = '';
     containerRef.current.appendChild(playerDiv);
 
-    const isMpd = url.includes('.mpd');
-    const isM3U8 = url.includes('.m3u8');
+    const isMpd = Boolean(isMpdProp) || streamType === 'mpd' || streamType === 'dash' || url.includes('.mpd');
+    const isM3U8 = streamType === 'hls' || url.includes('.m3u8');
 
     let playerSetup = {
       file: url,
@@ -77,10 +79,14 @@ export default function LegacyPlayer({
     if (isMpd) {
       playerSetup.type = 'dash';
       if (clearKey) {
+        const clearKeyEntries = typeof clearKey === 'string' && clearKey.includes(':')
+          ? [clearKey.split(':')]
+          : Object.entries(clearKey || {});
+        const [keyId, key] = clearKeyEntries[0] || [];
         playerSetup.drm = {
           clearkey: {
-            keyId: clearKey.split(':')[0],
-            key: clearKey.split(':')[1]
+            keyId,
+            key,
           }
         };
       }
@@ -130,7 +136,7 @@ export default function LegacyPlayer({
         playerRef.current = null;
       }
     };
-  }, [url, isJwLoaded, autoplay, muted, poster]);
+  }, [url, isJwLoaded, autoplay, muted, poster, clearKey, isMpdProp, streamType]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {

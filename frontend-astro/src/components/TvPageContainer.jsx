@@ -244,6 +244,7 @@ export default function TvPageContainer() {
   const matchScore = matchData?.has_score
     ? `${matchData.home_score_value} - ${matchData.away_score_value}`
     : (matchData?.isUpcoming ? 'VS' : '--');
+  const matchHighlight = matchData?.isFinished && matchData.highlight?.url ? matchData.highlight : null;
   const matchHeading = matchData && (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
@@ -290,6 +291,7 @@ export default function TvPageContainer() {
         </div>
       )}
       {matchData.isFinished && <div className="rounded-md bg-emerald-500/10 p-3 text-xs font-semibold text-emerald-200">Trận đấu đã kết thúc. Player phát sóng đã tắt, trang này chỉ giữ tỉ số, thống kê và chat riêng của trận.</div>}
+      {matchHighlight && <div className="rounded-md bg-white/5 p-3 text-xs text-white/60">Highlight sau trận: <span className="font-semibold text-white">{matchHighlight.title || 'Highlight trận đấu'}</span></div>}
       {matchError && <div className="rounded-md bg-yellow-500/10 p-3 text-xs text-yellow-200">{matchError}</div>}
     </div>
   );
@@ -319,11 +321,15 @@ export default function TvPageContainer() {
         <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,68fr)_minmax(340px,32fr)]">
           <div className={`fixed left-0 right-0 z-50 w-full overflow-hidden bg-black shadow-2xl transition-[top] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] lg:static lg:z-auto lg:rounded-lg lg:border lg:border-white/10 ${isHeaderHidden ? 'top-0' : 'top-[64px]'}`} style={{ willChange: 'top' }}>
             {!shouldRenderWorldCupPlayer(matchData) ? (
-              <div className="flex aspect-video flex-col items-center justify-center gap-3 bg-[#101010] px-4 text-center">
-                <Trophy size={40} className="text-[#FFD166]" />
-                <div className="text-xl font-black text-white">{matchScore}</div>
-                <div className="max-w-md text-sm text-white/55">Trận đấu đã kết thúc. Player phát sóng không còn hiển thị cho trận này.</div>
-              </div>
+              matchHighlight ? (
+                <WorldCupHighlightPlayer highlight={matchHighlight} title={matchData ? `${matchData.home_team_display} vs ${matchData.away_team_display}` : 'World Cup'} />
+              ) : (
+                <div className="flex aspect-video flex-col items-center justify-center gap-3 bg-[#101010] px-4 text-center">
+                  <Trophy size={40} className="text-[#FFD166]" />
+                  <div className="text-xl font-black text-white">{matchScore}</div>
+                  <div className="max-w-md text-sm text-white/55">Trận đấu đã kết thúc. Player phát sóng không còn hiển thị cho trận này.</div>
+                </div>
+              )
             ) : (currentChannelId || streamParam) ? <LivePlayerView key={`${currentChannelId || streamParam}-${activeMatchStream}`} channelId={currentChannelId} streamParam={streamParam} channelName={matchData ? `${matchData.home_team_display} vs ${matchData.away_team_display} - ${matchData.streams?.[activeMatchStream]?.name || 'World Cup'}` : currentChannel?.name} /> : <div className="flex aspect-video items-center justify-center text-sm text-white/45">Đang chờ nguồn phát World Cup...</div>}
           </div>
           <div className="aspect-video w-full lg:hidden" />
@@ -428,6 +434,26 @@ export default function TvPageContainer() {
           <div className="rounded-lg border border-white/5 bg-[#151515] py-16 text-center text-white/50">Không tìm thấy kênh phù hợp.</div>
         )}
       </div>
+    </div>
+  );
+}
+
+function WorldCupHighlightPlayer({ highlight, title }) {
+  const isM3u8 = highlight?.sourceType === 'm3u8';
+  if (isM3u8) {
+    return <LivePlayerView key={highlight.url} streamParam={highlight.url} channelName={`${title} - ${highlight.title || 'Highlight'}`} />;
+  }
+
+  return (
+    <div className="aspect-video w-full overflow-hidden bg-black">
+      <iframe
+        src={highlight.url}
+        title={highlight.title || title || 'World Cup highlight'}
+        className="h-full w-full border-0"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+        allowFullScreen
+        referrerPolicy="no-referrer-when-downgrade"
+      />
     </div>
   );
 }

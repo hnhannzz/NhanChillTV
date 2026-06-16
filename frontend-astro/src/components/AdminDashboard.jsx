@@ -477,6 +477,7 @@ function WorldCupStreamsTab({ matches, channels, streamsConfig, busy, adminReque
   const sortedMatches = useMemo(() => [...matches].sort((a, b) => new Date(a.kickoffAt || 0) - new Date(b.kickoffAt || 0)), [matches]);
   const [selectedMatchId, setSelectedMatchId] = useState('');
   const [form, setForm] = useState({ name: '', sourceType: 'iptv', sourceChannelId: '', stream: '' });
+  const [highlightForm, setHighlightForm] = useState({ sourceType: 'embed', title: '', url: '' });
 
   useEffect(() => {
     if (!selectedMatchId && sortedMatches[0]?.id) setSelectedMatchId(String(sortedMatches[0].id));
@@ -485,6 +486,15 @@ function WorldCupStreamsTab({ matches, channels, streamsConfig, busy, adminReque
   const hlsChannels = useMemo(() => channels.filter(channel => String(channel.url || '').toLowerCase().includes('.m3u8')), [channels]);
   const selectedMatch = sortedMatches.find(match => String(match.id) === String(selectedMatchId));
   const customStreams = streamsConfig?.matchStreams?.[String(selectedMatchId)] || [];
+  const currentHighlight = streamsConfig?.matchHighlights?.[String(selectedMatchId)] || null;
+
+  useEffect(() => {
+    setHighlightForm({
+      sourceType: currentHighlight?.sourceType || 'embed',
+      title: currentHighlight?.title || '',
+      url: currentHighlight?.url || '',
+    });
+  }, [selectedMatchId, currentHighlight?.sourceType, currentHighlight?.title, currentHighlight?.url]);
   const submit = event => {
     event.preventDefault();
     runAction(async () => {
@@ -494,6 +504,16 @@ function WorldCupStreamsTab({ matches, channels, streamsConfig, busy, adminReque
       });
       setForm({ name: '', sourceType: 'iptv', sourceChannelId: '', stream: '' });
     }, 'Đã thêm luồng World Cup.');
+  };
+
+  const submitHighlight = event => {
+    event.preventDefault();
+    runAction(async () => {
+      await adminRequest(`/admin/worldcup-highlights/${encodeURIComponent(selectedMatchId)}`, {
+        method: 'PUT',
+        body: JSON.stringify(highlightForm),
+      });
+    }, 'Đã lưu highlight World Cup.');
   };
 
   return (
@@ -530,6 +550,21 @@ function WorldCupStreamsTab({ matches, channels, streamsConfig, busy, adminReque
             <button disabled={busy || !selectedMatchId} className="inline-flex items-center justify-center gap-2 rounded-md bg-[#ED2C25] px-4 py-2 font-bold disabled:opacity-50 md:col-span-2"><Plus size={16} /> Thêm luồng</button>
           </form>
         </Panel>
+
+        <div className="xl:col-span-2">
+          <Panel title="Highlight sau trận">
+            <form onSubmit={submitHighlight} className="grid gap-3 md:grid-cols-[1fr_160px]">
+              <Field label="Tiêu đề"><input value={highlightForm.title} onChange={event => setHighlightForm({ ...highlightForm, title: event.target.value })} className="input-admin" placeholder="Highlight trận đấu" /></Field>
+              <Field label="Loại nguồn"><select value={highlightForm.sourceType} onChange={event => setHighlightForm({ ...highlightForm, sourceType: event.target.value })} className="input-admin"><option value="embed">Embed</option><option value="m3u8">M3U8</option></select></Field>
+              <div className="md:col-span-2"><Field label={highlightForm.sourceType === 'm3u8' ? 'URL M3U8 highlight' : 'URL embed hoặc iframe'}><input required value={highlightForm.url} onChange={event => setHighlightForm({ ...highlightForm, url: event.target.value })} className="input-admin" placeholder={highlightForm.sourceType === 'm3u8' ? 'https://.../highlight.m3u8' : 'https://... hoặc <iframe src=\"...\">'} /></Field></div>
+              <div className="flex flex-col gap-2 md:col-span-2 sm:flex-row">
+                <button disabled={busy || !selectedMatchId} className="inline-flex flex-1 items-center justify-center gap-2 rounded-md bg-[#ED2C25] px-4 py-2 font-bold disabled:opacity-50"><Save size={16} /> Lưu highlight</button>
+                {currentHighlight && <button type="button" disabled={busy || !selectedMatchId} onClick={() => runAction(() => adminRequest(`/admin/worldcup-highlights/${encodeURIComponent(selectedMatchId)}`, { method: 'DELETE' }), 'Đã xóa highlight World Cup.')} className="inline-flex items-center justify-center gap-2 rounded-md bg-red-500/10 px-4 py-2 font-bold text-red-300 hover:bg-red-500/20 disabled:opacity-50"><Trash2 size={16} /> Xóa highlight</button>}
+              </div>
+            </form>
+            {currentHighlight && <div className="mt-3 truncate rounded-md bg-black/25 px-3 py-2 text-xs text-white/45">Đang lưu: {currentHighlight.title || 'Highlight trận đấu'} · {currentHighlight.sourceType?.toUpperCase()} · {currentHighlight.url}</div>}
+          </Panel>
+        </div>
       </div>
 
       <div className="mt-4 overflow-hidden rounded-lg border border-white/10 bg-[#151515]">

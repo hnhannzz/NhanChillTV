@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { LogOut, Menu, Search, Trophy, User, X } from 'lucide-react';
 import classNames from 'classnames';
 import AuthModal from './AuthModal';
-import { fetchOPhimJson, getOPhimItems } from '../lib/OPhimApi';
+import { fetchOPhimJson, getOPhimImageUrl, getOPhimItems } from '../lib/OPhimApi';
 import AvatarPicker from './AvatarPicker';
 
 export default function Header({ toggleSidebar }) {
@@ -97,7 +97,7 @@ export default function Header({ toggleSidebar }) {
           ? getOPhimItems(moviesResult.value).slice(0, 5).map(movie => ({
             name: movie.name,
             subtitle: movie.original_name || movie.year || 'Phim',
-            image: movie.thumb_url || movie.poster_url || '/poster.jpg',
+            image: getOPhimImageUrl(movie.poster_url || movie.thumb_url),
             key: `movie-${movie.slug}`,
             type: 'movie',
             link: `/movie-detail/?slug=${encodeURIComponent(movie.slug)}`,

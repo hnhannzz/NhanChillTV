@@ -35,6 +35,7 @@ function TeamBlock({ name, flag, align = 'left' }) {
 
 export default function WorldCupMatchCard({ match, compact = false }) {
   const href = streamHref(match);
+  const hasHighlight = Boolean(match.highlight?.url);
 
   return (
     <article className={`overflow-hidden rounded-lg border bg-[#111111] transition-colors ${match.isLive ? 'border-[#ED2C25]/60 shadow-[0_0_0_1px_rgba(237,44,37,0.18)]' : 'border-white/8 hover:border-white/16'}`}>
@@ -83,8 +84,8 @@ export default function WorldCupMatchCard({ match, compact = false }) {
         )}
         {href && (
           <a href={href} className="inline-flex items-center gap-1.5 rounded-md bg-[#ED2C25] px-3 py-1.5 text-[11px] font-extrabold text-white transition-colors hover:bg-red-700">
-            {match.isFinished ? <Info size={12} /> : <Play size={12} fill="currentColor" />}
-            {match.isFinished ? (compact ? 'Chi tiết' : 'Xem chi tiết trận đấu') : 'Xem'}
+            {match.isFinished && !hasHighlight ? <Info size={12} /> : <Play size={12} fill="currentColor" />}
+            {match.isFinished ? (hasHighlight ? 'Xem highlight' : (compact ? 'Chi tiết' : 'Xem chi tiết trận đấu')) : 'Xem'}
           </a>
         )}
       </div>

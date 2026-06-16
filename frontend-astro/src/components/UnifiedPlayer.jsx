@@ -13,6 +13,7 @@ export default function UnifiedPlayer({
   className = '',
   clearKey,
   isMpd,
+  streamType,
   onNextEpisode,
   onCinemaMode,
   title,
@@ -77,6 +78,14 @@ export default function UnifiedPlayer({
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
   );
 
+  const getResolvedPlaybackType = () => {
+    if (isMpd || streamType === 'mpd' || streamType === 'dash') return 'dash';
+    if (streamType === 'hls') return 'hls';
+    if (streamType === 'mpegts') return 'mpegts';
+    if (streamType === 'progressive' || streamType === 'mp4') return 'mp4';
+    return inferPlaybackType(url);
+  };
+
   useEffect(() => {
     if (typeof document !== 'undefined') {
       setIsPipSupported(document.pictureInPictureEnabled || false);
@@ -93,11 +102,12 @@ export default function UnifiedPlayer({
     const maxRetries = 5;
     let retryTimeoutId = null;
 
-    const lowerUrl = String(url).toLowerCase();
-    const isMpegTs = !isMpd && !lowerUrl.includes('.m3u8') && !lowerUrl.includes('.mpd') && !lowerUrl.includes('.mp4');
+    const playbackType = getResolvedPlaybackType();
+    const isDash = playbackType === 'dash';
+    const isMpegTs = playbackType === 'mpegts';
 
     // 1. Block all MPD (DASH) streams on iOS/Safari (since iOS Safari lacks MSE)
-    if (isMpd && isSafariOrIOS) {
+    if (isDash && isSafariOrIOS) {
       setError('Kênh/phim định dạng MPD (DASH) này chưa hỗ trợ iOS, iPadOS hoặc Safari. Vui lòng dùng Chrome/Edge trên Windows hoặc Android.');
       return;
     }
@@ -108,7 +118,7 @@ export default function UnifiedPlayer({
       const mediaError = videoEl.error;
       console.warn('[Player] Native playback error:', mediaError?.code, mediaError?.message);
 
-      if (isSafariOrIOS && !isMpd && retryCount < maxRetries) {
+      if (isSafariOrIOS && !isDash && retryCount < maxRetries) {
         retryCount++;
         console.log(`[Player] Retrying native HLS source in 3s (Attempt ${retryCount}/${maxRetries})...`);
         setError(`Đang kết nối lại luồng phát (Thử lại ${retryCount}/${maxRetries})...`);
@@ -160,7 +170,7 @@ export default function UnifiedPlayer({
         setError(`Lỗi MPEG-TS: ${errorDetail}`);
         onError?.(errorInfo);
       });
-    } else if (isSafariOrIOS && !isMpd) {
+    } else if (isSafariOrIOS && !isDash) {
       // 2. Dùng native HLS player cho iOS/Safari
       console.log('[Player] Using native Safari HLS/VOD engine');
       videoRef.current.src = url;
@@ -345,7 +355,7 @@ export default function UnifiedPlayer({
         video.removeEventListener('canplay', doSeek);
       }
     };
-  }, [url]);
+  }, [url, isMpd, streamType]);
 
   // Handle Fullscreen state change events, including webkit prefix
   useEffect(() => {

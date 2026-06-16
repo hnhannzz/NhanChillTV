@@ -42,6 +42,34 @@ function createStableChannelId(channel) {
   return `ch_${crypto.createHash('sha1').update(fingerprint).digest('hex').slice(0, 16)}`;
 }
 
+function normalizeHexKey(value) {
+  const clean = String(value || '').trim().replace(/^0x/i, '').replace(/-/g, '').toLowerCase();
+  return /^[0-9a-f]{32}$/.test(clean) ? clean : null;
+}
+
+function base64KeyToHex(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  try {
+    const normalized = raw.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+    const hex = Buffer.from(padded, 'base64').toString('hex').toLowerCase();
+    return /^[0-9a-f]{32}$/.test(hex) ? hex : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function normalizeClearKeyValue(value) {
+  return normalizeHexKey(value) || base64KeyToHex(value);
+}
+
+function addClearKeyPair(clearKeys, kidValue, keyValue) {
+  const kid = normalizeClearKeyValue(kidValue);
+  const key = normalizeClearKeyValue(keyValue);
+  if (kid && key) clearKeys[kid] = key;
+}
+
 class M3UParser {
   static parseString(content) {
     if (!content) return [];
@@ -97,18 +125,20 @@ class M3UParser {
                 const parsed = JSON.parse(keyStr);
                 if (parsed.keys && Array.isArray(parsed.keys)) {
                   parsed.keys.forEach(k => {
-                    const kid = k.kid.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-                    const keyVal = k.k.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-                    clearKeys[kid] = keyVal;
+                    addClearKeyPair(clearKeys, k.kid, k.k || k.key);
+                  });
+                } else if (parsed.keys && typeof parsed.keys === 'object') {
+                  Object.entries(parsed.keys).forEach(([kid, keyVal]) => addClearKeyPair(clearKeys, kid, keyVal));
+                } else {
+                  Object.entries(parsed).forEach(([kid, keyVal]) => {
+                    if (typeof keyVal === 'string') addClearKeyPair(clearKeys, kid, keyVal);
                   });
                 }
               } catch (e) { console.error('ClearKey parse error', e); }
             } else if (keyStr.includes(':')) {
               const parts = keyStr.split(':');
               if (parts.length === 2) {
-                const kid = Buffer.from(parts[0], 'hex').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-                const keyVal = Buffer.from(parts[1], 'hex').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-                clearKeys[kid] = keyVal;
+                addClearKeyPair(clearKeys, parts[0], parts[1]);
               }
             }
             if (Object.keys(clearKeys).length > 0) {

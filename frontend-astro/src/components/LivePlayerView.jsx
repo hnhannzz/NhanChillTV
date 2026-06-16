@@ -31,6 +31,7 @@ export default function LivePlayerView({ channelId, streamParam, channelName }) 
   const [fallbackUrls, setFallbackUrls] = useState([]);
   const [clearKey, setClearKey] = useState(null);
   const [isMpd, setIsMpd] = useState(false);
+  const [streamType, setStreamType] = useState('hls');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [viewers, setViewers] = useState(0);
@@ -73,12 +74,14 @@ export default function LivePlayerView({ channelId, streamParam, channelName }) 
         setLoading(true);
         setError(null);
         setClearKey(null);
+        setStreamType('hls');
 
         if (streamParam && !channelId) {
           const proxyUrl = await resolveProxyPlaybackUrl(streamParam);
           const mpd = streamParam.toLowerCase().includes('.mpd');
           useDirectWithProxyFallback(streamParam, proxyUrl);
           setIsMpd(mpd);
+          setStreamType(mpd ? 'mpd' : streamParam.toLowerCase().includes('.mp4') ? 'progressive' : 'hls');
           setLoading(false);
           return;
         }
@@ -91,6 +94,7 @@ export default function LivePlayerView({ channelId, streamParam, channelName }) 
         const rawUrl = data.data.rawUrl;
         const cKey = data.data.clearKey;
         const mpdFlag = Boolean(data.data.isMpd);
+        const detectedType = data.data.streamType || (mpdFlag ? 'mpd' : 'hls');
 
         if (mpdFlag && cKey && isUnsupportedAppleDrmBrowser()) {
           throw new Error('Kênh DRM MPD này chưa hỗ trợ iOS, iPadOS hoặc Safari. Vui lòng dùng Chrome/Edge trên Windows hoặc Android.');
@@ -99,6 +103,7 @@ export default function LivePlayerView({ channelId, streamParam, channelName }) 
         if (data.data.isDirect) {
           useDirectWithProxyFallback(rawUrl, proxyUrl);
           setIsMpd(mpdFlag);
+          setStreamType(detectedType);
           setClearKey(cKey || null);
           setLoading(false);
           startHeartbeat();
@@ -114,6 +119,7 @@ export default function LivePlayerView({ channelId, streamParam, channelName }) 
               setStreamUrl(data.data.hlsUrl);
               setFallbackUrls([]);
               setIsMpd(false);
+              setStreamType('hls');
               setClearKey(cKey || null);
               setLoading(false);
               startHeartbeat();
@@ -175,7 +181,7 @@ export default function LivePlayerView({ channelId, streamParam, channelName }) 
   }
 
   const lowerUrl = String(streamUrl || '').toLowerCase();
-  const isMpegTs = !isMpd && !lowerUrl.includes('.m3u8') && !lowerUrl.includes('.mpd') && !lowerUrl.includes('.mp4');
+  const isMpegTs = streamType === 'mpegts' || (!isMpd && streamType !== 'hls' && streamType !== 'progressive' && !lowerUrl.includes('.m3u8') && !lowerUrl.includes('.mpd') && !lowerUrl.includes('.mp4'));
 
   const PlayerComponent = (playerType === 'legacy' && !isMpegTs) ? LegacyPlayer : UnifiedPlayer;
 
@@ -189,6 +195,7 @@ export default function LivePlayerView({ channelId, streamParam, channelName }) 
           muted={false}
           clearKey={clearKey}
           isMpd={isMpd}
+          streamType={streamType}
           className="w-full h-full"
           title={channelName || channelId || streamParam}
           subTitle="Live TV"

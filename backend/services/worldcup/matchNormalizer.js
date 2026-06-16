@@ -209,13 +209,14 @@ function getTodayKey(now = new Date()) {
 
 function normalizeWorldCupData(raw, options = {}) {
   const getStreams = typeof options.getStreams === 'function' ? options.getStreams : () => [];
+  const getHighlight = typeof options.getHighlight === 'function' ? options.getHighlight : () => null;
   const teams = (raw.teams || []).map(normalizeTeam);
   const stadiums = (raw.stadiums || []).map(normalizeStadium);
   const teamMap = Object.fromEntries(teams.map(team => [String(team.id), team]));
   const stadiumMap = Object.fromEntries(stadiums.map(stadium => [String(stadium.id), stadium]));
   const games = (raw.games || [])
     .map(game => normalizeGame(game, teamMap, stadiumMap))
-    .map(game => ({ ...game, streams: getStreams(game.id) }))
+    .map(game => ({ ...game, streams: getStreams(game.id), highlight: getHighlight(game.id) }))
     .sort(byKickoffAsc);
 
   const todayKey = getTodayKey(options.now || new Date());

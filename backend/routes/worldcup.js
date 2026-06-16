@@ -37,6 +37,7 @@ let refreshAllPromise = null;
 function normalize(raw) {
   return normalizeWorldCupData(raw, {
     getStreams: matchId => getWorldCupStreams(matchId, { db, m3uManager }),
+    getHighlight: matchId => db.getWorldCupHighlight(matchId),
   });
 }
 

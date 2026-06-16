@@ -114,22 +114,32 @@ const { title } = Astro.props;
 		<script is:inline>
 			(function() {
 				const start = Date.now();
-				const checkInterval = setInterval(checkReady, 100);
+				const minVisibleMs = 750;
+				const maxWaitMs = 12000;
 
-				function checkReady() {
-					const elapsed = Date.now() - start;
-					
-					// Wait at least 600ms to allow React hydration to inject image elements
-					if (elapsed < 600) return;
+				function waitForWindowLoad() {
+					if (document.readyState === 'complete') return Promise.resolve();
+					return new Promise(resolve => window.addEventListener('load', resolve, { once: true }));
+				}
 
-					const imgs = Array.from(document.querySelectorAll('img'));
-					const uncompleted = imgs.filter(img => !img.complete);
+				function waitForImages() {
+					const imgs = Array.from(document.images || []);
+					return Promise.allSettled(imgs.map(img => {
+						if (img.complete && img.naturalWidth !== 0) return Promise.resolve();
+						if (img.decode) return img.decode().catch(() => {});
+						return new Promise(resolve => {
+							img.addEventListener('load', resolve, { once: true });
+							img.addEventListener('error', resolve, { once: true });
+						});
+					}));
+				}
 
-					// If all images are fully resolved, or if we hit the safe fallback timeout (4.5s)
-					if (uncompleted.length === 0 || elapsed > 4500) {
-						clearInterval(checkInterval);
-						hideLoader();
-					}
+				function waitForFonts() {
+					return document.fonts?.ready?.catch(() => {}) || Promise.resolve();
+				}
+
+				function delay(ms) {
+					return new Promise(resolve => setTimeout(resolve, ms));
 				}
 
 				function hideLoader() {
@@ -141,6 +151,15 @@ const { title } = Astro.props;
 						}, 450);
 					}
 				}
+
+				const assetsReady = Promise.resolve()
+					.then(waitForWindowLoad)
+					.then(() => delay(120))
+					.then(() => Promise.allSettled([waitForImages(), waitForFonts()]));
+
+				Promise.race([assetsReady, delay(maxWaitMs)])
+					.then(() => delay(Math.max(0, minVisibleMs - (Date.now() - start))))
+					.then(hideLoader);
 			})();
 		</script>
 
