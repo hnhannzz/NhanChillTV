@@ -17,9 +17,17 @@ export default function MaintenanceGuard({ children }) {
   }, []);
 
   if (loading) {
-    return <div className="min-h-screen bg-[#050505] flex items-center justify-center">
-      <div className="animate-pulse flex flex-col items-center">
-        <div className="w-16 h-16 border-4 border-[#ED2C25] border-t-transparent rounded-full animate-spin"></div>
+    return <div className="flex min-h-screen items-center justify-center bg-[#050505] text-white">
+      <div className="flex flex-col items-center gap-4">
+        <div className="relative h-16 w-16">
+          <span className="absolute inset-0 rounded-full border border-white/10" />
+          <span className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-[#ED2C25]" />
+          <span className="absolute inset-4 rounded-full bg-[#ED2C25]/20" />
+        </div>
+        <div className="text-center">
+          <div className="text-lg font-black">NhanChillTV</div>
+          <div className="mt-1 text-xs font-semibold uppercase tracking-wide text-white/40">Đang tải hệ thống</div>
+        </div>
       </div>
     </div>;
   }

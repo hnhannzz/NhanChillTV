@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarClock, Clock, Heart, Info, Radio, Search, Trophy } from 'lucide-react';
 import LivePlayerView from './LivePlayerView';
 import EventChat from './EventChat';
@@ -70,7 +70,7 @@ export default function TvPageContainer() {
           const eventsData = await eventsRes.json();
           const event = eventsData.success ? eventsData.data.find(item => item.id === initialEventId) : null;
           if (event) {
-            const streams = event.streams?.length ? event.streams : [{ id: 'primary', name: 'Luồng chính', sourceType: event.sourceType, sourceChannelId: event.sourceChannelId, stream: event.stream }];
+            const streams = event.streams?.length ? event.streams : [{ id: 'primary', name: 'Luá»“ng chÃ­nh', sourceType: event.sourceType, sourceChannelId: event.sourceChannelId, stream: event.stream }];
             setEventData({ ...event, streams });
             const firstStream = streams[0];
             if (firstStream?.sourceType === 'iptv' && firstStream.sourceChannelId) {
@@ -90,15 +90,20 @@ export default function TvPageContainer() {
           if (!matchRes.ok || !matchPayload.success) throw new Error(matchPayload.error || `HTTP ${matchRes.status}`);
           const match = matchPayload.match;
           setMatchData(match);
-          const firstStream = match.streams?.[0];
-          if (firstStream?.sourceType === 'iptv' && firstStream.sourceChannelId) {
-            initialChannelId = firstStream.sourceChannelId;
-            initialStreamUrl = null;
-          } else if (firstStream?.stream) {
-            initialStreamUrl = firstStream.stream;
+          if (match.isFinished) {
             initialChannelId = null;
+            initialStreamUrl = null;
           } else {
-            setMatchError('Chưa có luồng M3U8 khả dụng cho trận này.');
+            const firstStream = match.streams?.[0];
+            if (firstStream?.sourceType === 'iptv' && firstStream.sourceChannelId) {
+              initialChannelId = firstStream.sourceChannelId;
+              initialStreamUrl = null;
+            } else if (firstStream?.stream) {
+              initialStreamUrl = firstStream.stream;
+              initialChannelId = null;
+            } else {
+              setMatchError('Chưa có luồng M3U8 khả dụng cho trận này.');
+            }
           }
         }
 
@@ -165,6 +170,7 @@ export default function TvPageContainer() {
   };
 
   const selectMatchStream = index => {
+    if (matchData?.isFinished) return;
     const stream = matchData?.streams?.[index];
     if (!stream) return;
     setActiveMatchStream(index);
@@ -190,7 +196,7 @@ export default function TvPageContainer() {
   const toggleFavoriteChannel = async (id, event) => {
     event.stopPropagation();
     const token = localStorage.getItem('userToken');
-    if (!token) return alert('Vui lòng đăng nhập để lưu kênh yêu thích.');
+    if (!token) return alert('Vui lÃ²ng Ä‘Äƒng nháº­p Ä‘á»ƒ lÆ°u kÃªnh yÃªu thÃ­ch.');
     try {
       const response = await fetch(`${API_BASE}/user/favorites/toggle`, {
         method: 'POST',
@@ -227,10 +233,10 @@ export default function TvPageContainer() {
   const eventHeading = eventData && (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
-        <div className="flex items-center gap-2 text-xs font-bold uppercase text-[#ED2C25]"><Radio size={14} /> {eventData.status === 'live' ? 'Đang trực tiếp' : 'Sắp diễn ra'}</div>
+        <div className="flex items-center gap-2 text-xs font-bold uppercase text-[#ED2C25]"><Radio size={14} /> {eventData.status === 'live' ? 'Äang trá»±c tiáº¿p' : 'Sáº¯p diá»…n ra'}</div>
         <h1 className="mt-1 truncate text-xl font-black text-white md:text-2xl">{eventData.title}</h1>
       </div>
-      {eventData.streams.length > 1 && <div className="hide-scrollbar flex max-w-full gap-2 overflow-x-auto pb-1">{eventData.streams.map((stream, index) => <button key={stream.id || index} onClick={() => selectEventStream(index)} className={`shrink-0 rounded-md px-3 py-2 text-sm font-semibold ${activeEventStream === index ? 'bg-[#ED2C25] text-white' : 'bg-white/8 text-white/65 hover:bg-white/12'}`}>{stream.name || `Luồng ${index + 1}`}</button>)}</div>}
+      {eventData.streams.length > 1 && <div className="hide-scrollbar flex max-w-full gap-2 overflow-x-auto pb-1">{eventData.streams.map((stream, index) => <button key={stream.id || index} onClick={() => selectEventStream(index)} className={`shrink-0 rounded-md px-3 py-2 text-sm font-semibold ${activeEventStream === index ? 'bg-[#ED2C25] text-white' : 'bg-white/8 text-white/65 hover:bg-white/12'}`}>{stream.name || `Luá»“ng ${index + 1}`}</button>)}</div>}
     </div>
   );
 
@@ -242,22 +248,22 @@ export default function TvPageContainer() {
       <div className="min-w-0">
         <div className="flex items-center gap-2 text-xs font-bold uppercase text-[#ED2C25]">
           {matchData.isLive ? <Radio size={14} /> : <Trophy size={14} />}
-          {matchData.isLive ? 'Đang trực tiếp' : matchData.isFinished ? 'Chi tiết trận đấu' : 'Phòng chờ trận đấu'}
+          {matchData.isLive ? 'Äang trá»±c tiáº¿p' : matchData.isFinished ? 'Chi tiáº¿t tráº­n Ä‘áº¥u' : 'PhÃ²ng chá» tráº­n Ä‘áº¥u'}
         </div>
         <h1 className="mt-1 truncate text-xl font-black text-white md:text-2xl">
           {matchData.home_team_display} vs {matchData.away_team_display}
         </h1>
         <div className="mt-1 flex flex-wrap gap-2 text-xs text-white/45">
           <span>Match #{matchData.id}</span>
-          <span>{matchData.stage_vi}{matchData.group ? ` - Bảng ${matchData.group}` : ''}</span>
+          <span>{matchData.stage_vi}{matchData.group ? ` - Báº£ng ${matchData.group}` : ''}</span>
           <span>{matchData.kickoffAtVN || 'GMT+7'}</span>
         </div>
       </div>
-      {matchData.streams?.length > 0 && (
+      {!matchData.isFinished && matchData.streams?.length > 0 && (
         <div className="hide-scrollbar flex max-w-full gap-2 overflow-x-auto pb-1">
           {matchData.streams.map((stream, index) => (
             <button key={stream.id || index} onClick={() => selectMatchStream(index)} className={`shrink-0 rounded-md px-3 py-2 text-sm font-semibold ${activeMatchStream === index ? 'bg-[#ED2C25] text-white' : 'bg-white/8 text-white/65 hover:bg-white/12'}`}>
-              {stream.name || `Luồng ${index + 1}`}
+              {stream.name || `Luá»“ng ${index + 1}`}
             </button>
           ))}
         </div>
@@ -267,21 +273,22 @@ export default function TvPageContainer() {
 
   const matchStats = matchData && (
     <div className="space-y-3 rounded-lg border border-white/10 bg-[#151515] p-4">
-      <div className="flex items-center gap-2 font-black text-white"><Info size={16} /> Thông số trận</div>
+      <div className="flex items-center gap-2 font-black text-white"><Info size={16} /> ThÃ´ng sá»‘ tráº­n</div>
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-md bg-black/25 p-3">
         <div className="min-w-0 truncate text-sm font-bold text-white">{matchData.home_team_display}</div>
         <div className="rounded-md bg-white/10 px-3 py-2 text-lg font-black text-white">{matchScore}</div>
         <div className="min-w-0 truncate text-right text-sm font-bold text-white">{matchData.away_team_display}</div>
       </div>
-      <InfoRowCompact icon={CalendarClock} label="Giờ Việt Nam" value={matchData.kickoffAtVN || 'Đang cập nhật'} />
-      <InfoRowCompact icon={Trophy} label="Vòng đấu" value={`${matchData.stage_vi || '--'}${matchData.group ? ` - Bảng ${matchData.group}` : ''}`} />
-      {matchData.stadium_name && <InfoRowCompact icon={Info} label="Sân" value={`${matchData.stadium_name}${matchData.stadium_country_vi ? `, ${matchData.stadium_country_vi}` : ''}`} />}
+      <InfoRowCompact icon={CalendarClock} label="Giá» Viá»‡t Nam" value={matchData.kickoffAtVN || 'Äang cáº­p nháº­t'} />
+      <InfoRowCompact icon={Trophy} label="VÃ²ng Ä‘áº¥u" value={`${matchData.stage_vi || '--'}${matchData.group ? ` - Báº£ng ${matchData.group}` : ''}`} />
+      {matchData.stadium_name && <InfoRowCompact icon={Info} label="SÃ¢n" value={`${matchData.stadium_name}${matchData.stadium_country_vi ? `, ${matchData.stadium_country_vi}` : ''}`} />}
       {(matchData.home_scorers_list?.length > 0 || matchData.away_scorers_list?.length > 0) && (
         <div className="rounded-md bg-white/5 p-3 text-xs text-white/60">
           <div className="truncate">{matchData.home_scorers_list?.join(', ')}</div>
           <div className="mt-1 truncate text-right">{matchData.away_scorers_list?.join(', ')}</div>
         </div>
       )}
+      {matchData.isFinished && <div className="rounded-md bg-emerald-500/10 p-3 text-xs font-semibold text-emerald-200">Trận đấu đã kết thúc. Player phát sóng đã tắt, trang này chỉ giữ tỉ số, thống kê và chat riêng của trận.</div>}
       {matchError && <div className="rounded-md bg-yellow-500/10 p-3 text-xs text-yellow-200">{matchError}</div>}
     </div>
   );
@@ -292,7 +299,7 @@ export default function TvPageContainer() {
         <div className="hidden lg:block">{eventHeading}</div>
         <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,68fr)_minmax(340px,32fr)]">
           <div className={`fixed left-0 right-0 z-50 w-full overflow-hidden bg-black shadow-2xl transition-[top] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] lg:static lg:z-auto lg:rounded-lg lg:border lg:border-white/10 ${isHeaderHidden ? 'top-0' : 'top-[64px]'}`} style={{ willChange: 'top' }}>
-            {(currentChannelId || streamParam) ? <LivePlayerView key={`${currentChannelId || streamParam}-${activeEventStream}`} channelId={currentChannelId} streamParam={streamParam} channelName={eventData ? `${eventData.title} - ${eventData.streams?.[activeEventStream]?.name || 'Luồng trực tiếp'}` : currentChannel?.name} /> : <div className="flex aspect-video items-center justify-center text-sm text-white/45">Đang chờ nguồn phát sự kiện...</div>}
+            {(currentChannelId || streamParam) ? <LivePlayerView key={`${currentChannelId || streamParam}-${activeEventStream}`} channelId={currentChannelId} streamParam={streamParam} channelName={eventData ? `${eventData.title} - ${eventData.streams?.[activeEventStream]?.name || 'Luá»“ng trá»±c tiáº¿p'}` : currentChannel?.name} /> : <div className="flex aspect-video items-center justify-center text-sm text-white/45">Äang chá» nguá»“n phÃ¡t sá»± kiá»‡n...</div>}
           </div>
           <div className="aspect-video w-full lg:hidden" />
           <div className="px-4 lg:hidden">{eventHeading}</div>
@@ -310,7 +317,13 @@ export default function TvPageContainer() {
         <div className="hidden lg:block">{matchHeading}</div>
         <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,68fr)_minmax(340px,32fr)]">
           <div className={`fixed left-0 right-0 z-50 w-full overflow-hidden bg-black shadow-2xl transition-[top] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] lg:static lg:z-auto lg:rounded-lg lg:border lg:border-white/10 ${isHeaderHidden ? 'top-0' : 'top-[64px]'}`} style={{ willChange: 'top' }}>
-            {(currentChannelId || streamParam) ? <LivePlayerView key={`${currentChannelId || streamParam}-${activeMatchStream}`} channelId={currentChannelId} streamParam={streamParam} channelName={matchData ? `${matchData.home_team_display} vs ${matchData.away_team_display} - ${matchData.streams?.[activeMatchStream]?.name || 'World Cup'}` : currentChannel?.name} /> : <div className="flex aspect-video items-center justify-center text-sm text-white/45">Đang chờ nguồn phát World Cup...</div>}
+            {matchData?.isFinished ? (
+              <div className="flex aspect-video flex-col items-center justify-center gap-3 bg-[#101010] px-4 text-center">
+                <Trophy size={40} className="text-[#FFD166]" />
+                <div className="text-xl font-black text-white">{matchScore}</div>
+                <div className="max-w-md text-sm text-white/55">Trận đấu đã kết thúc. Player phát sóng không còn hiển thị cho trận này.</div>
+              </div>
+            ) : (currentChannelId || streamParam) ? <LivePlayerView key={`${currentChannelId || streamParam}-${activeMatchStream}`} channelId={currentChannelId} streamParam={streamParam} channelName={matchData ? `${matchData.home_team_display} vs ${matchData.away_team_display} - ${matchData.streams?.[activeMatchStream]?.name || 'World Cup'}` : currentChannel?.name} /> : <div className="flex aspect-video items-center justify-center text-sm text-white/45">Đang chờ nguồn phát World Cup...</div>}
           </div>
           <div className="aspect-video w-full lg:hidden" />
           <div className="px-4 lg:hidden">{matchHeading}</div>
@@ -338,11 +351,11 @@ export default function TvPageContainer() {
 
         <aside className="mx-4 lg:mx-0 flex h-[330px] min-h-0 w-auto lg:w-full flex-col overflow-hidden rounded-lg border border-white/10 bg-[#151515] lg:h-[420px] xl:h-[460px]">
           <div className="border-b border-white/10 bg-[#101010] px-4 py-3">
-            <div className="truncate font-bold text-white">Lịch phát sóng</div>
-            <div className="truncate text-xs text-white/45">{currentChannel?.name || epgData?.channel?.name || 'Đang chọn kênh'}</div>
+            <div className="truncate font-bold text-white">Lá»‹ch phÃ¡t sÃ³ng</div>
+            <div className="truncate text-xs text-white/45">{currentChannel?.name || epgData?.channel?.name || 'Äang chá»n kÃªnh'}</div>
           </div>
           <div className="flex items-center justify-between border-b border-white/10 bg-[#ED2C25]/10 px-3 py-1.5 text-xs font-bold text-[#ED2C25]">
-            <span>Hôm nay</span>
+            <span>HÃ´m nay</span>
           </div>
           <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto px-2 py-1.5">
             {epgPrograms.length ? epgPrograms.map((program, index) => {
@@ -359,12 +372,12 @@ export default function TvPageContainer() {
             }) : (
               <div className="flex h-full flex-col items-center justify-center text-white/30">
                 <Clock size={30} className="mb-2" />
-                <span className="text-sm">Không có lịch phát sóng</span>
+                <span className="text-sm">KhÃ´ng cÃ³ lá»‹ch phÃ¡t sÃ³ng</span>
               </div>
             )}
           </div>
           <div className="border-t border-white/10 bg-[#101010] px-4 py-2 text-center text-[10px] text-white/40">
-            Lịch phát sóng cung cấp bởi: <span className="text-[#ED2C25] font-semibold">{epgSourceLabel}</span>
+            Lá»‹ch phÃ¡t sÃ³ng cung cáº¥p bá»Ÿi: <span className="text-[#ED2C25] font-semibold">{epgSourceLabel}</span>
           </div>
         </aside>
       </div>
@@ -394,13 +407,13 @@ export default function TvPageContainer() {
               el.scrollLeft = parseFloat(el.dataset.scrollLeft) - walk;
             }}
           >
-            <FilterButton active={filter === 'all'} onClick={() => setFilter('all')}>Tất cả</FilterButton>
-            <FilterButton active={filter === 'favorites'} onClick={() => setFilter('favorites')}>Yêu thích</FilterButton>
+            <FilterButton active={filter === 'all'} onClick={() => setFilter('all')}>Táº¥t cáº£</FilterButton>
+            <FilterButton active={filter === 'favorites'} onClick={() => setFilter('favorites')}>YÃªu thÃ­ch</FilterButton>
             {groups.map(group => <FilterButton key={group} active={filter === group} onClick={() => setFilter(group)}>{group}</FilterButton>)}
           </div>
           <div className="relative w-full shrink-0 md:w-72">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/45" />
-            <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Tìm kiếm kênh" className="w-full rounded-md border border-white/15 bg-[#151515] py-2 pl-9 pr-3 text-sm text-white outline-none focus:border-[#ED2C25]" />
+            <input value={search} onChange={event => setSearch(event.target.value)} placeholder="TÃ¬m kiáº¿m kÃªnh" className="w-full rounded-md border border-white/15 bg-[#151515] py-2 pl-9 pr-3 text-sm text-white outline-none focus:border-[#ED2C25]" />
           </div>
         </div>
 
@@ -411,7 +424,7 @@ export default function TvPageContainer() {
             ))}
           </div>
         ) : (
-          <div className="rounded-lg border border-white/5 bg-[#151515] py-16 text-center text-white/50">Không tìm thấy kênh phù hợp.</div>
+          <div className="rounded-lg border border-white/5 bg-[#151515] py-16 text-center text-white/50">KhÃ´ng tÃ¬m tháº¥y kÃªnh phÃ¹ há»£p.</div>
         )}
       </div>
     </div>
@@ -442,7 +455,7 @@ function ChannelCard({ channel, active, favorite, onPlay, onFavorite }) {
   return (
     <button onClick={() => onPlay(channel.id)} className={`group relative flex aspect-[16/10] w-full items-center justify-center overflow-hidden rounded-lg border bg-[#171717] p-4 transition-colors ${active ? 'border-[#ED2C25]' : 'border-white/5 hover:border-white/20'}`}>
       <img src={channel.logo || '/poster.jpg'} alt={channel.name} className="h-3/4 w-3/4 object-contain transition-transform group-hover:scale-105" onError={event => { event.currentTarget.src = '/poster.jpg'; }} />
-      <span onClick={event => onFavorite(channel.id, event)} className={`absolute right-2 top-2 rounded-md bg-black/55 p-1.5 ${favorite ? 'text-[#ED2C25]' : 'text-white/40 opacity-0 group-hover:opacity-100'}`} title="Yêu thích">
+      <span onClick={event => onFavorite(channel.id, event)} className={`absolute right-2 top-2 rounded-md bg-black/55 p-1.5 ${favorite ? 'text-[#ED2C25]' : 'text-white/40 opacity-0 group-hover:opacity-100'}`} title="YÃªu thÃ­ch">
         <Heart size={14} fill={favorite ? 'currentColor' : 'none'} />
       </span>
       <span className="absolute bottom-1.5 left-2 right-2 truncate text-center text-[11px] font-medium text-white/70">{channel.name}</span>

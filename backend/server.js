@@ -64,7 +64,9 @@ app.get('/api/health', async (req, res) => {
       },
       memory: {
         free: mem.free,
-        total: mem.total
+        total: mem.total,
+        used: mem.active,
+        usedPercent: mem.total ? (mem.active / mem.total) * 100 : 0
       }
     });
   } catch (err) {
