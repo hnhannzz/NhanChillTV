@@ -26,7 +26,7 @@ const WORLD_CUP_SLIDE = {
   name: 'World Cup 2026',
   original_name: 'Lịch thi đấu, livescore và phòng chat theo từng trận',
   description: 'Theo dõi lịch thi đấu theo giờ Việt Nam GMT+7, tỉ số realtime, bảng xếp hạng và chọn luồng bình luận World Cup ngay trên NhanChillTV.',
-  poster_url: '/poster.jpg',
+  poster_url: 'https://i.ibb.co/wr7DkswW/ezgif-8545a79bc51d4b23.webp',
 };
 
 export default function HeroBanner() {
