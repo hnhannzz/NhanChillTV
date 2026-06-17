@@ -104,6 +104,22 @@ class EpgService {
     fs.renameSync(tempPath, this.cachePath);
   }
 
+  ingestXml(xml, source = 'home-agent') {
+    const cleanXml = String(xml || '').replace(/^\uFEFF/, '');
+    const parsed = this.parseEpg(cleanXml, false);
+    this.applyParsedEpg(parsed);
+    this.saveDiskCache(cleanXml);
+    this.lastFetch = new Date();
+    this.lastError = null;
+    this.activeSource = source;
+    return {
+      channels: Object.keys(this.channels).length,
+      schedules: Object.keys(this.programs).length,
+      updatedAt: this.lastFetch.toISOString(),
+      source: this.activeSource,
+    };
+  }
+
   async fetchSource(sourceUrl, useProxyObj = null) {
     const requestConfig = {
       timeout: 30000,
@@ -356,6 +372,17 @@ class EpgService {
 
   getCurrentAndNext(channelId, options = {}) {
     return this.getSchedule(channelId, options);
+  }
+
+  getStatus() {
+    return {
+      source: this.activeSource || this.epgUrl,
+      updatedAt: this.lastFetch ? this.lastFetch.toISOString() : null,
+      error: this.lastError,
+      channels: Object.keys(this.channels).length,
+      schedules: Object.keys(this.programs).length,
+      cachePath: this.cachePath,
+    };
   }
 }
 

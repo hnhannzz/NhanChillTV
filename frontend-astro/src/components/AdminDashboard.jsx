@@ -21,6 +21,8 @@ export default function AdminDashboard() {
   const [streams, setStreams] = useState([]);
   const [health, setHealth] = useState(null);
   const [systemOverview, setSystemOverview] = useState(null);
+  const [homeAgent, setHomeAgent] = useState(null);
+  const [movieCache, setMovieCache] = useState(null);
   const [worldCupData, setWorldCupData] = useState(null);
   const [worldCupStreams, setWorldCupStreams] = useState({ matchStreams: {} });
   const [busy, setBusy] = useState(false);
@@ -67,6 +69,8 @@ export default function AdminDashboard() {
       adminRequest('/admin/worldcup-streams'),
       fetch(`${API_BASE}/worldcup/summary`).then(response => response.json()),
       adminRequest('/admin/system/overview'),
+      adminRequest('/admin/home-agent'),
+      adminRequest('/admin/movie-cache'),
     ]);
     if (requests[0].status === 'fulfilled') setEvents(requests[0].value.data || []);
     if (requests[1].status === 'fulfilled') setSources(requests[1].value.data || []);
@@ -79,6 +83,8 @@ export default function AdminDashboard() {
     if (requests[8].status === 'fulfilled') setWorldCupStreams(requests[8].value.data || { matchStreams: {} });
     if (requests[9].status === 'fulfilled' && requests[9].value.success) setWorldCupData(requests[9].value);
     if (requests[10].status === 'fulfilled') setSystemOverview(requests[10].value.data || null);
+    if (requests[11].status === 'fulfilled') setHomeAgent(requests[11].value.data || null);
+    if (requests[12].status === 'fulfilled') setMovieCache(requests[12].value.data || null);
   }, [adminRequest, settingsDirty, token]);
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -189,11 +195,11 @@ export default function AdminDashboard() {
 
         <main className="admin-scroll min-h-0 min-w-0 flex-1 overflow-y-auto p-3 pb-8 sm:p-4 md:p-6">
           {notice && <div className={`mb-4 rounded-md border px-4 py-3 text-sm ${notice.startsWith('Lỗi:') ? 'border-red-500/30 bg-red-500/10 text-red-300' : 'border-green-500/30 bg-green-500/10 text-green-300'}`}>{notice}</div>}
-          {activeTab === 'dashboard' && <DashboardTab health={health} systemOverview={systemOverview} status={status} sources={sources} events={events} streams={streams} busy={busy} onRefresh={() => runAction(() => adminRequest('/admin/m3u-sources/refresh', { method: 'POST' }), 'Đã cập nhật danh sách M3U.')} onRefreshWorldCup={() => runAction(async () => {
+          {activeTab === 'dashboard' && <DashboardTab health={health} systemOverview={systemOverview} homeAgent={homeAgent} movieCache={movieCache} status={status} sources={sources} events={events} streams={streams} busy={busy} onRefresh={() => runAction(() => adminRequest('/admin/m3u-sources/refresh', { method: 'POST' }), 'Đã cập nhật danh sách M3U.')} onRefreshWorldCup={() => runAction(async () => {
             const response = await fetch(`${API_BASE}/worldcup/refresh`, { method: 'POST' });
             const data = await response.json();
             if (!response.ok || !data.success) throw new Error(data.error || `HTTP ${response.status}`);
-          }, 'Đã refresh cache World Cup.')} onRestart={() => {
+          }, 'Đã refresh cache World Cup.')} onPrewarmMovieCache={() => runAction(() => adminRequest('/admin/movie-cache/prewarm', { method: 'POST' }), 'Đã prewarm cache OPhim.')} onClearMovieCache={() => runAction(() => adminRequest('/admin/movie-cache/clear', { method: 'POST' }), 'Đã xóa cache OPhim.')} onRestart={() => {
             if (window.confirm('Khởi động lại dịch vụ backend và reload Nginx?')) runAction(() => adminRequest('/admin/system/restart', { method: 'POST' }), 'Đã gửi lệnh khởi động lại.');
           }} />}
           {activeTab === 'events' && <EventsTab events={events} onAdd={() => setEventModal({ mode: 'create', event: null })} onEdit={event => setEventModal({ mode: 'edit', event })} onDelete={event => {
@@ -222,7 +228,7 @@ export default function AdminDashboard() {
   );
 }
 
-function DashboardTab({ health, systemOverview, status, sources, events, streams, busy, onRefresh, onRefreshWorldCup, onRestart }) {
+function DashboardTab({ health, systemOverview, homeAgent, movieCache, status, sources, events, streams, busy, onRefresh, onRefreshWorldCup, onPrewarmMovieCache, onClearMovieCache, onRestart }) {
   const cpuPercent = Number(systemOverview?.cpu?.currentLoad ?? health?.cpuLoad?.currentLoad ?? 0);
   const memory = systemOverview?.memory || health?.memory || {};
   const memoryPercent = Number(memory?.usedPercent || 0);
@@ -230,14 +236,17 @@ function DashboardTab({ health, systemOverview, status, sources, events, streams
   const viewers = Number(systemOverview?.viewers?.total || 0);
   const ffmpegProcesses = Number(systemOverview?.ffmpegProcesses ?? streams.length);
   const recentErrors = systemOverview?.recentErrors || [];
+  const homeAgentOnline = Boolean(homeAgent?.online);
+  const movieCacheEntries = Number(movieCache?.entries || 0);
   const cards = [
     ['Kênh IPTV', status?.channelsCount ?? 0, ListVideo], ['Nguồn đang bật', sources.filter(source => source.active).length, Server],
     ['Người xem', viewers, Eye], ['FFmpeg', ffmpegProcesses, Activity],
+    ['Home Agent', homeAgentOnline ? 'Online' : 'Offline', UploadCloud], ['OPhim cache', movieCacheEntries, Server],
   ];
   return (
     <section>
       <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-xl font-bold sm:text-2xl">Tổng quan</h1><p className="text-xs text-white/45 sm:text-sm">Trạng thái backend và dữ liệu IPTV.</p></div><div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto"><button disabled={busy} onClick={onRefresh} className="flex items-center justify-center gap-2 rounded-md bg-white/10 px-2 py-2 text-xs hover:bg-white/15 sm:px-3 sm:text-sm"><RefreshCw size={16} className={busy ? 'animate-spin' : ''} /> Cập nhật M3U</button><button disabled={busy} onClick={onRefreshWorldCup} className="flex items-center justify-center gap-2 rounded-md bg-white/10 px-2 py-2 text-xs hover:bg-white/15 sm:px-3 sm:text-sm"><Trophy size={16} /> World Cup cache</button><button onClick={onRestart} className="flex items-center justify-center gap-2 rounded-md border border-red-500/30 px-2 py-2 text-xs text-red-300 hover:bg-red-500/10 sm:px-3 sm:text-sm"><RotateCcw size={16} /> Khởi động lại</button></div></div>
-      <div className="mt-4 grid grid-cols-2 gap-2 sm:mt-5 sm:gap-3 lg:grid-cols-4">{cards.map(([label, value, Icon]) => <div key={label} className="rounded-lg border border-white/8 bg-[#151515] p-3 sm:p-4"><Icon size={18} className="mb-2 text-[#ED2C25] sm:mb-3" /><div className="text-xl font-black sm:text-2xl">{value}</div><div className="truncate text-[11px] text-white/45 sm:text-xs">{label}</div></div>)}</div>
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:mt-5 sm:gap-3 lg:grid-cols-3 xl:grid-cols-6">{cards.map(([label, value, Icon]) => <div key={label} className="rounded-lg border border-white/8 bg-[#151515] p-3 sm:p-4"><Icon size={18} className="mb-2 text-[#ED2C25] sm:mb-3" /><div className="text-xl font-black sm:text-2xl">{value}</div><div className="truncate text-[11px] text-white/45 sm:text-xs">{label}</div></div>)}</div>
       <div className="mt-5 grid gap-4 lg:grid-cols-2">
         <Panel title="Tài nguyên realtime">
           <MetricBar label="CPU" value={cpuPercent} detail={`${cpuPercent.toFixed(1)}%`} />
@@ -248,6 +257,23 @@ function DashboardTab({ health, systemOverview, status, sources, events, streams
           <InfoRow label="FFmpeg" value={health?.ffmpegAvailable ? 'Sẵn sàng' : 'Không tìm thấy'} />
         </Panel>
         <Panel title="Cập nhật M3U"><InfoRow label="Lần cập nhật" value={status?.lastRefreshAt ? new Date(status.lastRefreshAt).toLocaleString('vi-VN') : 'Chưa có'} /><InfoRow label="Trạng thái" value={status?.isRefreshing ? 'Đang cập nhật' : 'Sẵn sàng'} /><InfoRow label="Chu kỳ" value="1 giờ/lần" />{status?.lastError && <div className="mt-3 rounded bg-red-500/10 p-2 text-xs text-red-300">{status.lastError}</div>}</Panel>
+        <Panel title="Home Agent">
+          <InfoRow label="Trang thai" value={homeAgent?.tokenConfigured ? (homeAgentOnline ? 'Online' : 'Offline') : 'Chua cau hinh token'} />
+          <InfoRow label="Thiet bi" value={homeAgent?.agent?.hostname || homeAgent?.agent?.id || '--'} />
+          <InfoRow label="Lan gap" value={homeAgent?.agent?.lastSeenAt ? new Date(homeAgent.agent.lastSeenAt).toLocaleString('vi-VN') : '--'} />
+          <InfoRow label="EPG Home" value={homeAgent?.epg?.updatedAt ? `${new Date(homeAgent.epg.updatedAt).toLocaleString('vi-VN')} · ${formatBytesCompact(homeAgent.epg.bytes)}` : '--'} />
+          <InfoRow label="Kenh loi" value={homeAgent?.channelHealth ? `${homeAgent.channelHealth.failed || 0}/${homeAgent.channelHealth.total || 0}` : '--'} />
+        </Panel>
+        <Panel title="OPhim cache">
+          <InfoRow label="Entry" value={movieCache?.entries ?? 0} />
+          <InfoRow label="Hit / Miss" value={`${movieCache?.stats?.hits || 0} / ${movieCache?.stats?.misses || 0}`} />
+          <InfoRow label="Stale / Error" value={`${movieCache?.stats?.stale || 0} / ${movieCache?.stats?.errors || 0}`} />
+          <InfoRow label="Prewarm" value={movieCache?.stats?.lastPrewarmAt ? new Date(movieCache.stats.lastPrewarmAt).toLocaleString('vi-VN') : '--'} />
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <button disabled={busy} onClick={onPrewarmMovieCache} className="rounded-md bg-white/10 px-3 py-2 text-xs font-bold hover:bg-white/15 disabled:opacity-50">Prewarm</button>
+            <button disabled={busy} onClick={onClearMovieCache} className="rounded-md bg-red-500/10 px-3 py-2 text-xs font-bold text-red-200 hover:bg-red-500/20 disabled:opacity-50">Clear</button>
+          </div>
+        </Panel>
         <Panel title="Log lỗi gần nhất">
           {recentErrors.length ? recentErrors.map((item, index) => (
             <div key={`${item.at}-${index}`} className="border-b border-white/5 py-2 text-xs last:border-0">
@@ -746,3 +772,10 @@ function InfoRow({ label, value }) { return <div className="flex justify-between
 function Empty({ text }) { return <div className="p-10 text-center text-sm text-white/45">{text}</div>; }
 function Field({ label, children }) { return <label className="block text-sm"><span className="mb-1.5 block text-white/55">{label}</span>{children}</label>; }
 function formatBytes(value) { const bytes = Number(value || 0); if (!bytes) return '--'; return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`; }
+function formatBytesCompact(value) {
+  const bytes = Number(value || 0);
+  if (!bytes) return '--';
+  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return `${Math.round(bytes / 1024)} KB`;
+}

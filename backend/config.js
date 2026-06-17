@@ -29,8 +29,10 @@ module.exports = {
   hlsTempPath: process.env.HLS_TEMP_PATH || path.join(projectRoot, 'nginx/temp/hls_temp'),
   eventTempPath: process.env.EVENT_TEMP_PATH || path.join(projectRoot, 'nginx/temp/event_temp'),
   epgCachePath: process.env.EPG_CACHE_PATH || path.join(projectRoot, 'nginx/temp/epg-cache.xml'),
+  homeAgentStatePath: process.env.HOME_AGENT_STATE_PATH || path.join(projectRoot, 'nginx/temp/home-agent-state.json'),
   dbPath: process.env.DB_PATH || path.join(projectRoot, 'backend/db/data.json'),
   rtmpControlUrl: process.env.RTMP_CONTROL_URL || 'http://127.0.0.1:8050/rtmp-control',
+  homeAgentToken: process.env.HOME_AGENT_TOKEN || '',
   
   // FFmpeg transcode settings
   ffmpeg: {

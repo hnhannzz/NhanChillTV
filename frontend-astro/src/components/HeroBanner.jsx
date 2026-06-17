@@ -108,10 +108,11 @@ export default function HeroBanner() {
   const imageUrl = currentSlide.isWorldCup || currentSlide.isEvent
     ? (currentSlide.poster_url || '/poster.jpg')
     : getOPhimImageUrl(currentSlide.poster_url || currentSlide.thumb_url);
-  const openMovieDetails = event => {
+  const movieDetailSlug = !currentSlide.isWorldCup && !currentSlide.isEvent ? currentSlide.slug : null;
+  const openMovieDetails = slug => event => {
     event.preventDefault();
     event.stopPropagation();
-    if (currentSlide?.slug) setModalSlug(currentSlide.slug);
+    if (slug) setModalSlug(slug);
   };
 
   return (
@@ -166,7 +167,7 @@ export default function HeroBanner() {
                 ? <a href="/worldcup/" className="flex items-center gap-2 rounded-md bg-white/20 px-5 py-3 text-sm font-bold text-white backdrop-blur-md transition-transform hover:scale-105 hover:bg-white/30"><Info size={19} /> Lịch & bảng đấu</a>
                 : currentSlide.isEvent
                 ? <a href="/events/" className="flex items-center gap-2 rounded-md bg-white/20 px-5 py-3 text-sm font-bold text-white backdrop-blur-md transition-transform hover:scale-105 hover:bg-white/30"><Info size={19} /> Sự kiện</a>
-                : <button type="button" onClick={openMovieDetails} className="flex items-center gap-2 rounded-md bg-white/20 px-5 py-3 text-sm font-bold text-white backdrop-blur-md transition-transform hover:scale-105 hover:bg-white/30"><Info size={19} /> Chi tiết</button>}
+                : <button type="button" onClick={openMovieDetails(movieDetailSlug)} className="flex items-center gap-2 rounded-md bg-white/20 px-5 py-3 text-sm font-bold text-white backdrop-blur-md transition-transform hover:scale-105 hover:bg-white/30"><Info size={19} /> Xem thêm</button>}
             </motion.div>
           </motion.div>
         </AnimatePresence>

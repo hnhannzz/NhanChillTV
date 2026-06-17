@@ -36,6 +36,26 @@ export default function MovieStreamPlayer({ episode, movie, movieSlug, onNextEpi
   const handleTimeUpdate = (currentTime) => {
     if (currentTime > 5 && progressKey && typeof window !== 'undefined') {
       localStorage.setItem(progressKey, currentTime.toString());
+      const userId = localStorage.getItem('userToken') || 'guest';
+      const listKey = `movie_continue_${userId}`;
+      let existing = [];
+      try {
+        existing = JSON.parse(localStorage.getItem(listKey) || '[]');
+        if (!Array.isArray(existing)) existing = [];
+      } catch {
+        existing = [];
+      }
+      const nextItem = {
+        slug: resolvedMovieSlug,
+        name: movie?.name || 'Phim',
+        thumb_url: movie?.thumb_url || movie?.poster_url || '',
+        episodeName: episode?.name || '',
+        episodeKey: resolvedEpisodeKey,
+        currentTime,
+        updatedAt: Date.now(),
+      };
+      const next = [nextItem, ...existing.filter(item => !(item.slug === nextItem.slug && item.episodeKey === nextItem.episodeKey))].slice(0, 30);
+      localStorage.setItem(listKey, JSON.stringify(next));
     }
   };
 

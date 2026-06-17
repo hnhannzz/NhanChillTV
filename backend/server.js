@@ -59,6 +59,7 @@ app.use('/api/epg', require('./routes/epg'));
 app.use('/api/movies', require('./routes/movies'));
 app.use('/api/worldcup', worldCupRouter);
 app.use('/api/proxy', require('./routes/proxy'));
+app.use('/api/home-agent', require('./routes/homeAgent'));
 
 // Health check & Metrics for Load Balancing
 app.get('/api/health', async (req, res) => {

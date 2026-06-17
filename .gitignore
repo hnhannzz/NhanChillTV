@@ -10,6 +10,8 @@ nginx/m3u_iptv/*.m3u
 backend/db/*.json
 !backend/db/*.example.json
 *.log
+__pycache__/
+*.pyc
 *.key
 *.pem
 id_rsa*

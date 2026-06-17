@@ -18,6 +18,13 @@ const COUNTRIES = [
 ];
 
 const YEARS = Array.from({ length: 23 }, (_, index) => String(2026 - index));
+const QUALITIES = ['HD', 'FHD', '4K', 'Vietsub', 'Thuyet minh', 'Long tieng'];
+const STATUSES = [
+  ['Hoan tat', 'completed'],
+  ['Dang ra', 'ongoing'],
+  ['Phim bo', 'series'],
+  ['Phim le', 'single'],
+];
 
 export default function MoviesContainer() {
   const initialSearch = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('search') || '' : '';
@@ -31,6 +38,8 @@ export default function MoviesContainer() {
   const [genre, setGenre] = useState('');
   const [country, setCountry] = useState('');
   const [year, setYear] = useState('');
+  const [quality, setQuality] = useState('');
+  const [movieStatus, setMovieStatus] = useState('');
   const [favoritesMode, setFavoritesMode] = useState(false);
 
   useEffect(() => {
@@ -114,6 +123,19 @@ export default function MoviesContainer() {
   };
 
   const pageLabel = useMemo(() => pagination ? `Trang ${pagination.currentPage} / ${pagination.totalPages}` : '', [pagination]);
+  const filteredMovies = useMemo(() => movies.filter(movie => {
+    const qualityText = `${movie.quality || ''} ${movie.lang || ''}`.toLowerCase();
+    if (quality && !qualityText.includes(quality.toLowerCase())) return false;
+
+    const type = String(movie.type || movie.movie_type || '').toLowerCase();
+    const episodeCurrent = String(movie.episode_current || movie.current_episode || '').toLowerCase();
+    const isCompleted = episodeCurrent.includes('hoan tat') || episodeCurrent.includes('hoàn tất') || episodeCurrent.includes('full');
+    if (movieStatus === 'completed' && !isCompleted) return false;
+    if (movieStatus === 'ongoing' && isCompleted) return false;
+    if (movieStatus === 'series' && !(type.includes('series') || type.includes('phim-bo') || movie.episode_total)) return false;
+    if (movieStatus === 'single' && !(type.includes('single') || type.includes('phim-le'))) return false;
+    return true;
+  }), [movies, movieStatus, quality]);
 
   return (
     <div className="flex flex-col gap-5">
@@ -133,16 +155,18 @@ export default function MoviesContainer() {
         <select value={genre} onChange={event => changeGenre(event.target.value)} className="min-w-[150px] rounded-md border border-white/10 bg-[#171717] px-3 py-2 text-sm text-white outline-none focus:border-[#ED2C25]"><option value="">Thể loại</option>{GENRES.map(([label, value]) => <option key={value} value={value}>{label}</option>)}</select>
         <select value={country} onChange={event => changeCountry(event.target.value)} className="min-w-[150px] rounded-md border border-white/10 bg-[#171717] px-3 py-2 text-sm text-white outline-none focus:border-[#ED2C25]"><option value="">Quốc gia</option>{COUNTRIES.map(([label, value]) => <option key={value} value={value}>{label}</option>)}</select>
         <select value={year} onChange={event => changeYear(event.target.value)} className="min-w-[105px] rounded-md border border-white/10 bg-[#171717] px-3 py-2 text-sm text-white outline-none focus:border-[#ED2C25]"><option value="">Năm</option>{YEARS.map(value => <option key={value} value={value}>{value}</option>)}</select>
+        <select value={quality} onChange={event => setQuality(event.target.value)} className="min-w-[120px] rounded-md border border-white/10 bg-[#171717] px-3 py-2 text-sm text-white outline-none focus:border-[#ED2C25]"><option value="">Chat luong</option>{QUALITIES.map(value => <option key={value} value={value}>{value}</option>)}</select>
+        <select value={movieStatus} onChange={event => setMovieStatus(event.target.value)} className="min-w-[130px] rounded-md border border-white/10 bg-[#171717] px-3 py-2 text-sm text-white outline-none focus:border-[#ED2C25]"><option value="">Trang thai</option>{STATUSES.map(([label, value]) => <option key={value} value={value}>{label}</option>)}</select>
       </div>
 
       {loading ? (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">{Array.from({ length: 12 }, (_, index) => <div key={index} className="aspect-[2/3] animate-pulse rounded-lg bg-white/5" />)}</div>
-      ) : !movies.length ? (
+      ) : !filteredMovies.length ? (
         <div className="rounded-lg border border-white/5 bg-[#151515] py-16 text-center text-white/50">Không tìm thấy dữ liệu.</div>
       ) : (
         <>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-            {movies.map(movie => (
+            {filteredMovies.map(movie => (
               <a key={movie.slug || movie.id} href={`/movie-detail/?slug=${encodeURIComponent(movie.slug)}`} className="group relative aspect-[2/3] overflow-hidden rounded-lg border border-white/5 bg-[#1A1A1A] hover:border-[#ED2C25]/50">
                 <img src={getOPhimImageUrl(movie.thumb_url || movie.poster_url)} alt={movie.name} className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" onError={event => { event.currentTarget.src = '/poster.jpg'; }} />
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-black/10 to-transparent" />

@@ -26,7 +26,7 @@ function isUnsupportedAppleDrmBrowser() {
   return isIOS || isSafari;
 }
 
-export default function LivePlayerView({ channelId, streamParam, channelName, isLive = true }) {
+export default function LivePlayerView({ channelId, streamParam, channelName, isLive = true, preferDirectStream = false }) {
   const [streamUrl, setStreamUrl] = useState(null);
   const [fallbackUrls, setFallbackUrls] = useState([]);
   const [clearKey, setClearKey] = useState(null);
@@ -81,9 +81,14 @@ export default function LivePlayerView({ channelId, streamParam, channelName, is
         setStreamType('hls');
 
         if (streamParam && !channelId) {
-          const proxyUrl = await resolveProxyPlaybackUrl(streamParam);
           const mpd = streamParam.toLowerCase().includes('.mpd');
-          useDirectWithProxyFallback(streamParam, proxyUrl);
+          if (preferDirectStream) {
+            setStreamUrl(streamParam);
+            setFallbackUrls([]);
+          } else {
+            const proxyUrl = await resolveProxyPlaybackUrl(streamParam);
+            useDirectWithProxyFallback(streamParam, proxyUrl);
+          }
           setIsMpd(mpd);
           setStreamType(mpd ? 'mpd' : streamParam.toLowerCase().includes('.mp4') ? 'progressive' : 'hls');
           setLoading(false);

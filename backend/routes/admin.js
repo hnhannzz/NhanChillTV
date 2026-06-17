@@ -12,6 +12,8 @@ const si = require('systeminformation');
 const { execFile } = require('child_process');
 const ffmpegWrapper = require('../../ffmpeg-core/wrapper');
 const m3uManager = require('../services/m3uManager');
+const { homeAgentService } = require('../services/homeAgentService');
+const moviesRouter = require('./movies');
 
 const db = new Database(config.dbPath);
 const adminSessions = new Set();
@@ -310,6 +312,28 @@ router.post('/m3u-sources/refresh', auth, async (req, res) => {
 
 router.get('/status', auth, (req, res) => {
   res.json({ success: true, data: m3uManager.getStatus() });
+});
+
+router.get('/home-agent', auth, (req, res) => {
+  res.json({ success: true, data: homeAgentService.getStatus() });
+});
+
+router.get('/movie-cache', auth, (req, res) => {
+  res.json({ success: true, data: moviesRouter._cache?.getStatus?.() || null });
+});
+
+router.post('/movie-cache/prewarm', auth, async (req, res) => {
+  try {
+    const data = await moviesRouter._cache?.prewarm?.();
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(502).json({ success: false, error: err.message });
+  }
+});
+
+router.post('/movie-cache/clear', auth, (req, res) => {
+  moviesRouter._cache?.clear?.();
+  res.json({ success: true, data: moviesRouter._cache?.getStatus?.() || null });
 });
 
 // IPTV Settings

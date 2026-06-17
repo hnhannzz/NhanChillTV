@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Heart, Play, Send } from 'lucide-react';
-import { fetchOPhimJson, getOPhimImageUrl } from '../lib/OPhimApi';
+import { fetchOPhimJson, getOPhimImageUrl, getOPhimItems } from '../lib/OPhimApi';
 import MovieStreamPlayer from './MovieStreamPlayer';
 
 export default function MovieDetailContainer() {
@@ -16,6 +16,7 @@ export default function MovieDetailContainer() {
   
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
+  const [relatedMovies, setRelatedMovies] = useState([]);
 
   const slug = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('slug') : null;
 
@@ -32,6 +33,7 @@ export default function MovieDetailContainer() {
         if (data.status === 'success' || data.status === true) {
           const m = data.movie || data.item || data.data?.item;
           setMovie(m);
+          loadRelatedMovies(m);
           
           if (m.episodes && m.episodes[0] && (m.episodes[0].server_data || m.episodes[0].items)) {
             const firstEpisode = (m.episodes[0].server_data || m.episodes[0].items)[0];
@@ -76,6 +78,22 @@ export default function MovieDetailContainer() {
       }
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const loadRelatedMovies = async (movieData) => {
+    try {
+      const categorySlug = movieData?.category?.find(item => item.slug)?.slug;
+      const countrySlug = movieData?.country?.find(item => item.slug)?.slug;
+      const endpoint = categorySlug ? `/films/the-loai/${categorySlug}` : countrySlug ? `/films/quoc-gia/${countrySlug}` : '';
+      if (!endpoint) return;
+      const data = await fetchOPhimJson(`${endpoint}?page=1`);
+      const items = getOPhimItems(data)
+        .filter(item => item.slug && item.slug !== slug)
+        .slice(0, 8);
+      setRelatedMovies(items);
+    } catch (err) {
+      setRelatedMovies([]);
     }
   };
 
@@ -308,6 +326,27 @@ export default function MovieDetailContainer() {
           </form>
         </div>
       </div>
+
+      {relatedMovies.length > 0 && (
+        <section className="rounded-xl border border-white/5 bg-[#121212] p-4 md:p-6">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h3 className="text-lg font-bold text-white">Phim liên quan</h3>
+            <a href="/movies/" className="text-sm font-semibold text-[#ED2C25] hover:text-red-300">Xem thêm</a>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8">
+            {relatedMovies.map(item => (
+              <a key={item.slug} href={`/movie-detail/?slug=${encodeURIComponent(item.slug)}`} className="group min-w-0">
+                <div className="relative aspect-[2/3] overflow-hidden rounded-lg border border-white/5 bg-[#1A1A1A]">
+                  <img src={getOPhimImageUrl(item.thumb_url || item.poster_url)} alt={item.name} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" onError={event => { event.currentTarget.src = '/poster.jpg'; }} />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+                  <span className="absolute right-1.5 top-1.5 rounded bg-[#ED2C25] px-1.5 py-0.5 text-[9px] font-bold text-white">{item.quality || item.episode_current || 'HD'}</span>
+                </div>
+                <div className="mt-2 line-clamp-2 text-xs font-semibold text-white/80 group-hover:text-[#ED2C25]">{item.name}</div>
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
