@@ -131,12 +131,13 @@ function ReminderButton({ match, compact }) {
     if (delay < 2147483647) {
       window.setTimeout(notify, delay);
     }
+    alert('Đã đặt nhắc trước trận 30 phút.');
   };
 
   return (
     <button type="button" onClick={schedule} disabled={enabled} className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[11px] font-extrabold transition-colors ${enabled ? 'bg-emerald-400/10 text-emerald-300' : 'bg-white/10 text-white/70 hover:bg-white/15 hover:text-white'}`}>
       <Bell size={12} />
-      {enabled ? 'Đã nhắc' : compact ? 'Nhắc' : 'Nhắc tôi 30p'}
+      {enabled ? 'Đã nhắc' : 'Nhắc Tôi'}
     </button>
   );
 }

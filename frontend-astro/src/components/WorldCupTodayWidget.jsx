@@ -72,9 +72,9 @@ export default function WorldCupTodayWidget() {
   const showTomorrow = allTodayFinished || (todayMatches.length === 0 && tomorrowMatches.length > 0);
   const visibleMatches = showTomorrow ? tomorrowMatches : todayMatches;
   const fallbackMatches = visibleMatches.length ? [] : (payload?.nextGames || []).slice(0, 3);
-  const heading = showTomorrow ? 'Trận đấu ngày mai' : 'Trận đấu hôm nay';
+  const heading = showTomorrow ? 'Lịch thi đấu tiếp theo' : 'Trận đấu hôm nay';
   const dateText = showTomorrow ? payload?.tomorrowDate : payload?.date;
-  const emptyText = showTomorrow ? 'Chưa có trận ngày mai' : 'Không có trận trong hôm nay';
+  const emptyText = showTomorrow ? 'Chưa có lịch thi đấu tiếp theo' : 'Không có trận trong hôm nay';
 
   return (
     <div className="space-y-4">
@@ -82,11 +82,11 @@ export default function WorldCupTodayWidget() {
         <div>
           <div className="inline-flex items-center gap-2 rounded-md border border-[#FFD166]/25 bg-[#FFD166]/10 px-3 py-1 text-xs font-extrabold uppercase tracking-wide text-[#FFD166]">
             <Trophy size={14} />
-            World Cup 2026
+            FIFA World Cup 2026
           </div>
           <h2 className="mt-2 text-xl font-black text-white md:text-3xl">{heading}</h2>
           <p className="mt-1 text-sm text-white/50">
-            Theo ngày Việt Nam GMT+7: {formatDateKey(dateText) || dateText} · Dữ liệu cập nhật lần cuối: {formatUpdatedAt(payload?.updatedAt)}
+            Theo giờ Việt Nam GMT+7: {formatDateKey(dateText) || dateText} · Cập nhật lần cuối: {formatUpdatedAt(payload?.updatedAt)}
           </p>
         </div>
         <a href="/worldcup/" className="inline-flex items-center gap-2 self-start rounded-md bg-[#ED2C25] px-4 py-2 text-sm font-extrabold text-white transition-colors hover:bg-red-700 md:self-auto">

@@ -645,7 +645,6 @@ export default function UnifiedPlayer({
       <div 
         className="absolute inset-0 z-10 cursor-pointer"
         onTouchEnd={(e) => {
-          e.preventDefault();
           setShowControls(prev => {
             const nextVal = !prev;
             if (nextVal) {
@@ -690,15 +689,15 @@ export default function UnifiedPlayer({
 
       {/* Continue Watching Prompt */}
       {showContinuePrompt && (
-        <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-40 backdrop-blur-sm">
-          <div className="bg-[#121212] p-8 rounded-2xl border border-white/10 text-center shadow-2xl max-w-sm">
-            <h3 className="text-xl font-bold text-white mb-2">THÔNG BÁO!</h3>
-            <p className="text-white/70 mb-6">Bạn đã dừng lại ở {formatTime(initialTime)}</p>
+        <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-40 backdrop-blur-sm px-4">
+          <div className="w-full max-w-[300px] rounded-xl border border-white/10 bg-[#121212] p-4 text-center shadow-2xl sm:max-w-sm sm:p-6">
+            <h3 className="text-base font-bold text-white sm:text-lg">Xem tiếp?</h3>
+            <p className="mb-4 mt-1 text-sm text-white/70">Bạn đã dừng ở {formatTime(initialTime)}</p>
             <div className="flex flex-col gap-3">
-              <button onClick={continueWatching} className="w-full bg-[#ED2C25] text-white font-bold py-3 px-6 rounded-xl hover:bg-red-700 transition-colors">
+              <button onClick={continueWatching} className="w-full bg-[#ED2C25] text-white font-bold py-2.5 px-4 rounded-lg hover:bg-red-700 transition-colors">
                 Tiếp tục xem
               </button>
-              <button onClick={restartWatching} className="w-full bg-white/10 text-white font-bold py-3 px-6 rounded-xl hover:bg-white/20 transition-colors">
+              <button onClick={restartWatching} className="w-full bg-white/10 text-white font-bold py-2.5 px-4 rounded-lg hover:bg-white/20 transition-colors">
                 Xem lại từ đầu
               </button>
             </div>

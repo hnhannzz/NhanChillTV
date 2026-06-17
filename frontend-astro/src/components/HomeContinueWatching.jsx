@@ -32,7 +32,7 @@ export default function HomeContinueWatching() {
       <div className="mb-4 flex items-end justify-between gap-3">
         <div>
           <h2 className="text-xl font-black text-white md:text-3xl">Xem tiếp</h2>
-          <p className="mt-1 text-sm text-white/45">Tiếp tục đúng phim, đúng tập theo tài khoản đang dùng.</p>
+          <p className="mt-1 text-sm text-white/45">Xem tiếp tập phim bạn đang xem dở.</p>
         </div>
         <a href="/movies/" className="rounded-md bg-white/10 px-3 py-2 text-sm font-bold text-white/70 hover:bg-white/15 hover:text-white">Kho phim</a>
       </div>

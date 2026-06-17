@@ -110,14 +110,14 @@ export default function WorldCupPortal() {
   };
 
   useEffect(() => {
-    loadData();
+    loadData(true);
     const timer = window.setInterval(() => loadData(), 30000);
     return () => window.clearInterval(timer);
   }, []);
 
   const scheduleMatches = useMemo(() => filterMatches(data?.upcomingGames || [], query), [data, query]);
   const resultMatches = useMemo(() => filterMatches(data?.finishedGames || [], query), [data, query]);
-  const todayMatches = data?.todayGames || [];
+  const todayMatches = useMemo(() => filterMatches(data?.todayGames || [], query), [data, query]);
 
   if (loading && !data) {
     return (
@@ -152,11 +152,11 @@ export default function WorldCupPortal() {
               <Trophy size={14} />
               FIFA World Cup 2026
             </div>
-            <h1 className="mt-3 text-2xl font-black leading-tight text-white md:text-4xl">Lịch thi đấu và livescore</h1>
+            <h1 className="mt-3 text-2xl font-black leading-tight text-white md:text-4xl">Lịch thi đấu, kết quả và bảng xếp hạng</h1>
             <p className="mt-2 max-w-2xl text-sm text-white/55">
-              Tất cả thời gian đã đổi sang giờ Việt Nam GMT+7. Lịch và kết quả được đồng bộ theo ngày thi đấu tại Việt Nam.
+              Thời gian hiển thị theo giờ Việt Nam GMT+7. Dữ liệu được tự động đồng bộ khi bạn mở trang và cập nhật định kỳ trong lúc xem.
             </p>
-            <p className="mt-2 text-xs font-semibold text-white/40">Dữ liệu cập nhật lần cuối: {formatUpdatedAt(data?.updatedAt)}</p>
+            <p className="mt-2 text-xs font-semibold text-white/40">Cập nhật lần cuối: {formatUpdatedAt(data?.updatedAt)}</p>
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -175,37 +175,23 @@ export default function WorldCupPortal() {
               className="inline-flex items-center justify-center gap-2 rounded-md border border-white/10 bg-white/8 px-4 py-2.5 text-sm font-extrabold text-white transition-colors hover:bg-white/12 disabled:cursor-wait disabled:opacity-60"
             >
               <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />
-              Đồng bộ
+              Cập nhật dữ liệu
             </button>
           </div>
         </div>
 
         {error && data && (
           <div className="mt-4 rounded-md border border-[#FFD166]/20 bg-[#FFD166]/10 px-4 py-3 text-sm text-[#ffe0a3]">
-            API World Cup đang chập chờn, website tạm dùng dữ liệu cache. Dữ liệu cập nhật lần cuối: {formatUpdatedAt(data.updatedAt)}.
+            API World Cup đang chập chờn, website đang dùng dữ liệu đã lưu. Cập nhật lần cuối: {formatUpdatedAt(data.updatedAt)}.
           </div>
         )}
 
         <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
-          <StatItem icon={CalendarDays} label="Trận hôm nay" value={todayMatches.length} />
+          <StatItem icon={CalendarDays} label="Trận hôm nay" value={data?.todayGames?.length || 0} />
           <StatItem icon={RadioDot} label="Đang đá" value={data?.liveGames?.length || 0} />
           <StatItem icon={CalendarClock} label="Sắp diễn ra" value={data?.upcomingGames?.length || 0} />
           <StatItem icon={Trophy} label="Đã kết thúc" value={data?.finishedGames?.length || 0} />
         </div>
-      </section>
-
-      <section className="space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-black text-white">Các trận hôm nay tại Việt Nam</h2>
-          <span className="text-xs font-semibold text-white/40">{data?.todayDate}</span>
-        </div>
-        {todayMatches.length ? (
-          <div className="grid gap-4 md:grid-cols-2">
-            {todayMatches.map(match => <WorldCupMatchCard key={match.id} match={match} />)}
-          </div>
-        ) : (
-          <EmptyState title="Không có trận trong hôm nay" description="Widget và lịch đang dùng mốc ngày Việt Nam GMT+7, nên một số trận theo giờ địa phương có thể chuyển sang ngày hôm sau tại Việt Nam." />
-        )}
       </section>
 
       <div className="hide-scrollbar flex gap-2 overflow-x-auto border-b border-white/10">
@@ -216,7 +202,7 @@ export default function WorldCupPortal() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`inline-flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-extrabold transition-colors whitespace-nowrap ${selected ? 'border-[#ED2C25] text-white' : 'border-transparent text-white/50 hover:text-white'}`}
+              className={`inline-flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-3 text-sm font-extrabold transition-colors ${selected ? 'border-[#ED2C25] text-white' : 'border-transparent text-white/50 hover:text-white'}`}
             >
               <Icon size={16} />
               {tab.label}
@@ -226,12 +212,15 @@ export default function WorldCupPortal() {
       </div>
 
       {activeTab === 'schedule' && (
-        <MatchSections
-          matches={scheduleMatches}
-          newestFirst={false}
-          emptyTitle="Chưa có lịch phù hợp"
-          emptyDescription="Lịch thi đấu chỉ hiển thị các trận chưa kết thúc và được sắp xếp theo trận gần đá nhất."
-        />
+        <div className="space-y-6">
+          <TodaySection todayMatches={todayMatches} todayDate={data?.todayDate} />
+          <MatchSections
+            matches={scheduleMatches}
+            newestFirst={false}
+            emptyTitle="Chưa có lịch phù hợp"
+            emptyDescription="Lịch thi đấu chỉ hiển thị các trận chưa kết thúc và được sắp xếp theo trận gần đá nhất."
+          />
+        </div>
       )}
 
       {activeTab === 'results' && (
@@ -254,6 +243,24 @@ function RadioDot(props) {
     <span className="relative inline-flex h-[15px] w-[15px] items-center justify-center" {...props}>
       <span className="h-2 w-2 rounded-full bg-[#ED2C25]" />
     </span>
+  );
+}
+
+function TodaySection({ todayMatches, todayDate }) {
+  return (
+    <section className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-black text-white">Trận đấu hôm nay</h2>
+        <span className="text-xs font-semibold text-white/40">{todayDate}</span>
+      </div>
+      {todayMatches.length ? (
+        <div className="grid gap-4 md:grid-cols-2">
+          {todayMatches.map(match => <WorldCupMatchCard key={match.id} match={match} />)}
+        </div>
+      ) : (
+        <EmptyState title="Hôm nay chưa có trận" description="Lịch đang tính theo ngày Việt Nam GMT+7. Nếu trận theo giờ địa phương rơi sang ngày khác tại Việt Nam, hệ thống sẽ xếp vào đúng ngày Việt Nam." />
+      )}
+    </section>
   );
 }
 

@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useEffect, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
 
 const UnifiedPlayer = lazy(() => import('./UnifiedPlayer.jsx'));
 const LegacyPlayer = lazy(() => import('./LegacyPlayer.jsx'));
@@ -13,6 +13,7 @@ export default function MovieStreamPlayer({ episode, movie, movieSlug, onNextEpi
   const [progressKey, setProgressKey] = useState('');
   const [initialTime, setInitialTime] = useState(0);
   const [playerType, setPlayerType] = useState('shaka');
+  const lastProgressSaveRef = useRef(0);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -35,6 +36,9 @@ export default function MovieStreamPlayer({ episode, movie, movieSlug, onNextEpi
 
   const handleTimeUpdate = (currentTime) => {
     if (currentTime > 5 && progressKey && typeof window !== 'undefined') {
+      const now = Date.now();
+      if (now - lastProgressSaveRef.current < 5000) return;
+      lastProgressSaveRef.current = now;
       localStorage.setItem(progressKey, currentTime.toString());
       const userId = localStorage.getItem('userToken') || 'guest';
       const listKey = `movie_continue_${userId}`;

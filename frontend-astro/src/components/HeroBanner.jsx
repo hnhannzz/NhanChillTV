@@ -23,7 +23,7 @@ const fadeIn = {
 const WORLD_CUP_SLIDE = {
   id: 'worldcup-2026-hero',
   isWorldCup: true,
-  name: 'World Cup 2026',
+  name: 'FIFA World Cup 2026™',
   original_name: 'FIFA World Cup 2026',
   description: 'Theo dõi lịch thi đấu theo giờ Việt Nam GMT+7, tỉ số realtime, bảng xếp hạng và chọn luồng bình luận World Cup ngay trên NhanChillTV.',
   poster_url: 'https://i.ibb.co/wr7DkswW/ezgif-8545a79bc51d4b23.webp',
@@ -101,18 +101,19 @@ export default function HeroBanner() {
   const description = String(currentSlide.description || 'Khám phá nội dung đang được nhiều khán giả quan tâm trên NhanChillTV.').replace(/<[^>]+>/g, ' ');
   const originalTitle = String(currentSlide.origin_name || currentSlide.original_name || '').trim();
   const shouldShowOriginalTitle = originalTitle && originalTitle.toLowerCase() !== String(currentSlide.name || '').trim().toLowerCase();
+  const movieDetailSlug = !currentSlide.isWorldCup && !currentSlide.isEvent ? currentSlide.slug : '';
   const watchUrl = currentSlide.isWorldCup
     ? '/worldcup/'
     : currentSlide.isEvent
     ? `/tv/?event=${encodeURIComponent(currentSlide.id)}${currentSlide.sourceChannelId ? `&channel=${encodeURIComponent(currentSlide.sourceChannelId)}` : ''}`
-    : `/movie-detail/?slug=${encodeURIComponent(currentSlide.slug)}`;
+    : `/movie-detail/?slug=${encodeURIComponent(movieDetailSlug)}`;
   const imageUrl = currentSlide.isWorldCup || currentSlide.isEvent
     ? (currentSlide.poster_url || '/poster.jpg')
     : getOPhimImageUrl(currentSlide.poster_url || currentSlide.thumb_url);
-  const movieDetailSlug = !currentSlide.isWorldCup && !currentSlide.isEvent ? currentSlide.slug : null;
-  const openMovieDetails = slug => event => {
+  const openMovieDetails = event => {
     event.preventDefault();
     event.stopPropagation();
+    const slug = event.currentTarget.dataset.slug;
     if (slug) setModalSlug(slug);
   };
 
@@ -155,13 +156,11 @@ export default function HeroBanner() {
             animate="visible"
           >
             <motion.span variants={fadeSlideUp} className="mb-3 inline-block rounded bg-[#ED2C25] px-2 py-1 text-[10px] font-bold tracking-wide text-white md:text-xs">
-              {currentSlide.isWorldCup ? 'WORLD CUP 2026' : currentSlide.isEvent ? (currentSlide.status === 'live' ? 'SỰ KIỆN TRỰC TIẾP' : 'SỰ KIỆN ĐÃ GHIM') : 'PHIM PHỔ BIẾN'}
+              {currentSlide.isWorldCup ? 'FIFA WORLD CUP 2026' : currentSlide.isEvent ? (currentSlide.status === 'live' ? 'SỰ KIỆN TRỰC TIẾP' : 'SỰ KIỆN ĐÃ GHIM') : 'PHIM PHỔ BIẾN'}
             </motion.span>
             <motion.h1 variants={fadeSlideUp} className="line-clamp-2 text-3xl font-black leading-tight text-white md:text-6xl">{currentSlide.name}</motion.h1>
             {shouldShowOriginalTitle && (
-              <motion.h2 variants={fadeIn} className="mt-2 text-xs font-bold uppercase tracking-wide text-white/55 md:text-sm">
-                Tên gốc: <span className="normal-case tracking-normal text-white/70">{originalTitle}</span>
-              </motion.h2>
+              <motion.h2 variants={fadeIn} className="mt-2 text-xs font-bold text-white/70 md:text-sm">{originalTitle}</motion.h2>
             )}
             <motion.p variants={fadeIn} className="mb-6 mt-3 line-clamp-3 max-w-3xl text-xs text-white/80 md:text-base">{description}</motion.p>
             <motion.div variants={fadeSlideUp} className="pointer-events-auto flex items-center gap-3">
@@ -174,7 +173,7 @@ export default function HeroBanner() {
               ) : currentSlide.isEvent ? (
                 <a href="/events/" className="flex items-center gap-2 rounded-md bg-white/20 px-5 py-3 text-sm font-bold text-white backdrop-blur-md transition-transform hover:scale-105 hover:bg-white/30"><Info size={19} /> Sự kiện</a>
               ) : (
-                <button type="button" onClick={openMovieDetails(movieDetailSlug)} className="flex items-center gap-2 rounded-md bg-white/20 px-5 py-3 text-sm font-bold text-white backdrop-blur-md transition-transform hover:scale-105 hover:bg-white/30"><Info size={19} /> Xem thêm</button>
+                <button type="button" data-slug={movieDetailSlug} onClick={openMovieDetails} className="flex items-center gap-2 rounded-md bg-white/20 px-5 py-3 text-sm font-bold text-white backdrop-blur-md transition-transform hover:scale-105 hover:bg-white/30"><Info size={19} /> Xem thêm</button>
               )}
             </motion.div>
           </motion.div>
