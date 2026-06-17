@@ -1,9 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import shaka from 'shaka-player/dist/shaka-player.ui.js';
-import 'shaka-player/dist/controls.css';
 import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, SkipForward, LightbulbOff, Settings } from 'lucide-react';
-import mpegts from 'mpegts.js';
-import { getMimeType, inferPlaybackType } from '../lib/playbackUrl';
+import { inferPlaybackType } from '../lib/playbackUrl';
 
 export default function UnifiedPlayer({
   url,
@@ -100,11 +97,13 @@ export default function UnifiedPlayer({
   }, [url, initialTime, shouldGateResume]);
 
   useEffect(() => {
-    if (!videoRef.current || !videoContainerRef.current) return;
+    const video = videoRef.current;
+    if (!video || !videoContainerRef.current) return;
 
     let shakaPlayer = null;
     let mpegtsPlayer = null;
     let doSeek = null;
+    let cancelled = false;
     let retryCount = 0;
     const maxRetries = 5;
     let retryTimeoutId = null;
@@ -112,14 +111,9 @@ export default function UnifiedPlayer({
     const playbackType = getResolvedPlaybackType();
     const isDash = playbackType === 'dash';
     const isMpegTs = playbackType === 'mpegts';
+    const isProgressive = playbackType === 'mp4';
 
-    // 1. Block all MPD (DASH) streams on iOS/Safari (since iOS Safari lacks MSE)
-    if (isDash && isSafariOrIOS) {
-      setError('Kênh/phim định dạng MPD (DASH) này chưa hỗ trợ iOS, iPadOS hoặc Safari. Vui lòng dùng Chrome/Edge trên Windows hoặc Android.');
-      return;
-    }
-
-    const handleNativeError = (e) => {
+    const handleNativeError = () => {
       const videoEl = videoRef.current;
       if (!videoEl) return;
       const mediaError = videoEl.error;
@@ -129,7 +123,7 @@ export default function UnifiedPlayer({
         retryCount++;
         console.log(`[Player] Retrying native HLS source in 3s (Attempt ${retryCount}/${maxRetries})...`);
         setError(`Đang kết nối lại luồng phát (Thử lại ${retryCount}/${maxRetries})...`);
-        
+
         retryTimeoutId = setTimeout(() => {
           if (videoRef.current && url) {
             videoRef.current.src = url;
@@ -142,169 +136,6 @@ export default function UnifiedPlayer({
       }
     };
 
-    if (isMpegTs && mpegts.isSupported()) {
-      const absoluteUrl = new URL(url, window.location.href).href;
-
-      mpegtsPlayer = mpegts.createPlayer({
-        type: 'mpegts',
-        isLive: true,
-        url: absoluteUrl
-      }, {
-        enableWorker: true,
-        lazyLoad: false,
-        enableStashBuffer: false,
-        liveBufferLatencyChasing: true,
-      });
-      playerRef.current = mpegtsPlayer;
-      
-      mpegtsPlayer.attachMediaElement(videoRef.current);
-      mpegtsPlayer.load();
-      if (autoplay) {
-        mpegtsPlayer.play().catch(err => {
-          console.warn('Autoplay unmuted prevented for mpegts, trying muted...', err);
-          if (videoRef.current) {
-            videoRef.current.muted = true;
-            setIsMuted(true);
-            setShowUnmuteHint(true);
-            videoRef.current.play().catch(() => {});
-          }
-        });
-      }
-      onReady?.(null);
-
-      mpegtsPlayer.on(mpegts.Events.ERROR, (errorType, errorDetail, errorInfo) => {
-        console.error('MPEG-TS Error:', errorType, errorDetail, errorInfo);
-        setError(`Lỗi MPEG-TS: ${errorDetail}`);
-        onError?.(errorInfo);
-      });
-    } else if (isSafariOrIOS && !isDash) {
-      // 2. Dùng native HLS player cho iOS/Safari
-      console.log('[Player] Using native Safari HLS/VOD engine');
-      videoRef.current.src = url;
-      videoRef.current.load();
-      
-      let seeked = false;
-      doSeek = () => {
-        if (seeked) return;
-        if (!shouldGateResume && initialTime > 0 && videoRef.current && videoRef.current.duration > 0) {
-          videoRef.current.currentTime = initialTime;
-          seeked = true;
-          console.log('[Player] Native HLS seeked to:', initialTime);
-        }
-      };
-      
-      videoRef.current.addEventListener('loadedmetadata', doSeek);
-      videoRef.current.addEventListener('loadeddata', doSeek);
-      videoRef.current.addEventListener('canplay', doSeek);
-
-      if (autoplay && !shouldGateResume) {
-        videoRef.current.play().catch(err => {
-          console.warn('Native HLS autoplay unmuted prevented, trying muted...', err);
-          if (videoRef.current) {
-            videoRef.current.muted = true;
-            setIsMuted(true);
-            setShowUnmuteHint(true);
-            videoRef.current.play().catch(() => {});
-          }
-        });
-      }
-      onReady?.(null);
-    } else {
-      shaka.polyfill.installAll();
-      if (!shaka.Player.isBrowserSupported()) {
-        setError('Browser không hỗ trợ Shaka Player');
-        return;
-      }
-
-      shakaPlayer = new shaka.Player(videoRef.current);
-      playerRef.current = shakaPlayer;
-
-      let clearKeysObj = {};
-      if (clearKey) {
-        if (typeof clearKey === 'string') {
-          if (clearKey.includes(':')) {
-            const [kid, key] = clearKey.split(':');
-            clearKeysObj[kid] = key;
-          }
-        } else if (typeof clearKey === 'object') {
-          clearKeysObj = clearKey;
-        }
-      }
-
-      const drmConfig = Object.keys(clearKeysObj).length > 0 ? {
-        clearKeys: clearKeysObj
-      } : undefined;
-
-      shakaPlayer.configure({
-        streaming: {
-          bufferingGoal: 45,
-          rebufferingGoal: 5,
-          bufferBehind: 15,
-          retryParameters: {
-            maxAttempts: 5,
-            timeout: 10000,
-          },
-          abr: {
-            enabled: true,
-            defaultBandwidthEstimate: 1500000,
-            switchInterval: 4,
-          }
-        },
-        drm: drmConfig
-      });
-
-      const loadStream = async () => {
-        try {
-          await shakaPlayer.load(url, shouldGateResume ? 0 : initialTime);
-          if (autoplay && !shouldGateResume) {
-            videoRef.current.play().catch(() => {
-              console.warn('Shaka autoplay unmuted prevented, trying muted...');
-              if (videoRef.current) {
-                videoRef.current.muted = true;
-                setIsMuted(true);
-                setShowUnmuteHint(true);
-                videoRef.current.play().catch(() => {});
-              }
-            });
-          }
-          
-          const updateQualities = () => {
-            if (!shakaPlayer) return;
-            const tracks = shakaPlayer.getVariantTracks();
-            const unique = [];
-            const seen = new Set();
-            for (const track of tracks) {
-              if (track.height && !seen.has(track.height)) {
-                seen.add(track.height);
-                unique.push(track);
-              }
-            }
-            unique.sort((a, b) => b.height - a.height);
-            setAvailableQualities(unique);
-          };
-
-          shakaPlayer.addEventListener('trackschanged', updateQualities);
-          updateQualities();
-
-          onReady?.(shakaPlayer);
-        } catch (err) {
-          console.error('Error loading video', err);
-          setError('Không thể tải luồng video: ' + err.message);
-          onError?.(err);
-        }
-      };
-
-      loadStream();
-
-      shakaPlayer.addEventListener('error', (event) => {
-        console.error('Player error', event.detail);
-        setError('Lỗi phát video: ' + event.detail.message);
-        onError?.(event.detail);
-      });
-    }
-
-    const video = videoRef.current;
-    
     const handlePlay = () => setIsPlaying(true);
     const handlePause = () => setIsPlaying(false);
     const handleVolumeChange = () => {
@@ -317,7 +148,6 @@ export default function UnifiedPlayer({
     };
     const handleLoadedMetadata = () => setDuration(video.duration);
 
-    // Sync fullscreen state with native iOS player controls
     const handleWebKitBeginFullscreen = () => setIsFullscreen(true);
     const handleWebKitEndFullscreen = () => setIsFullscreen(false);
 
@@ -330,7 +160,196 @@ export default function UnifiedPlayer({
     video.addEventListener('webkitendfullscreen', handleWebKitEndFullscreen);
     video.addEventListener('error', handleNativeError);
 
+    const setupPlayback = async () => {
+      setError(null);
+      setAvailableQualities([]);
+      setCurrentQuality('auto');
+      playerRef.current = null;
+
+      if (isDash && isSafariOrIOS) {
+        setError('Kênh/phim định dạng MPD (DASH) này chưa hỗ trợ iOS, iPadOS hoặc Safari. Vui lòng dùng Chrome/Edge trên Windows hoặc Android.');
+        return;
+      }
+
+      try {
+        if (isMpegTs) {
+          const mpegtsModule = await import('mpegts.js');
+          if (cancelled) return;
+          const mpegts = mpegtsModule.default || mpegtsModule;
+
+          if (mpegts.isSupported()) {
+            const absoluteUrl = new URL(url, window.location.href).href;
+
+            mpegtsPlayer = mpegts.createPlayer({
+              type: 'mpegts',
+              isLive: true,
+              url: absoluteUrl,
+            }, {
+              enableWorker: true,
+              lazyLoad: false,
+              enableStashBuffer: false,
+              liveBufferLatencyChasing: true,
+            });
+            playerRef.current = mpegtsPlayer;
+
+            mpegtsPlayer.attachMediaElement(video);
+            mpegtsPlayer.load();
+            if (autoplay) {
+              mpegtsPlayer.play().catch(err => {
+                console.warn('Autoplay unmuted prevented for mpegts, trying muted...', err);
+                if (videoRef.current) {
+                  videoRef.current.muted = true;
+                  setIsMuted(true);
+                  setShowUnmuteHint(true);
+                  videoRef.current.play().catch(() => {});
+                }
+              });
+            }
+            onReady?.(null);
+
+            mpegtsPlayer.on(mpegts.Events.ERROR, (errorType, errorDetail, errorInfo) => {
+              console.error('MPEG-TS Error:', errorType, errorDetail, errorInfo);
+              setError(`Lỗi MPEG-TS: ${errorDetail}`);
+              onError?.(errorInfo);
+            });
+            return;
+          }
+        }
+
+        if ((isSafariOrIOS && !isDash) || isProgressive) {
+          console.log('[Player] Using native HTML5 playback engine');
+          video.src = url;
+          video.load();
+
+          let seeked = false;
+          doSeek = () => {
+            if (seeked) return;
+            if (!shouldGateResume && initialTime > 0 && videoRef.current && videoRef.current.duration > 0) {
+              videoRef.current.currentTime = initialTime;
+              seeked = true;
+              console.log('[Player] Native HLS seeked to:', initialTime);
+            }
+          };
+
+          video.addEventListener('loadedmetadata', doSeek);
+          video.addEventListener('loadeddata', doSeek);
+          video.addEventListener('canplay', doSeek);
+
+          if (autoplay && !shouldGateResume) {
+            video.play().catch(err => {
+              console.warn('Native HLS autoplay unmuted prevented, trying muted...', err);
+              if (videoRef.current) {
+                videoRef.current.muted = true;
+                setIsMuted(true);
+                setShowUnmuteHint(true);
+                videoRef.current.play().catch(() => {});
+              }
+            });
+          }
+          onReady?.(null);
+          return;
+        }
+
+        const shakaModule = isDash
+          ? await import('shaka-player/dist/shaka-player.dash-es2021.js')
+          : await import('shaka-player/dist/shaka-player.hls-es2021.js');
+        if (cancelled) return;
+        const shaka = shakaModule.default || shakaModule;
+
+        shaka.polyfill.installAll();
+        if (!shaka.Player.isBrowserSupported()) {
+          setError('Browser không hỗ trợ Shaka Player');
+          return;
+        }
+
+        shakaPlayer = new shaka.Player(video);
+        playerRef.current = shakaPlayer;
+
+        let clearKeysObj = {};
+        if (clearKey) {
+          if (typeof clearKey === 'string') {
+            if (clearKey.includes(':')) {
+              const [kid, key] = clearKey.split(':');
+              clearKeysObj[kid] = key;
+            }
+          } else if (typeof clearKey === 'object') {
+            clearKeysObj = clearKey;
+          }
+        }
+
+        const drmConfig = Object.keys(clearKeysObj).length > 0 ? {
+          clearKeys: clearKeysObj,
+        } : undefined;
+
+        shakaPlayer.configure({
+          streaming: {
+            bufferingGoal: 45,
+            rebufferingGoal: 5,
+            bufferBehind: 15,
+            retryParameters: {
+              maxAttempts: 5,
+              timeout: 10000,
+            },
+            abr: {
+              enabled: true,
+              defaultBandwidthEstimate: 1500000,
+              switchInterval: 4,
+            },
+          },
+          drm: drmConfig,
+        });
+
+        shakaPlayer.addEventListener('error', (event) => {
+          console.error('Player error', event.detail);
+          setError('Lỗi phát video: ' + event.detail.message);
+          onError?.(event.detail);
+        });
+
+        await shakaPlayer.load(url, shouldGateResume ? 0 : initialTime);
+        if (cancelled) return;
+        if (autoplay && !shouldGateResume) {
+          video.play().catch(() => {
+            console.warn('Shaka autoplay unmuted prevented, trying muted...');
+            if (videoRef.current) {
+              videoRef.current.muted = true;
+              setIsMuted(true);
+              setShowUnmuteHint(true);
+              videoRef.current.play().catch(() => {});
+            }
+          });
+        }
+
+        const updateQualities = () => {
+          if (!shakaPlayer) return;
+          const tracks = shakaPlayer.getVariantTracks();
+          const unique = [];
+          const seen = new Set();
+          for (const track of tracks) {
+            if (track.height && !seen.has(track.height)) {
+              seen.add(track.height);
+              unique.push(track);
+            }
+          }
+          unique.sort((a, b) => b.height - a.height);
+          setAvailableQualities(unique);
+        };
+
+        shakaPlayer.addEventListener('trackschanged', updateQualities);
+        updateQualities();
+
+        onReady?.(shakaPlayer);
+      } catch (err) {
+        if (cancelled) return;
+        console.error('Error loading video', err);
+        setError('Không thể tải luồng video: ' + err.message);
+        onError?.(err);
+      }
+    };
+
+    setupPlayback();
+
     return () => {
+      cancelled = true;
       if (shakaPlayer) {
         shakaPlayer.destroy();
       }
@@ -338,7 +357,6 @@ export default function UnifiedPlayer({
         mpegtsPlayer.destroy();
       }
 
-      // Stop source load and clean memory on iOS/Safari
       video.src = '';
       try {
         video.removeAttribute('src');
@@ -355,14 +373,14 @@ export default function UnifiedPlayer({
       video.removeEventListener('webkitbeginfullscreen', handleWebKitBeginFullscreen);
       video.removeEventListener('webkitendfullscreen', handleWebKitEndFullscreen);
       video.removeEventListener('error', handleNativeError);
-      
+
       if (doSeek) {
         video.removeEventListener('loadedmetadata', doSeek);
         video.removeEventListener('loadeddata', doSeek);
         video.removeEventListener('canplay', doSeek);
       }
     };
-  }, [url, isMpd, streamType, initialTime, autoplay, shouldGateResume]);
+  }, [url, isMpd, streamType, initialTime, autoplay, shouldGateResume, clearKey]);
 
   // Handle Fullscreen state change events, including webkit prefix
   useEffect(() => {

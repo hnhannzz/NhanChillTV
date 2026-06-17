@@ -29,5 +29,9 @@
     "video.js": "^8.23.7",
     "videojs-contrib-eme": "^5.5.2",
     "zustand": "^5.0.14"
+  },
+  "overrides": {
+    "esbuild": "^0.28.1",
+    "vite": "^8.0.16"
   }
 }
