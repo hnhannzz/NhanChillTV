@@ -14,7 +14,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from shutil import disk_usage
 from threading import Thread
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 DEFAULT_HEADERS = {
     "User-Agent": "NhanChillTV-HomeAgent/1.0",
     "Accept": "*/*",
@@ -65,12 +65,63 @@ def post_agent(path, payload):
     return json.loads(body.decode("utf-8") or "{}")
 
 
+def get_agent(path, timeout=60):
+    token = agent_token()
+    if not token:
+        raise RuntimeError("HOME_AGENT_TOKEN is missing")
+    return request(
+        f"{api_base()}{path}",
+        timeout=timeout,
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+
 def read_first(path, default=""):
     try:
         with open(path, "r", encoding="utf-8") as handle:
             return handle.read().strip()
     except OSError:
         return default
+
+
+def read_cpu_times():
+    parts = read_first("/proc/stat").splitlines()[0].split()[1:]
+    values = [int(value) for value in parts]
+    idle = values[3] + (values[4] if len(values) > 4 else 0)
+    return sum(values), idle
+
+
+def cpu_percent(sample_seconds=0.15):
+    try:
+        total_a, idle_a = read_cpu_times()
+        time.sleep(sample_seconds)
+        total_b, idle_b = read_cpu_times()
+        total_delta = total_b - total_a
+        idle_delta = idle_b - idle_a
+        if total_delta <= 0:
+            return 0
+        return round((1 - idle_delta / total_delta) * 100, 1)
+    except Exception:
+        return 0
+
+
+def collect_network():
+    interfaces = {}
+    root = "/sys/class/net"
+    try:
+        for name in os.listdir(root):
+            if name == "lo":
+                continue
+            base = os.path.join(root, name)
+            interfaces[name] = {
+                "operstate": read_first(os.path.join(base, "operstate"), "unknown"),
+                "speedMbps": int(read_first(os.path.join(base, "speed"), "0") or 0),
+                "rxBytes": int(read_first(os.path.join(base, "statistics/rx_bytes"), "0") or 0),
+                "txBytes": int(read_first(os.path.join(base, "statistics/tx_bytes"), "0") or 0),
+            }
+    except OSError:
+        pass
+    return interfaces
 
 
 def collect_metrics():
@@ -91,6 +142,7 @@ def collect_metrics():
 
     return {
         "load": load,
+        "cpuPercent": cpu_percent(),
         "memory": {
             "total": meminfo.get("MemTotal", 0),
             "available": meminfo.get("MemAvailable", 0),
@@ -107,6 +159,7 @@ def heartbeat():
         "version": VERSION,
         "uptimeSeconds": float(read_first("/proc/uptime", "0").split()[0]),
         "metrics": collect_metrics(),
+        "network": collect_network(),
         "capabilities": ["epg-fetch", "channel-health", "manifest-relay"],
     }
     return post_agent("/home-agent/heartbeat", payload)
@@ -208,6 +261,33 @@ def channel_health():
     })
 
 
+def pull_backup():
+    status, headers, body = get_agent("/home-agent/backup", timeout=90)
+    if status < 200 or status >= 300:
+        raise RuntimeError(f"backup returned HTTP {status}")
+
+    backup_dir = os.getenv("BACKUP_DIR", "/opt/nhanchill-home-agent/backups")
+    os.makedirs(backup_dir, exist_ok=True)
+    filename = time.strftime("nhanchill-backup-%Y%m%d-%H%M%S.json.gz", time.localtime())
+    target = os.path.join(backup_dir, filename)
+    with open(target, "wb") as handle:
+        handle.write(body)
+    os.chmod(target, 0o600)
+
+    keep = env_int("BACKUP_KEEP", 7)
+    backups = sorted(
+        [os.path.join(backup_dir, name) for name in os.listdir(backup_dir) if name.startswith("nhanchill-backup-") and name.endswith(".json.gz")],
+        key=lambda item: os.path.getmtime(item),
+        reverse=True,
+    )
+    for old in backups[keep:]:
+        try:
+            os.remove(old)
+        except OSError:
+            pass
+    return {"path": target, "bytes": len(body), "kept": min(len(backups), keep)}
+
+
 class RelayHandler(BaseHTTPRequestHandler):
     def do_GET(self):
       try:
@@ -257,6 +337,8 @@ def run_once():
     print(json.dumps(fetch_epg(), ensure_ascii=False))
     print("[home-agent] channel health")
     print(json.dumps(channel_health(), ensure_ascii=False))
+    print("[home-agent] backup")
+    print(json.dumps(pull_backup(), ensure_ascii=False))
 
 
 def run_loop():
@@ -264,8 +346,10 @@ def run_loop():
     epg_interval = env_int("EPG_INTERVAL_SECONDS", 30 * 60)
     health_interval = env_int("HEALTH_INTERVAL_SECONDS", 10 * 60)
     heartbeat_interval = env_int("HEARTBEAT_INTERVAL_SECONDS", 60)
+    backup_interval = env_int("BACKUP_INTERVAL_SECONDS", 24 * 60 * 60)
     next_epg = 0
     next_health = 0
+    next_backup = 0
     while True:
         now = time.time()
         try:
@@ -288,6 +372,14 @@ def run_loop():
             except Exception as err:
                 print(f"[health] {err}")
                 next_health = now + min(300, health_interval)
+        if now >= next_backup:
+            try:
+                print("[backup] pull")
+                pull_backup()
+                next_backup = now + backup_interval
+            except Exception as err:
+                print(f"[backup] {err}")
+                next_backup = now + min(1800, backup_interval)
         time.sleep(heartbeat_interval)
 
 

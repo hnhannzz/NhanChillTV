@@ -214,7 +214,7 @@ export default function AdminDashboard() {
           }} onToggle={source => runAction(() => adminRequest(`/admin/m3u-sources/${source.id}`, { method: 'PUT', body: JSON.stringify({ active: !source.active }) }), 'Đã cập nhật trạng thái nguồn.')} onDelete={source => {
             if (window.confirm(`Xóa nguồn "${source.name}"?`)) runAction(() => adminRequest(`/admin/m3u-sources/${source.id}`, { method: 'DELETE' }), 'Đã xóa nguồn M3U.');
           }} onRefresh={() => runAction(() => adminRequest('/admin/m3u-sources/refresh', { method: 'POST' }), 'Đã cập nhật danh sách M3U.')} />}
-          {activeTab === 'channels' && <ChannelsTab channels={channels} settings={settings} setSettings={updater => { setSettings(updater); setSettingsDirty(true); }} search={channelSearch} setSearch={setChannelSearch} busy={busy} onSave={() => runAction(async () => { await adminRequest('/admin/iptv-settings', { method: 'POST', body: JSON.stringify(settings) }); setSettingsDirty(false); }, 'Đã lưu cấu hình IPTV.')} />}
+          {activeTab === 'channels' && <ChannelsTab channels={channels} homeAgent={homeAgent} settings={settings} setSettings={updater => { setSettings(updater); setSettingsDirty(true); }} search={channelSearch} setSearch={setChannelSearch} busy={busy} onSave={() => runAction(async () => { await adminRequest('/admin/iptv-settings', { method: 'POST', body: JSON.stringify(settings) }); setSettingsDirty(false); }, 'Đã lưu cấu hình IPTV.')} />}
           {activeTab === 'worldcup' && <WorldCupStreamsTab matches={worldCupData?.games || []} channels={channels} streamsConfig={worldCupStreams} busy={busy} adminRequest={adminRequest} runAction={runAction} />}
           {activeTab === 'transcode247' && <Transcode247Tab channels={channels} settings={settings} setSettings={setSettings} busy={busy} adminRequest={adminRequest} runAction={runAction} streams={streams} />}
           {activeTab === 'streams' && <StreamsTab streams={streams} onStop={stream => runAction(() => adminRequest('/admin/active-streams/kill', { method: 'POST', body: JSON.stringify({ id: stream.id }) }), 'Đã dừng luồng phát.')} />}
@@ -238,6 +238,10 @@ function DashboardTab({ health, systemOverview, homeAgent, movieCache, status, s
   const recentErrors = systemOverview?.recentErrors || [];
   const homeAgentOnline = Boolean(homeAgent?.online);
   const movieCacheEntries = Number(movieCache?.entries || 0);
+  const agentMetrics = homeAgent?.agent?.metrics || {};
+  const agentMemory = agentMetrics.memory || {};
+  const agentDisk = agentMetrics.disk || {};
+  const agentNetwork = Object.entries(homeAgent?.agent?.network || {})[0];
   const cards = [
     ['Kênh IPTV', status?.channelsCount ?? 0, ListVideo], ['Nguồn đang bật', sources.filter(source => source.active).length, Server],
     ['Người xem', viewers, Eye], ['FFmpeg', ffmpegProcesses, Activity],
@@ -261,8 +265,13 @@ function DashboardTab({ health, systemOverview, homeAgent, movieCache, status, s
           <InfoRow label="Trang thai" value={homeAgent?.tokenConfigured ? (homeAgentOnline ? 'Online' : 'Offline') : 'Chua cau hinh token'} />
           <InfoRow label="Thiet bi" value={homeAgent?.agent?.hostname || homeAgent?.agent?.id || '--'} />
           <InfoRow label="Lan gap" value={homeAgent?.agent?.lastSeenAt ? new Date(homeAgent.agent.lastSeenAt).toLocaleString('vi-VN') : '--'} />
+          <InfoRow label="CPU/RAM" value={`${Number(agentMetrics.cpuPercent || 0).toFixed(1)}% · ${formatBytesCompact(agentMemory.total - agentMemory.available)} / ${formatBytesCompact(agentMemory.total)}`} />
+          <InfoRow label="Disk" value={`${formatBytesCompact(agentDisk.used)} / ${formatBytesCompact(agentDisk.total)}`} />
+          <InfoRow label="Nhiet do" value={agentMetrics.temperatureC ? `${agentMetrics.temperatureC}°C` : '--'} />
+          <InfoRow label="Network" value={agentNetwork ? `${agentNetwork[0]} · ${agentNetwork[1].speedMbps || '--'}Mbps · ${agentNetwork[1].operstate}` : '--'} />
           <InfoRow label="EPG Home" value={homeAgent?.epg?.updatedAt ? `${new Date(homeAgent.epg.updatedAt).toLocaleString('vi-VN')} · ${formatBytesCompact(homeAgent.epg.bytes)}` : '--'} />
           <InfoRow label="Kenh loi" value={homeAgent?.channelHealth ? `${homeAgent.channelHealth.failed || 0}/${homeAgent.channelHealth.total || 0}` : '--'} />
+          <InfoRow label="Backup" value={homeAgent?.backup?.lastPulledAt ? `${new Date(homeAgent.backup.lastPulledAt).toLocaleString('vi-VN')} · ${formatBytesCompact(homeAgent.backup.bytes)}` : '--'} />
         </Panel>
         <Panel title="OPhim cache">
           <InfoRow label="Entry" value={movieCache?.entries ?? 0} />
@@ -300,10 +309,24 @@ function M3uTab({ sources, sourceForm, setSourceForm, busy, onAdd, onToggle, onD
   </section>;
 }
 
-function ChannelsTab({ channels, settings, setSettings, search, setSearch, busy, onSave }) {
+function ChannelsTab({ channels, homeAgent, settings, setSettings, search, setSearch, busy, onSave }) {
+  const [healthFilter, setHealthFilter] = useState('all');
   const groups = [...new Set(channels.map(channel => channel.group).filter(Boolean))];
   const orderedGroups = [...settings.groupOrder.filter(group => groups.includes(group)), ...groups.filter(group => !settings.groupOrder.includes(group))];
-  const visibleChannels = channels.filter(channel => `${channel.name} ${channel.group}`.toLowerCase().includes(search.toLowerCase())).slice(0, 300);
+  const healthRows = homeAgent?.channelHealth?.channels || [];
+  const healthMap = useMemo(() => new Map(healthRows.map(item => [item.id, item])), [healthRows]);
+  const healthSummary = homeAgent?.channelHealth || {};
+  const visibleChannels = channels
+    .filter(channel => `${channel.name} ${channel.group}`.toLowerCase().includes(search.toLowerCase()))
+    .filter(channel => {
+      const health = healthMap.get(channel.id);
+      if (healthFilter === 'all') return true;
+      if (healthFilter === 'unchecked') return !health;
+      if (healthFilter === 'down') return health && !health.ok;
+      if (healthFilter === 'drm') return Boolean(health?.drm);
+      return health?.type === healthFilter;
+    })
+    .slice(0, 300);
   const toggle = (key, value) => setSettings(current => ({ ...current, [key]: current[key].includes(value) ? current[key].filter(item => item !== value) : [...current[key], value] }));
   const moveGroup = (index, direction) => {
     const next = [...orderedGroups];
@@ -315,38 +338,56 @@ function ChannelsTab({ channels, settings, setSettings, search, setSearch, busy,
   const updateCustomLogo = (channelId, logoUrl) => {
     setSettings(current => {
       const nextLogos = { ...(current.customLogos || {}) };
-      if (logoUrl.trim()) {
-        nextLogos[channelId] = logoUrl.trim();
-      } else {
-        delete nextLogos[channelId];
-      }
+      if (logoUrl.trim()) nextLogos[channelId] = logoUrl.trim();
+      else delete nextLogos[channelId];
       return { ...current, customLogos: nextLogos };
     });
   };
-  return <section><SectionHeader title="Kênh IPTV" subtitle={`${channels.length} kênh đã nạp`} action={<button disabled={busy} onClick={onSave} className="flex items-center gap-2 rounded-md bg-[#ED2C25] px-3 py-2 text-sm font-bold"><Save size={16} /> Lưu cấu hình</button>} />
-    <div className="mt-5 grid gap-4 xl:grid-cols-[310px_1fr]"><Panel title="Thứ tự nhóm"><div className="max-h-[460px] overflow-y-auto pr-1">{orderedGroups.map((group, index) => <div key={group} className="flex h-9 items-center gap-1 border-b border-white/5 last:border-0"><span className="w-6 text-center text-[10px] text-white/30">{index + 1}</span><button onClick={() => toggle('hiddenGroups', group)} className={`rounded p-1 ${settings.hiddenGroups.includes(group) ? 'text-white/30' : 'text-green-400'}`}>{settings.hiddenGroups.includes(group) ? <EyeOff size={15} /> : <Eye size={15} />}</button><span className="min-w-0 flex-1 truncate text-xs">{group}</span><button disabled={index === 0} onClick={() => moveGroup(index, -1)} className="rounded p-1 hover:bg-white/5 disabled:opacity-20"><ChevronUp size={14} /></button><button disabled={index === orderedGroups.length - 1} onClick={() => moveGroup(index, 1)} className="rounded p-1 hover:bg-white/5 disabled:opacity-20"><ChevronDown size={14} /></button></div>)}</div></Panel>
-      <Panel title="Kênh"><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Tìm kênh..." className="mb-3 w-full rounded-md border border-white/10 bg-black/25 px-3 py-2 text-sm outline-none focus:border-[#ED2C25]" /><div className="max-h-[560px] overflow-y-auto flex flex-col gap-2">{visibleChannels.map(channel => {
-        const customLogoVal = settings.customLogos?.[channel.id] || '';
-        return (
-          <div key={channel.id} className="flex items-center justify-between border-b border-white/5 py-2 text-sm gap-2 sm:gap-3">
-            <label className="flex cursor-pointer items-center gap-2 min-w-0 flex-1">
-              <input type="checkbox" checked={!settings.hiddenChannels.includes(channel.id)} onChange={() => toggle('hiddenChannels', channel.id)} className="shrink-0" />
-              <img src={channel.logo || '/poster.jpg'} className="h-7 w-10 object-contain bg-black/20 rounded shrink-0" alt="" />
-              <span className="min-w-0 flex-1 truncate">{channel.name}</span>
-              <span className="hidden text-xs text-white/35 sm:block shrink-0">{channel.group}</span>
-            </label>
-            <div className="flex items-center gap-1 shrink-0">
-              <input
-                type="text"
-                placeholder="Custom Logo URL"
-                value={customLogoVal}
-                onChange={(e) => updateCustomLogo(channel.id, e.target.value)}
-                className="rounded border border-white/10 bg-black/35 px-2 py-1 text-xs outline-none focus:border-[#ED2C25] w-24 sm:w-48"
-              />
+  const healthUpdated = healthSummary.updatedAt ? new Date(healthSummary.updatedAt).toLocaleString('vi-VN') : 'Chưa có dữ liệu';
+
+  return <section><SectionHeader title="Kênh IPTV" subtitle={`${channels.length} kênh đã nạp · Health: ${healthUpdated}`} action={<button disabled={busy} onClick={onSave} className="flex items-center gap-2 rounded-md bg-[#ED2C25] px-3 py-2 text-sm font-bold"><Save size={16} /> Lưu cấu hình</button>} />
+    <div className="mt-5 grid gap-4 xl:grid-cols-[310px_1fr]">
+      <div className="space-y-4">
+        <Panel title="Thứ tự nhóm"><div className="max-h-[460px] overflow-y-auto pr-1">{orderedGroups.map((group, index) => <div key={group} className="flex h-9 items-center gap-1 border-b border-white/5 last:border-0"><span className="w-6 text-center text-[10px] text-white/30">{index + 1}</span><button onClick={() => toggle('hiddenGroups', group)} className={`rounded p-1 ${settings.hiddenGroups.includes(group) ? 'text-white/30' : 'text-green-400'}`}>{settings.hiddenGroups.includes(group) ? <EyeOff size={15} /> : <Eye size={15} />}</button><span className="min-w-0 flex-1 truncate text-xs">{group}</span><button disabled={index === 0} onClick={() => moveGroup(index, -1)} className="rounded p-1 hover:bg-white/5 disabled:opacity-20"><ChevronUp size={14} /></button><button disabled={index === orderedGroups.length - 1} onClick={() => moveGroup(index, 1)} className="rounded p-1 hover:bg-white/5 disabled:opacity-20"><ChevronDown size={14} /></button></div>)}</div></Panel>
+        <Panel title="Channel Health"><InfoRow label="Home Agent" value={homeAgent?.online ? 'Online' : 'Offline'} /><InfoRow label="OK / Lỗi" value={`${healthSummary.ok || 0} / ${healthSummary.failed || 0}`} /><InfoRow label="HLS / MPD" value={`${healthSummary.byType?.hls || 0} / ${healthSummary.byType?.mpd || 0}`} /><InfoRow label="DRM" value={healthRows.filter(item => item.drm).length} /></Panel>
+      </div>
+      <Panel title="Kênh">
+        <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Tìm kênh..." className="mb-3 w-full rounded-md border border-white/10 bg-black/25 px-3 py-2 text-sm outline-none focus:border-[#ED2C25]" />
+        <div className="mb-3 flex flex-wrap gap-2">
+          {['all', 'hls', 'mpd', 'drm', 'down', 'unchecked'].map(filter => <button key={filter} onClick={() => setHealthFilter(filter)} className={`rounded-md px-2.5 py-1.5 text-xs font-bold ${healthFilter === filter ? 'bg-[#ED2C25] text-white' : 'bg-white/8 text-white/60 hover:bg-white/12'}`}>{filter.toUpperCase()}</button>)}
+        </div>
+        <div className="max-h-[620px] overflow-y-auto flex flex-col gap-2">{visibleChannels.map(channel => {
+          const customLogoVal = settings.customLogos?.[channel.id] || '';
+          const health = healthMap.get(channel.id);
+          const statusClass = !health ? 'bg-white/8 text-white/35' : health.ok ? 'bg-emerald-500/10 text-emerald-300' : 'bg-red-500/10 text-red-300';
+          return (
+            <div key={channel.id} className="flex items-center justify-between border-b border-white/5 py-2 text-sm gap-2 sm:gap-3">
+              <label className="flex cursor-pointer items-center gap-2 min-w-0 flex-1">
+                <input type="checkbox" checked={!settings.hiddenChannels.includes(channel.id)} onChange={() => toggle('hiddenChannels', channel.id)} className="shrink-0" />
+                <img src={channel.logo || '/poster.jpg'} className="h-7 w-10 object-contain bg-black/20 rounded shrink-0" alt="" />
+                <span className="min-w-0 flex-1 truncate">{channel.name}</span>
+                <span className="hidden text-xs text-white/35 lg:block shrink-0">{channel.group}</span>
+              </label>
+              <div className="hidden min-w-[180px] flex-wrap justify-end gap-1 lg:flex">
+                <span className={`rounded px-2 py-0.5 text-[10px] font-bold ${statusClass}`}>{health ? (health.ok ? 'OK' : 'DOWN') : 'NO CHECK'}</span>
+                {health?.type && <span className="rounded bg-white/8 px-2 py-0.5 text-[10px] text-white/60">{health.type.toUpperCase()}</span>}
+                {health?.drm && <span className="rounded bg-yellow-500/10 px-2 py-0.5 text-[10px] text-yellow-200">DRM</span>}
+                {health?.latencyMs ? <span className="rounded bg-white/8 px-2 py-0.5 text-[10px] text-white/45">{health.latencyMs}ms</span> : null}
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <input
+                  type="text"
+                  placeholder="Custom Logo URL"
+                  value={customLogoVal}
+                  onChange={(e) => updateCustomLogo(channel.id, e.target.value)}
+                  className="rounded border border-white/10 bg-black/35 px-2 py-1 text-xs outline-none focus:border-[#ED2C25] w-24 sm:w-48"
+                />
+              </div>
             </div>
-          </div>
-        );
-      })}</div></Panel></div>
+          );
+        })}</div>
+      </Panel>
+    </div>
   </section>;
 }
 

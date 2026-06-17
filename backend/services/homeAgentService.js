@@ -20,6 +20,10 @@ const DEFAULT_STATE = {
     enabled: false,
     updatedAt: null,
   },
+  backup: {
+    lastPulledAt: null,
+    bytes: 0,
+  },
 };
 
 function ensureDir(filePath) {
@@ -83,12 +87,15 @@ class HomeAgentService {
     const now = Date.now();
     const lastSeen = this.state.agent?.lastSeenAt ? new Date(this.state.agent.lastSeenAt).getTime() : 0;
     const online = lastSeen > 0 && now - lastSeen < Number(process.env.HOME_AGENT_ONLINE_WINDOW_MS || 3 * 60 * 1000);
+    const epgStatus = epgService.getStatus();
     return {
       tokenConfigured: Boolean(config.homeAgentToken),
       online,
+      fallbackMode: !online,
+      fallbackReason: online ? null : 'Home Agent offline, main VPS keeps serving disk/API cache',
       statePath: this.statePath,
       ...this.state,
-      epgService: epgService.getStatus(),
+      epgService: epgStatus,
     };
   }
 
@@ -158,6 +165,47 @@ class HomeAgentService {
     };
     this.save();
     return this.state.channelHealth;
+  }
+
+  createBackupArchive() {
+    const candidates = [
+      path.join(config.projectRoot, 'backend/db/data.json'),
+      path.join(config.projectRoot, 'backend/db/users.json'),
+      path.join(config.projectRoot, 'backend/db/comments.json'),
+      path.join(config.projectRoot, 'nginx/temp/worldcup-cache.json'),
+      config.homeAgentStatePath,
+    ];
+    const files = {};
+    for (const filePath of candidates) {
+      const resolved = path.resolve(filePath);
+      if (!resolved.startsWith(config.projectRoot) || !fs.existsSync(resolved)) continue;
+      const rel = path.relative(config.projectRoot, resolved).replace(/\\/g, '/');
+      try {
+        const stat = fs.statSync(resolved);
+        if (!stat.isFile() || stat.size > Number(process.env.HOME_AGENT_BACKUP_MAX_FILE_BYTES || 5 * 1024 * 1024)) continue;
+        files[rel] = {
+          mtime: stat.mtime.toISOString(),
+          bytes: stat.size,
+          content: fs.readFileSync(resolved, 'utf8'),
+        };
+      } catch (err) {
+        console.warn('[HomeAgent] Backup read failed:', rel, err.message);
+      }
+    }
+
+    const payload = {
+      createdAt: new Date().toISOString(),
+      version: config.version,
+      files,
+    };
+    const buffer = zlib.gzipSync(Buffer.from(JSON.stringify(payload, null, 2), 'utf8'), { level: 6 });
+    this.state.backup = {
+      lastPulledAt: payload.createdAt,
+      bytes: buffer.length,
+      fileCount: Object.keys(files).length,
+    };
+    this.save();
+    return buffer;
   }
 }
 

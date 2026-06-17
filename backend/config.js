@@ -33,6 +33,8 @@ module.exports = {
   dbPath: process.env.DB_PATH || path.join(projectRoot, 'backend/db/data.json'),
   rtmpControlUrl: process.env.RTMP_CONTROL_URL || 'http://127.0.0.1:8050/rtmp-control',
   homeAgentToken: process.env.HOME_AGENT_TOKEN || '',
+  telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
+  telegramChatId: process.env.TELEGRAM_CHAT_ID || '',
   
   // FFmpeg transcode settings
   ffmpeg: {

@@ -39,4 +39,18 @@ router.post('/channel-health', agentAuth, (req, res) => {
   }
 });
 
+router.get('/backup', agentAuth, (req, res) => {
+  try {
+    const archive = homeAgentService.createBackupArchive();
+    res.set({
+      'Content-Type': 'application/gzip',
+      'Content-Disposition': `attachment; filename="nhanchill-backup-${Date.now()}.json.gz"`,
+      'Cache-Control': 'no-store',
+    });
+    res.send(archive);
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;

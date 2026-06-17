@@ -98,6 +98,7 @@ export default function Header({ toggleSidebar }) {
             name: movie.name,
             subtitle: movie.original_name || movie.year || 'Phim',
             image: getOPhimImageUrl(movie.poster_url || movie.thumb_url),
+            badges: [movie.quality, movie.episode_current || movie.current_episode, movie.year].filter(Boolean).slice(0, 3),
             key: `movie-${movie.slug}`,
             type: 'movie',
             link: `/movie-detail/?slug=${encodeURIComponent(movie.slug)}`,
@@ -111,6 +112,7 @@ export default function Header({ toggleSidebar }) {
               name: channel.name,
               subtitle: channel.group || 'Kênh truyền hình',
               image: channel.logo || '/poster.jpg',
+              badges: ['LIVE', channel.group].filter(Boolean).slice(0, 2),
               key: `tv-${channel.id}`,
               type: 'tv',
               link: `/tv/?channel=${encodeURIComponent(channel.id)}`,
@@ -183,6 +185,7 @@ export default function Header({ toggleSidebar }) {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 truncate text-sm font-semibold text-white">{result.type === 'tv' && <span className="rounded bg-[#ED2C25] px-1 py-0.5 text-[8px] font-bold">LIVE</span>}{result.name}</div>
                     <div className="truncate text-xs text-white/45">{result.subtitle}</div>
+                    {result.badges?.length > 0 && <div className="mt-1 flex flex-wrap gap-1">{result.badges.map(badge => <span key={badge} className="rounded bg-white/8 px-1.5 py-0.5 text-[9px] font-bold text-white/55">{badge}</span>)}</div>}
                   </div>
                 </a>
               ))}

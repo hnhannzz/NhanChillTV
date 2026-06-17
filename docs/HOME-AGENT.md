@@ -9,6 +9,7 @@ small validated metadata to the main VPS.
 - Fetches `https://vnepg.site/epg.xml`, validates XMLTV, gzip-compresses it, and uploads it to the main VPS.
 - Sends heartbeat and device metrics: load, RAM, disk, temperature.
 - Checks a small IPTV sample list from the Vietnam IP and reports stream type: `hls`, `mpd`, `progressive`, `unknown`, `dead`.
+- Pulls a small gzip backup from the main VPS and keeps a local rotating backup set.
 - Can optionally expose a tiny allowlisted relay for manifest/metadata requests. Keep it behind VPN/tunnel and do not proxy full video.
 
 ## Server Environment
@@ -17,6 +18,8 @@ Set this on the main VPS service environment:
 
 ```bash
 HOME_AGENT_TOKEN="change-this-long-random-token"
+TELEGRAM_BOT_TOKEN=""
+TELEGRAM_CHAT_ID=""
 ```
 
 Restart the main service after changing the environment.
@@ -42,6 +45,32 @@ set -a
 set +a
 python3 /opt/nhanchill-home-agent/home_agent.py --once
 ```
+
+## Backup
+
+The agent calls `GET /api/home-agent/backup` with the shared token and stores gzipped JSON files in:
+
+```bash
+/opt/nhanchill-home-agent/backups
+```
+
+Defaults:
+
+- `BACKUP_INTERVAL_SECONDS=86400`
+- `BACKUP_KEEP=7`
+- `BACKUP_DIR=/opt/nhanchill-home-agent/backups`
+
+The backup is intentionally small and only includes JSON state such as `backend/db/*.json`, World Cup cache, and Home Agent state.
+
+## Telegram Alerts
+
+Telegram alerts are disabled unless both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are configured on the main VPS.
+
+Current alerts:
+
+- Home Agent offline
+- EPG cache stale
+- checked channels failing from Home Agent
 
 ## Relay Notes
 

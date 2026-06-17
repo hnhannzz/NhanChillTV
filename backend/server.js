@@ -9,6 +9,8 @@ const ffmpegWrapper = require('../ffmpeg-core/wrapper');
 const m3uManager = require('./services/m3uManager');
 const transcode247Manager = require('./services/transcode247Manager');
 const worldCupRouter = require('./routes/worldcup');
+const { homeAgentService } = require('./services/homeAgentService');
+const telegramNotifier = require('./services/telegramNotifier');
 
 const app = express();
 const server = http.createServer(app);
@@ -156,6 +158,47 @@ setInterval(async () => {
     console.error('[Metrics] Error gathering system info:', err);
   }
 }, 2000);
+
+setInterval(async () => {
+  try {
+    const status = homeAgentService.getStatus();
+    const now = Date.now();
+    if (status.tokenConfigured && !status.online) {
+      await telegramNotifier.alertOnce(
+        'home-agent-offline',
+        `NhanChillTV alert: Home Agent offline. Main VPS is serving fallback cache. Last seen: ${status.agent?.lastSeenAt || 'never'}`
+      );
+    }
+
+    const epgUpdated = status.epgService?.updatedAt ? new Date(status.epgService.updatedAt).getTime() : 0;
+    if (epgUpdated && now - epgUpdated > Number(process.env.EPG_STALE_ALERT_MS || 3 * 60 * 60 * 1000)) {
+      await telegramNotifier.alertOnce(
+        'epg-stale',
+        `NhanChillTV alert: EPG cache is stale. Last update: ${status.epgService.updatedAt}`
+      );
+    }
+
+    if (status.channelHealth?.failed > 0) {
+      await telegramNotifier.alertOnce(
+        'channel-health-failed',
+        `NhanChillTV alert: ${status.channelHealth.failed}/${status.channelHealth.total} checked channels are failing on Home Agent.`
+      );
+    }
+
+    const [cpu, mem] = await Promise.all([si.currentLoad(), si.mem()]);
+    const cpuThreshold = Number(process.env.VPS_CPU_ALERT_PERCENT || 90);
+    const memThreshold = Number(process.env.VPS_MEMORY_ALERT_PERCENT || 90);
+    const memPercent = mem.total ? (mem.active / mem.total) * 100 : 0;
+    if (cpu.currentLoad >= cpuThreshold) {
+      await telegramNotifier.alertOnce('vps-cpu-high', `NhanChillTV alert: VPS CPU high ${cpu.currentLoad.toFixed(1)}%.`);
+    }
+    if (memPercent >= memThreshold) {
+      await telegramNotifier.alertOnce('vps-memory-high', `NhanChillTV alert: VPS RAM high ${memPercent.toFixed(1)}%.`);
+    }
+  } catch (err) {
+    console.error('[HomeAgent Monitor] Error:', err.message);
+  }
+}, Number(process.env.HOME_AGENT_MONITOR_INTERVAL_MS || 60 * 1000));
 
 // Start server
 m3uManager.refreshAll().then(() => {

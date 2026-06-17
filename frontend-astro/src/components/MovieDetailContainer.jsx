@@ -19,6 +19,7 @@ export default function MovieDetailContainer() {
   const [relatedMovies, setRelatedMovies] = useState([]);
 
   const slug = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('slug') : null;
+  const episodeQuery = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('episode') : null;
 
   useEffect(() => {
     if (!slug) {
@@ -36,7 +37,11 @@ export default function MovieDetailContainer() {
           loadRelatedMovies(m);
           
           if (m.episodes && m.episodes[0] && (m.episodes[0].server_data || m.episodes[0].items)) {
-            const firstEpisode = (m.episodes[0].server_data || m.episodes[0].items)[0];
+            const allEpisodes = m.episodes.flatMap(server => server.server_data || server.items || []);
+            const firstEpisode = allEpisodes.find(ep => {
+              const key = ep.slug || ep.filename || ep.name || ep.link_m3u8 || ep.link_embed || '';
+              return episodeQuery && key === episodeQuery;
+            }) || allEpisodes[0];
             if (firstEpisode) {
               setCurrentEpisode(firstEpisode);
               setCurrentEmbed(firstEpisode.link_m3u8 || firstEpisode.link_embed || firstEpisode.embed || '');
@@ -67,7 +72,7 @@ export default function MovieDetailContainer() {
     };
 
     loadData();
-  }, [slug]);
+  }, [slug, episodeQuery]);
 
   const loadComments = async () => {
     try {
@@ -119,7 +124,10 @@ export default function MovieDetailContainer() {
             name: movie.name,
             thumb_url: movie.thumb_url,
             quality: movie.quality,
-            year: movie.year
+            year: movie.year,
+            episode_current: movie.episode_current || movie.current_episode || '',
+            episode_total: movie.episode_total || '',
+            modified: movie.modified || null
           }
         })
       });

@@ -1,5 +1,5 @@
-import React from 'react';
-import { CalendarClock, Info, MapPin, Play, Radio, Shield, Timer } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Bell, CalendarClock, Info, MapPin, Play, Radio, Shield, Timer } from 'lucide-react';
 
 function scoreText(match) {
   if (match.isUpcoming) return 'VS';
@@ -82,13 +82,61 @@ export default function WorldCupMatchCard({ match, compact = false }) {
             <span className="truncate">{match.stadium_name ? `${match.stadium_name}, ${match.stadium_country_vi}` : 'Đang cập nhật sân'}</span>
           </span>
         )}
-        {href && (
-          <a href={href} className="inline-flex items-center gap-1.5 rounded-md bg-[#ED2C25] px-3 py-1.5 text-[11px] font-extrabold text-white transition-colors hover:bg-red-700">
-            {match.isFinished && !hasHighlight ? <Info size={12} /> : <Play size={12} fill="currentColor" />}
-            {match.isFinished ? (hasHighlight ? 'Xem highlight' : (compact ? 'Chi tiết' : 'Xem chi tiết trận đấu')) : 'Xem'}
-          </a>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {match.isUpcoming && <ReminderButton match={match} compact={compact} />}
+          {href && (
+            <a href={href} className="inline-flex items-center gap-1.5 rounded-md bg-[#ED2C25] px-3 py-1.5 text-[11px] font-extrabold text-white transition-colors hover:bg-red-700">
+              {match.isFinished && !hasHighlight ? <Info size={12} /> : <Play size={12} fill="currentColor" />}
+              {match.isFinished ? (hasHighlight ? 'Xem highlight' : (compact ? 'Chi tiết' : 'Xem chi tiết trận đấu')) : 'Xem'}
+            </a>
+          )}
+        </div>
       </div>
     </article>
+  );
+}
+
+function ReminderButton({ match, compact }) {
+  const storageKey = `worldcup_reminder_${match.id}`;
+  const [enabled, setEnabled] = useState(false);
+
+  useEffect(() => {
+    setEnabled(localStorage.getItem(storageKey) === '1');
+  }, [storageKey]);
+
+  const notify = () => {
+    const title = `${match.home_team_display || match.home_team_name_vi} vs ${match.away_team_display || match.away_team_name_vi}`;
+    const body = 'Trận đấu sắp bắt đầu sau 30 phút.';
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification(title, { body, tag: storageKey });
+    } else {
+      alert(`${title}\n${body}`);
+    }
+  };
+
+  const schedule = async () => {
+    if (!match.kickoffAt) return;
+    if ('Notification' in window && Notification.permission === 'default') {
+      await Notification.requestPermission();
+    }
+    localStorage.setItem(storageKey, '1');
+    setEnabled(true);
+
+    const remindAt = new Date(match.kickoffAt).getTime() - 30 * 60 * 1000;
+    const delay = remindAt - Date.now();
+    if (delay <= 0) {
+      notify();
+      return;
+    }
+    if (delay < 2147483647) {
+      window.setTimeout(notify, delay);
+    }
+  };
+
+  return (
+    <button type="button" onClick={schedule} disabled={enabled} className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[11px] font-extrabold transition-colors ${enabled ? 'bg-emerald-400/10 text-emerald-300' : 'bg-white/10 text-white/70 hover:bg-white/15 hover:text-white'}`}>
+      <Bell size={12} />
+      {enabled ? 'Đã nhắc' : compact ? 'Nhắc' : 'Nhắc tôi 30p'}
+    </button>
   );
 }

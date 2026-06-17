@@ -3,6 +3,8 @@ import Layout from '../layouts/Layout.astro';
 import MainLayout from '../components/MainLayout.jsx';
 import HeroBanner from '../components/HeroBanner.jsx';
 import WorldCupTodayWidget from '../components/WorldCupTodayWidget.jsx';
+import HomeContinueWatching from '../components/HomeContinueWatching.jsx';
+import HomeFavoriteUpdates from '../components/HomeFavoriteUpdates.jsx';
 import HomeEvents from '../components/HomeEvents.jsx';
 import HomeChannels from '../components/HomeChannels.jsx';
 import HomeMovies from '../components/HomeMovies.jsx';
@@ -12,52 +14,49 @@ import HomeMovies from '../components/HomeMovies.jsx';
   <MainLayout client:load>
     <HeroBanner client:load />
 
-    <div class="px-4 md:px-12 py-12 space-y-12 pb-32">
+    <div class="bg-[#070707] px-4 py-10 pb-32 md:px-12 md:py-12">
+      <div class="mx-auto flex max-w-[1600px] flex-col gap-12">
+        <section class="grid items-start gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)]">
+          <WorldCupTodayWidget client:only="react" />
+          <div class="flex min-w-0 flex-col gap-8">
+            <HomeContinueWatching client:only="react" />
+            <HomeFavoriteUpdates client:only="react" />
+          </div>
+        </section>
 
-      {/* World Cup Today Widget */}
-      <section>
-        <WorldCupTodayWidget client:only="react" />
-      </section>
+        <section>
+          <div class="mb-5 flex items-center justify-between gap-4 md:mb-6">
+            <div class="min-w-0">
+              <p class="text-xs font-black uppercase tracking-[0.18em] text-[#ED2C25]">Live</p>
+              <h2 class="mt-1 text-2xl font-black text-white md:text-4xl">Sự kiện trực tiếp</h2>
+            </div>
+            <a href="/events/" class="shrink-0 rounded-md bg-[#ED2C25] px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-red-700 md:px-5">Xem tất cả</a>
+          </div>
+          <HomeEvents client:only="react" />
+        </section>
 
-      {/* Live Events Section */}
-      <section>
-        <div class="flex items-center justify-between mb-4 md:mb-6">
-          <h2 class="text-xl md:text-4xl font-black text-white flex items-center gap-2 md:gap-3">
-            <span class="w-1.5 md:w-2 h-6 md:h-12 bg-[#ED2C25] rounded-full inline-block"></span>
-            Sự Kiện Trực Tiếp
-          </h2>
-          <a href="/events/" class="text-xs md:text-lg font-bold text-white bg-[#ED2C25] hover:bg-red-700 px-4 md:px-6 py-2 md:py-2.5 rounded-full transition-colors shadow-lg shadow-red-500/30 shrink-0">Xem tất cả</a>
-        </div>
-        
-        <HomeEvents client:only="react" />
-      </section>
-      
-      {/* Live TV Section */}
-      <section class="mt-16">
-        <div class="flex items-center justify-between mb-4 md:mb-6">
-          <h2 class="text-xl md:text-4xl font-black text-white flex items-center gap-2 md:gap-3">
-            <span class="w-1.5 md:w-2 h-6 md:h-12 bg-[#ED2C25] rounded-full inline-block"></span>
-            Truyền Hình Trực Tiếp
-          </h2>
-          <a href="/tv/" class="text-xs md:text-lg font-bold text-white bg-[#ED2C25] hover:bg-red-700 px-4 md:px-6 py-2 md:py-2.5 rounded-full transition-colors shadow-lg shadow-red-500/30 shrink-0">Xem tất cả</a>
-        </div>
-        
-        <HomeChannels client:only="react" />
-      </section>
+        <section>
+          <div class="mb-5 flex items-center justify-between gap-4 md:mb-6">
+            <div class="min-w-0">
+              <p class="text-xs font-black uppercase tracking-[0.18em] text-[#ED2C25]">TV</p>
+              <h2 class="mt-1 text-2xl font-black text-white md:text-4xl">Truyền hình trực tiếp</h2>
+            </div>
+            <a href="/tv/" class="shrink-0 rounded-md bg-white/10 px-4 py-2 text-sm font-bold text-white/75 transition-colors hover:bg-white/15 hover:text-white md:px-5">Mở TV</a>
+          </div>
+          <HomeChannels client:only="react" />
+        </section>
 
-      {/* Movies Section */}
-      <section>
-        <div class="flex items-center justify-between mb-4 mt-12 md:mb-6 md:mt-16">
-          <h2 class="text-xl md:text-4xl font-black text-white flex items-center gap-2 md:gap-3">
-            <span class="w-1.5 md:w-2 h-6 md:h-12 bg-[#ED2C25] rounded-full inline-block"></span>
-            Phim Mới Cập Nhật
-          </h2>
-          <a href="/movies/" class="text-xs md:text-lg font-bold text-white bg-[#ED2C25] hover:bg-red-700 px-4 md:px-6 py-2 md:py-2.5 rounded-full transition-colors shadow-lg shadow-red-500/30 shrink-0">Xem tất cả</a>
-        </div>
-        
-        <HomeMovies client:only="react" />
-      </section>
-
+        <section>
+          <div class="mb-5 flex items-center justify-between gap-4 md:mb-6">
+            <div class="min-w-0">
+              <p class="text-xs font-black uppercase tracking-[0.18em] text-[#ED2C25]">OPhim</p>
+              <h2 class="mt-1 text-2xl font-black text-white md:text-4xl">Phim mới cập nhật</h2>
+            </div>
+            <a href="/movies/" class="shrink-0 rounded-md bg-white/10 px-4 py-2 text-sm font-bold text-white/75 transition-colors hover:bg-white/15 hover:text-white md:px-5">Kho phim</a>
+          </div>
+          <HomeMovies client:only="react" />
+        </section>
+      </div>
     </div>
   </MainLayout>
 </Layout>
