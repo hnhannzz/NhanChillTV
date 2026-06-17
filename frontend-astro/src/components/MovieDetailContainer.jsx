@@ -102,6 +102,20 @@ export default function MovieDetailContainer() {
     }
   };
 
+  const renderPeopleLinks = (people, type) => (
+    <span className="inline-flex flex-wrap gap-1.5 align-middle">
+      {people.map(person => (
+        <a
+          key={`${type}-${person}`}
+          href={`/person/?type=${type}&name=${encodeURIComponent(person)}`}
+          className="rounded-md bg-white/8 px-2 py-1 text-xs font-semibold text-white hover:bg-[#ED2C25] hover:text-white"
+        >
+          {person}
+        </a>
+      ))}
+    </span>
+  );
+
   const handleToggleFavorite = async () => {
     const token = localStorage.getItem('userToken');
     if (!token) {
@@ -216,10 +230,10 @@ export default function MovieDetailContainer() {
               <div className="sm:col-span-2 md:col-span-3"><strong className="text-white/40">Tên khác:</strong> <span className="text-white font-medium">{movie.alternative_names.join(', ')}</span></div>
             )}
             {movie.actor && Array.isArray(movie.actor) && movie.actor.length > 0 && (
-              <div className="sm:col-span-2 md:col-span-3"><strong className="text-white/40">Diễn viên:</strong> <span className="text-white font-medium">{movie.actor.join(', ')}</span></div>
+              <div className="sm:col-span-2 md:col-span-3"><strong className="text-white/40">Diễn viên:</strong> <span className="text-white font-medium">{renderPeopleLinks(movie.actor, 'actor')}</span></div>
             )}
             {movie.director && Array.isArray(movie.director) && movie.director.length > 0 && (
-              <div className="sm:col-span-2 md:col-span-3"><strong className="text-white/40">Đạo diễn:</strong> <span className="text-white font-medium">{movie.director.join(', ')}</span></div>
+              <div className="sm:col-span-2 md:col-span-3"><strong className="text-white/40">Đạo diễn:</strong> <span className="text-white font-medium">{renderPeopleLinks(movie.director, 'director')}</span></div>
             )}
           </div>
 

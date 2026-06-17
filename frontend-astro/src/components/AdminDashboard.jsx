@@ -242,6 +242,13 @@ function DashboardTab({ health, systemOverview, homeAgent, movieCache, status, s
   const agentMemory = agentMetrics.memory || {};
   const agentDisk = agentMetrics.disk || {};
   const agentNetwork = Object.entries(homeAgent?.agent?.network || {})[0];
+  const agentCpuPercent = Number(agentMetrics.cpuPercent || 0);
+  const agentMemoryTotal = Number(agentMemory.total || 0);
+  const agentMemoryUsed = Math.max(0, agentMemoryTotal - Number(agentMemory.available || 0));
+  const agentMemoryPercent = agentMemoryTotal ? (agentMemoryUsed / agentMemoryTotal) * 100 : 0;
+  const agentDiskTotal = Number(agentDisk.total || 0);
+  const agentDiskUsed = Number(agentDisk.used || 0);
+  const agentDiskPercent = agentDiskTotal ? (agentDiskUsed / agentDiskTotal) * 100 : 0;
   const cards = [
     ['Kênh IPTV', status?.channelsCount ?? 0, ListVideo], ['Nguồn đang bật', sources.filter(source => source.active).length, Server],
     ['Người xem', viewers, Eye], ['FFmpeg', ffmpegProcesses, Activity],
@@ -265,8 +272,9 @@ function DashboardTab({ health, systemOverview, homeAgent, movieCache, status, s
           <InfoRow label="Trang thai" value={homeAgent?.tokenConfigured ? (homeAgentOnline ? 'Online' : 'Offline') : 'Chua cau hinh token'} />
           <InfoRow label="Thiet bi" value={homeAgent?.agent?.hostname || homeAgent?.agent?.id || '--'} />
           <InfoRow label="Lan gap" value={homeAgent?.agent?.lastSeenAt ? new Date(homeAgent.agent.lastSeenAt).toLocaleString('vi-VN') : '--'} />
-          <InfoRow label="CPU/RAM" value={`${Number(agentMetrics.cpuPercent || 0).toFixed(1)}% · ${formatBytesCompact(agentMemory.total - agentMemory.available)} / ${formatBytesCompact(agentMemory.total)}`} />
-          <InfoRow label="Disk" value={`${formatBytesCompact(agentDisk.used)} / ${formatBytesCompact(agentDisk.total)}`} />
+          <MetricBar label="CPU box" value={agentCpuPercent} detail={`${agentCpuPercent.toFixed(1)}%`} />
+          <MetricBar label="RAM box" value={agentMemoryPercent} detail={`${agentMemoryPercent.toFixed(1)}% - ${formatBytesCompact(agentMemoryUsed)} / ${formatBytesCompact(agentMemoryTotal)}`} />
+          <MetricBar label="Disk box" value={agentDiskPercent} detail={`${agentDiskPercent.toFixed(1)}% - ${formatBytesCompact(agentDiskUsed)} / ${formatBytesCompact(agentDiskTotal)}`} />
           <InfoRow label="Nhiet do" value={agentMetrics.temperatureC ? `${agentMetrics.temperatureC}°C` : '--'} />
           <InfoRow label="Network" value={agentNetwork ? `${agentNetwork[0]} · ${agentNetwork[1].speedMbps || '--'}Mbps · ${agentNetwork[1].operstate}` : '--'} />
           <InfoRow label="EPG Home" value={homeAgent?.epg?.updatedAt ? `${new Date(homeAgent.epg.updatedAt).toLocaleString('vi-VN')} · ${formatBytesCompact(homeAgent.epg.bytes)}` : '--'} />

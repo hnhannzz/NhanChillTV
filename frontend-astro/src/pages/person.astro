@@ -1,0 +1,13 @@
+---
+import Layout from '../layouts/Layout.astro';
+import MainLayout from '../components/MainLayout.jsx';
+import PersonPageContainer from '../components/PersonPageContainer.jsx';
+---
+
+<Layout title="Diễn viên & Đạo diễn - NhanChillTV">
+  <MainLayout client:load>
+    <div className="mt-4 px-4 pb-8 pt-4 md:mt-8 md:px-8 md:pt-6">
+      <PersonPageContainer client:only="react" />
+    </div>
+  </MainLayout>
+</Layout>

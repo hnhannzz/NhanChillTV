@@ -24,7 +24,7 @@ const WORLD_CUP_SLIDE = {
   id: 'worldcup-2026-hero',
   isWorldCup: true,
   name: 'World Cup 2026',
-  original_name: 'Lịch thi đấu, livescore và phòng chat theo từng trận',
+  original_name: 'FIFA World Cup 2026',
   description: 'Theo dõi lịch thi đấu theo giờ Việt Nam GMT+7, tỉ số realtime, bảng xếp hạng và chọn luồng bình luận World Cup ngay trên NhanChillTV.',
   poster_url: 'https://i.ibb.co/wr7DkswW/ezgif-8545a79bc51d4b23.webp',
 };
@@ -48,23 +48,22 @@ export default function HeroBanner() {
             ...event,
             isEvent: true,
             name: event.title,
-            original_name: event.status === 'live' ? 'Đang trực tiếp' : 'Sự kiện sắp diễn ra',
+            original_name: event.status === 'live' ? 'Live event' : 'Upcoming event',
             poster_url: event.thumbnailUrl || event.thumbnailBase64 || '/poster.jpg',
           }))
         : [];
-      
+
       const rawMovies = moviesResult.status === 'fulfilled' ? getOPhimItems(moviesResult.value).slice(0, 6) : [];
-      
-      // Fetch detailed movie info in parallel for true description
       const movies = await Promise.all(
-        rawMovies.map(async (movie) => {
+        rawMovies.map(async movie => {
           try {
             const detailData = await fetchOPhimJson(`/phim/${movie.slug}`);
             const detailItem = detailData.movie || detailData.item || detailData.data?.item;
             if (detailItem) {
               return {
                 ...movie,
-                description: detailItem.content || detailItem.description || ''
+                original_name: detailItem.origin_name || detailItem.original_name || movie.origin_name || movie.original_name || '',
+                description: detailItem.content || detailItem.description || '',
               };
             }
           } catch (err) {
@@ -80,18 +79,18 @@ export default function HeroBanner() {
 
   useEffect(() => {
     if (slides.length < 2) return undefined;
-    const DURATION = 8000;
-    const INTERVAL = 50;
+    const duration = 8000;
+    const interval = 50;
     let elapsed = 0;
     const timer = setInterval(() => {
-      elapsed += INTERVAL;
-      setProgress(elapsed / DURATION);
-      if (elapsed >= DURATION) {
+      elapsed += interval;
+      setProgress(elapsed / duration);
+      if (elapsed >= duration) {
         setCurrentIndex(index => (index + 1) % slides.length);
         elapsed = 0;
         setProgress(0);
       }
-    }, INTERVAL);
+    }, interval);
     return () => clearInterval(timer);
   }, [slides, currentIndex]);
 
@@ -100,6 +99,8 @@ export default function HeroBanner() {
 
   const currentSlide = slides[currentIndex] || slides[0];
   const description = String(currentSlide.description || 'Khám phá nội dung đang được nhiều khán giả quan tâm trên NhanChillTV.').replace(/<[^>]+>/g, ' ');
+  const originalTitle = String(currentSlide.origin_name || currentSlide.original_name || '').trim();
+  const shouldShowOriginalTitle = originalTitle && originalTitle.toLowerCase() !== String(currentSlide.name || '').trim().toLowerCase();
   const watchUrl = currentSlide.isWorldCup
     ? '/worldcup/'
     : currentSlide.isEvent
@@ -116,20 +117,19 @@ export default function HeroBanner() {
   };
 
   return (
-    <motion.section 
-      onPanEnd={(e, info) => {
+    <motion.section
+      onPanEnd={(event, info) => {
         if (info.offset.x < -80) {
-          setCurrentIndex((prev) => (prev + 1) % slides.length);
+          setCurrentIndex(prev => (prev + 1) % slides.length);
           setProgress(0);
         } else if (info.offset.x > 80) {
-          setCurrentIndex((prev) => (prev - 1 + slides.length) % slides.length);
+          setCurrentIndex(prev => (prev - 1 + slides.length) % slides.length);
           setProgress(0);
         }
       }}
       className="group relative h-[60vh] w-full select-none overflow-hidden bg-black md:h-[80vh]"
       style={{ touchAction: 'pan-y' }}
     >
-      {/* Background image with Ken Burns effect */}
       <AnimatePresence mode="wait">
         <motion.div
           key={currentSlide.id || currentSlide.slug || currentIndex}
@@ -140,14 +140,13 @@ export default function HeroBanner() {
           className="absolute inset-0"
           style={{ willChange: 'transform, opacity' }}
         >
-          <img src={imageUrl} alt={currentSlide.name} className="h-full w-full object-cover opacity-65 pointer-events-none" />
-          <div className="absolute inset-0 bg-gradient-to-r from-black via-black/45 to-transparent pointer-events-none" />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-transparent to-transparent pointer-events-none" />
+          <img src={imageUrl} alt={currentSlide.name} className="pointer-events-none h-full w-full object-cover opacity-65" />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black via-black/45 to-transparent" />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#050505] via-transparent to-transparent" />
         </motion.div>
       </AnimatePresence>
 
-      {/* Content with staggered animation */}
-      <div className="absolute inset-0 z-20 flex w-full flex-col justify-end px-4 pb-16 md:w-2/3 md:px-12 md:pb-28 pointer-events-none">
+      <div className="pointer-events-none absolute inset-0 z-20 flex w-full flex-col justify-end px-4 pb-16 md:w-2/3 md:px-12 md:pb-28">
         <AnimatePresence mode="wait">
           <motion.div
             key={`content-${currentSlide.id || currentSlide.slug || currentIndex}`}
@@ -159,29 +158,37 @@ export default function HeroBanner() {
               {currentSlide.isWorldCup ? 'WORLD CUP 2026' : currentSlide.isEvent ? (currentSlide.status === 'live' ? 'SỰ KIỆN TRỰC TIẾP' : 'SỰ KIỆN ĐÃ GHIM') : 'PHIM PHỔ BIẾN'}
             </motion.span>
             <motion.h1 variants={fadeSlideUp} className="line-clamp-2 text-3xl font-black leading-tight text-white md:text-6xl">{currentSlide.name}</motion.h1>
-            <motion.h2 variants={fadeIn} className="mt-2 text-sm font-bold text-white/60 md:text-xl">{currentSlide.original_name}</motion.h2>
+            {shouldShowOriginalTitle && (
+              <motion.h2 variants={fadeIn} className="mt-2 text-xs font-bold uppercase tracking-wide text-white/55 md:text-sm">
+                Tên gốc: <span className="normal-case tracking-normal text-white/70">{originalTitle}</span>
+              </motion.h2>
+            )}
             <motion.p variants={fadeIn} className="mb-6 mt-3 line-clamp-3 max-w-3xl text-xs text-white/80 md:text-base">{description}</motion.p>
-            <motion.div variants={fadeSlideUp} className="flex items-center gap-3 pointer-events-auto">
-              <a href={watchUrl} className="flex items-center gap-2 rounded-md bg-[#ED2C25] px-5 py-3 text-sm font-bold text-white transition-transform hover:scale-105 hover:bg-red-700">{currentSlide.isWorldCup ? <Trophy size={19} /> : <Play fill="currentColor" size={19} />} {currentSlide.isWorldCup ? 'Mở World Cup' : currentSlide.isEvent ? 'Xem sự kiện' : 'Xem ngay'}</a>
-              {currentSlide.isWorldCup
-                ? <a href="/worldcup/" className="flex items-center gap-2 rounded-md bg-white/20 px-5 py-3 text-sm font-bold text-white backdrop-blur-md transition-transform hover:scale-105 hover:bg-white/30"><Info size={19} /> Lịch & bảng đấu</a>
-                : currentSlide.isEvent
-                ? <a href="/events/" className="flex items-center gap-2 rounded-md bg-white/20 px-5 py-3 text-sm font-bold text-white backdrop-blur-md transition-transform hover:scale-105 hover:bg-white/30"><Info size={19} /> Sự kiện</a>
-                : <button type="button" onClick={openMovieDetails(movieDetailSlug)} className="flex items-center gap-2 rounded-md bg-white/20 px-5 py-3 text-sm font-bold text-white backdrop-blur-md transition-transform hover:scale-105 hover:bg-white/30"><Info size={19} /> Xem thêm</button>}
+            <motion.div variants={fadeSlideUp} className="pointer-events-auto flex items-center gap-3">
+              <a href={watchUrl} className="flex items-center gap-2 rounded-md bg-[#ED2C25] px-5 py-3 text-sm font-bold text-white transition-transform hover:scale-105 hover:bg-red-700">
+                {currentSlide.isWorldCup ? <Trophy size={19} /> : <Play fill="currentColor" size={19} />}
+                {currentSlide.isWorldCup ? 'Mở World Cup' : currentSlide.isEvent ? 'Xem sự kiện' : 'Xem ngay'}
+              </a>
+              {currentSlide.isWorldCup ? (
+                <a href="/worldcup/" className="flex items-center gap-2 rounded-md bg-white/20 px-5 py-3 text-sm font-bold text-white backdrop-blur-md transition-transform hover:scale-105 hover:bg-white/30"><Info size={19} /> Lịch & bảng đấu</a>
+              ) : currentSlide.isEvent ? (
+                <a href="/events/" className="flex items-center gap-2 rounded-md bg-white/20 px-5 py-3 text-sm font-bold text-white backdrop-blur-md transition-transform hover:scale-105 hover:bg-white/30"><Info size={19} /> Sự kiện</a>
+              ) : (
+                <button type="button" onClick={openMovieDetails(movieDetailSlug)} className="flex items-center gap-2 rounded-md bg-white/20 px-5 py-3 text-sm font-bold text-white backdrop-blur-md transition-transform hover:scale-105 hover:bg-white/30"><Info size={19} /> Xem thêm</button>
+              )}
             </motion.div>
           </motion.div>
         </AnimatePresence>
       </div>
 
-      {/* Dot indicators with progress bar */}
-      <div className="absolute bottom-7 right-5 z-20 flex items-center gap-2 md:right-12 pointer-events-auto">
+      <div className="pointer-events-auto absolute bottom-7 right-5 z-20 flex items-center gap-2 md:right-12">
         {slides.map((slide, index) => (
           <button
             key={slide.id || slide.slug || index}
             onClick={() => { setCurrentIndex(index); setProgress(0); }}
             className="relative h-1.5 overflow-hidden rounded-full bg-white/20 transition-all duration-300"
             style={{ width: index === currentIndex ? 32 : 16 }}
-            title={`${slide.isEvent ? 'Sự kiện' : 'Phim'} ${index + 1}`}
+            title={`${slide.isEvent ? 'Sự kiện' : slide.isWorldCup ? 'World Cup' : 'Phim'} ${index + 1}`}
           >
             {index === currentIndex && (
               <span

@@ -7,6 +7,7 @@ const { createWorldCupCacheService } = require('../services/worldcup/cacheServic
 const {
   normalizeWorldCupData,
   byKickoffAsc,
+  getDateKey,
 } = require('../services/worldcup/matchNormalizer');
 const { getWorldCupStreams } = require('../services/worldcup/streamResolver');
 
@@ -33,6 +34,10 @@ const cacheService = createWorldCupCacheService({
 });
 
 let refreshAllPromise = null;
+
+function addDays(date, days) {
+  return new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
+}
 
 function normalize(raw) {
   return normalizeWorldCupData(raw, {
@@ -75,13 +80,18 @@ router.get('/today', async (req, res) => {
     const normalized = normalize(await cacheService.getAllResources({ force: req.query.refresh === '1' }));
     const dateKey = req.query.date || normalized.todayDate;
     const matches = normalized.games.filter(game => game.vnDateKey === dateKey).sort(byKickoffAsc);
+    const tomorrowDate = addDays(new Date(`${dateKey}T12:00:00+07:00`), 1);
+    const tomorrowKey = getDateKey(tomorrowDate, normalized.timezone);
+    const tomorrowMatches = normalized.games.filter(game => game.vnDateKey === tomorrowKey).sort(byKickoffAsc);
     setWorldCupCacheHeaders(res, 15);
     res.json({
       success: true,
       timezone: normalized.timezone,
       date: dateKey,
+      tomorrowDate: tomorrowKey,
       updatedAt: normalized.updatedAt,
       matches,
+      tomorrowMatches,
       liveGames: normalized.liveGames,
       nextGames: normalized.nextGames,
     });

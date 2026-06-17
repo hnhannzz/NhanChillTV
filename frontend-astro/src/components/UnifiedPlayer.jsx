@@ -38,7 +38,7 @@ export default function UnifiedPlayer({
   const [duration, setDuration] = useState(0);
   const [showControls, setShowControls] = useState(true);
   const controlsTimeoutRef = useRef(null);
-  const [showContinuePrompt, setShowContinuePrompt] = useState(initialTime > 0);
+  const [showContinuePrompt, setShowContinuePrompt] = useState(initialTime > 5 && isLive !== true);
 
   // Seeking optimizations
   const [isSeeking, setIsSeeking] = useState(false);
@@ -58,6 +58,7 @@ export default function UnifiedPlayer({
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
 
   const isLiveStream = isLive ?? (duration === Infinity || !isFinite(duration) || subTitle === 'Live TV');
+  const shouldGateResume = initialTime > 5 && isLive !== true;
 
   // Mobile/touch detection
   const [isMobile, setIsMobile] = useState(false);
@@ -92,6 +93,11 @@ export default function UnifiedPlayer({
       setIsPipSupported(document.pictureInPictureEnabled || false);
     }
   }, []);
+
+  useEffect(() => {
+    setCurrentTime(shouldGateResume ? 0 : initialTime);
+    setShowContinuePrompt(shouldGateResume);
+  }, [url, initialTime, shouldGateResume]);
 
   useEffect(() => {
     if (!videoRef.current || !videoContainerRef.current) return;
@@ -180,7 +186,7 @@ export default function UnifiedPlayer({
       let seeked = false;
       doSeek = () => {
         if (seeked) return;
-        if (initialTime > 0 && videoRef.current && videoRef.current.duration > 0) {
+        if (!shouldGateResume && initialTime > 0 && videoRef.current && videoRef.current.duration > 0) {
           videoRef.current.currentTime = initialTime;
           seeked = true;
           console.log('[Player] Native HLS seeked to:', initialTime);
@@ -191,7 +197,7 @@ export default function UnifiedPlayer({
       videoRef.current.addEventListener('loadeddata', doSeek);
       videoRef.current.addEventListener('canplay', doSeek);
 
-      if (autoplay) {
+      if (autoplay && !shouldGateResume) {
         videoRef.current.play().catch(err => {
           console.warn('Native HLS autoplay unmuted prevented, trying muted...', err);
           if (videoRef.current) {
@@ -249,8 +255,8 @@ export default function UnifiedPlayer({
 
       const loadStream = async () => {
         try {
-          await shakaPlayer.load(url, initialTime);
-          if (autoplay) {
+          await shakaPlayer.load(url, shouldGateResume ? 0 : initialTime);
+          if (autoplay && !shouldGateResume) {
             videoRef.current.play().catch(() => {
               console.warn('Shaka autoplay unmuted prevented, trying muted...');
               if (videoRef.current) {
@@ -356,7 +362,7 @@ export default function UnifiedPlayer({
         video.removeEventListener('canplay', doSeek);
       }
     };
-  }, [url, isMpd, streamType]);
+  }, [url, isMpd, streamType, initialTime, autoplay, shouldGateResume]);
 
   // Handle Fullscreen state change events, including webkit prefix
   useEffect(() => {
@@ -536,7 +542,11 @@ export default function UnifiedPlayer({
 
   const continueWatching = () => {
     setShowContinuePrompt(false);
-    videoRef.current?.play().catch(() => {});
+    if (videoRef.current) {
+      videoRef.current.currentTime = initialTime;
+      setCurrentTime(initialTime);
+      videoRef.current.play().catch(() => {});
+    }
   };
 
   const restartWatching = () => {

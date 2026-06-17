@@ -22,6 +22,26 @@ export default function MovieModal({ slug, onClose }) {
 
   if (!slug) return null;
 
+  const renderPeopleLinks = (people, type) => {
+    const list = Array.isArray(people)
+      ? people
+      : String(people || '').split(',').map(item => item.trim()).filter(Boolean);
+    if (!list.length) return 'Đang cập nhật';
+    return (
+      <span className="inline-flex flex-wrap gap-1.5 align-middle">
+        {list.map(person => (
+          <a
+            key={`${type}-${person}`}
+            href={`/person/?type=${type}&name=${encodeURIComponent(person)}`}
+            className="rounded-md bg-white/8 px-2 py-0.5 text-xs font-semibold text-white hover:bg-[#ED2C25]"
+          >
+            {person}
+          </a>
+        ))}
+      </span>
+    );
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8 bg-black/80 backdrop-blur-sm">
       <div className="bg-[#121212] rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto hide-scrollbar border border-white/10 shadow-2xl relative animate-in fade-in zoom-in duration-300">
@@ -67,8 +87,8 @@ export default function MovieModal({ slug, onClose }) {
               </div>
 
               <div className="text-sm text-white/80 space-y-2">
-                <p><strong>Đạo diễn:</strong> {movie.director ? movie.director.join(', ') : 'Đang cập nhật'}</p>
-                <p><strong>Diễn viên:</strong> {movie.actor ? movie.actor.join(', ') : (movie.casts || 'Đang cập nhật')}</p>
+                <p><strong>Đạo diễn:</strong> {renderPeopleLinks(movie.director, 'director')}</p>
+                <p><strong>Diễn viên:</strong> {renderPeopleLinks(movie.actor || movie.casts, 'actor')}</p>
                 <p><strong>Điểm:</strong> {movie.tmdb?.vote_average ? `TMDB ${movie.tmdb.vote_average}` : (movie.imdb?.vote_average ? `IMDB ${movie.imdb.vote_average}` : 'Chưa có')}</p>
                 <p><strong>Thể loại:</strong> {movie.category && movie.category[1] ? movie.category[1].list.map(c => c.name).join(', ') : 'Đang cập nhật'}</p>
                 <p><strong>Quốc gia:</strong> {movie.category && movie.category[4] ? movie.category[4].list.map(c => c.name).join(', ') : 'Đang cập nhật'}</p>

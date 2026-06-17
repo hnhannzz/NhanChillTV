@@ -15,6 +15,18 @@ function formatUpdatedAt(value) {
   }).format(date);
 }
 
+function formatDateKey(dateKey) {
+  if (!dateKey) return '';
+  const date = new Date(`${dateKey}T12:00:00+07:00`);
+  if (Number.isNaN(date.getTime())) return dateKey;
+  return new Intl.DateTimeFormat('vi-VN', {
+    weekday: 'long',
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: 'Asia/Ho_Chi_Minh',
+  }).format(date);
+}
+
 export default function WorldCupTodayWidget() {
   const [payload, setPayload] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -55,7 +67,14 @@ export default function WorldCupTodayWidget() {
   }
 
   const todayMatches = payload?.matches || [];
-  const fallbackMatches = todayMatches.length ? [] : (payload?.nextGames || []).slice(0, 3);
+  const tomorrowMatches = payload?.tomorrowMatches || [];
+  const allTodayFinished = todayMatches.length > 0 && todayMatches.every(match => match.isFinished);
+  const showTomorrow = allTodayFinished || (todayMatches.length === 0 && tomorrowMatches.length > 0);
+  const visibleMatches = showTomorrow ? tomorrowMatches : todayMatches;
+  const fallbackMatches = visibleMatches.length ? [] : (payload?.nextGames || []).slice(0, 3);
+  const heading = showTomorrow ? 'Trận đấu ngày mai' : 'Trận đấu hôm nay';
+  const dateText = showTomorrow ? payload?.tomorrowDate : payload?.date;
+  const emptyText = showTomorrow ? 'Chưa có trận ngày mai' : 'Không có trận trong hôm nay';
 
   return (
     <div className="space-y-4">
@@ -65,8 +84,10 @@ export default function WorldCupTodayWidget() {
             <Trophy size={14} />
             World Cup 2026
           </div>
-          <h2 className="mt-2 text-xl font-black text-white md:text-3xl">Trận đấu hôm nay</h2>
-          <p className="mt-1 text-sm text-white/50">Theo ngày Việt Nam GMT+7: {payload?.date} · Dữ liệu cập nhật lần cuối: {formatUpdatedAt(payload?.updatedAt)}</p>
+          <h2 className="mt-2 text-xl font-black text-white md:text-3xl">{heading}</h2>
+          <p className="mt-1 text-sm text-white/50">
+            Theo ngày Việt Nam GMT+7: {formatDateKey(dateText) || dateText} · Dữ liệu cập nhật lần cuối: {formatUpdatedAt(payload?.updatedAt)}
+          </p>
         </div>
         <a href="/worldcup/" className="inline-flex items-center gap-2 self-start rounded-md bg-[#ED2C25] px-4 py-2 text-sm font-extrabold text-white transition-colors hover:bg-red-700 md:self-auto">
           Lịch đầy đủ
@@ -74,15 +95,15 @@ export default function WorldCupTodayWidget() {
         </a>
       </div>
 
-      {todayMatches.length ? (
+      {visibleMatches.length ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {todayMatches.slice(0, 6).map(match => <WorldCupMatchCard key={match.id} match={match} compact />)}
+          {visibleMatches.slice(0, 6).map(match => <WorldCupMatchCard key={match.id} match={match} compact />)}
         </div>
       ) : (
         <div className="rounded-lg border border-white/10 bg-[#111111] p-5">
           <div className="flex items-center gap-2 text-sm font-extrabold text-white">
             <CalendarDays size={16} />
-            Không có trận trong hôm nay
+            {emptyText}
           </div>
           {fallbackMatches.length > 0 && (
             <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
