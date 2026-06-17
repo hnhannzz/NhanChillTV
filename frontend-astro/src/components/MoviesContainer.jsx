@@ -1,30 +1,36 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Play, Search } from 'lucide-react';
-import { fetchOPhimJson, getOPhimItems, getOPhimPagination, isOPhimSuccess, getOPhimImageUrl } from '../lib/OPhimApi';
+import { fetchKKPhimJson, getKKPhimImageUrl, getKKPhimItems, getKKPhimPagination, isKKPhimSuccess } from '../lib/KKPhimApi';
 
-const GENRES = [
-  ['Hành Động', 'hanh-dong'], ['Phiêu Lưu', 'phieu-luu'], ['Hoạt Hình', 'hoat-hinh'], ['Hài', 'hai'],
+const DEFAULT_GENRES = [
+  ['Hành Động', 'hanh-dong'], ['Phiêu Lưu', 'phieu-luu'], ['Hoạt Hình', 'hoat-hinh'], ['Hài Hước', 'hai-huoc'],
   ['Hình Sự', 'hinh-su'], ['Tài Liệu', 'tai-lieu'], ['Chính Kịch', 'chinh-kich'], ['Gia Đình', 'gia-dinh'],
-  ['Giả Tưởng', 'gia-tuong'], ['Lịch Sử', 'lich-su'], ['Kinh Dị', 'kinh-di'], ['Nhạc', 'nhac'], ['Bí Ẩn', 'bi-an'],
-  ['Lãng Mạn', 'lang-man'], ['Khoa Học Viễn Tưởng', 'khoa-hoc-vien-tuong'], ['Gây Cấn', 'gay-can'],
-  ['Chiến Tranh', 'chien-tranh'], ['Tâm Lý', 'tam-ly'], ['Tình Cảm', 'tinh-cam'], ['Cổ Trang', 'co-trang'], ['Miền Tây', 'mien-tay'],
+  ['Viễn Tưởng', 'vien-tuong'], ['Lịch Sử', 'lich-su'], ['Kinh Dị', 'kinh-di'], ['Bí Ẩn', 'bi-an'],
+  ['Tình Cảm', 'tinh-cam'], ['Tâm Lý', 'tam-ly'], ['Cổ Trang', 'co-trang'],
 ];
 
-const COUNTRIES = [
-  ['Âu Mỹ', 'au-my'], ['Anh', 'anh'], ['Trung Quốc', 'trung-quoc'], ['Indonesia', 'indonesia'], ['Việt Nam', 'viet-nam'],
-  ['Pháp', 'phap'], ['Hồng Kông', 'hong-kong'], ['Hàn Quốc', 'han-quoc'], ['Nhật Bản', 'nhat-ban'],
-  ['Thái Lan', 'thai-lan'], ['Đài Loan', 'dai-loan'], ['Nga', 'nga'], ['Hà Lan', 'ha-lan'],
-  ['Philippines', 'philippines'], ['Ấn Độ', 'an-do'], ['Quốc gia khác', 'quoc-gia-khac'],
+const DEFAULT_COUNTRIES = [
+  ['Âu Mỹ', 'au-my'], ['Anh', 'anh'], ['Trung Quốc', 'trung-quoc'], ['Việt Nam', 'viet-nam'],
+  ['Hàn Quốc', 'han-quoc'], ['Nhật Bản', 'nhat-ban'], ['Thái Lan', 'thai-lan'], ['Đài Loan', 'dai-loan'],
+  ['Ấn Độ', 'an-do'], ['Quốc gia khác', 'quoc-gia-khac'],
 ];
 
-const YEARS = Array.from({ length: 23 }, (_, index) => String(2026 - index));
-const QUALITIES = ['HD', 'FHD', '4K', 'Vietsub', 'Thuyet minh', 'Long tieng'];
+const YEARS = Array.from({ length: 57 }, (_, index) => String(2026 - index));
+const QUALITIES = ['HD', 'FHD', '4K', 'Vietsub', 'Thuyết minh', 'Lồng tiếng'];
 const STATUSES = [
-  ['Hoan tat', 'completed'],
-  ['Dang ra', 'ongoing'],
-  ['Phim bo', 'series'],
-  ['Phim le', 'single'],
+  ['Hoàn tất', 'completed'],
+  ['Đang ra', 'ongoing'],
+  ['Phim bộ', 'series'],
+  ['Phim lẻ', 'single'],
 ];
+
+function toOptions(data, fallback) {
+  const items = data?.categories || data?.countries || getKKPhimItems(data);
+  if (!Array.isArray(items) || !items.length) return fallback;
+  return items
+    .map(item => [item.name, item.slug])
+    .filter(([label, value]) => label && value);
+}
 
 export default function MoviesContainer() {
   const initialSearch = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('search') || '' : '';
@@ -41,6 +47,21 @@ export default function MoviesContainer() {
   const [quality, setQuality] = useState('');
   const [movieStatus, setMovieStatus] = useState('');
   const [favoritesMode, setFavoritesMode] = useState(false);
+  const [genres, setGenres] = useState(DEFAULT_GENRES);
+  const [countries, setCountries] = useState(DEFAULT_COUNTRIES);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.allSettled([
+      fetchKKPhimJson('/the-loai'),
+      fetchKKPhimJson('/quoc-gia'),
+    ]).then(([genreResult, countryResult]) => {
+      if (cancelled) return;
+      if (genreResult.status === 'fulfilled') setGenres(toOptions(genreResult.value, DEFAULT_GENRES));
+      if (countryResult.status === 'fulfilled') setCountries(toOptions(countryResult.value, DEFAULT_COUNTRIES));
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     if (favoritesMode) return undefined;
@@ -49,10 +70,10 @@ export default function MoviesContainer() {
       setLoading(true);
       try {
         const separator = endpoint.includes('?') ? '&' : '?';
-        const data = await fetchOPhimJson(`${endpoint}${separator}page=${page}`, { signal: controller.signal });
-        if (!isOPhimSuccess(data)) throw new Error('OPhim returned no data');
-        setMovies(getOPhimItems(data));
-        setPagination(getOPhimPagination(data));
+        const data = await fetchKKPhimJson(`${endpoint}${separator}page=${page}`, { signal: controller.signal });
+        if (!isKKPhimSuccess(data)) throw new Error('Movie API returned no data');
+        setMovies(getKKPhimItems(data));
+        setPagination(getKKPhimPagination(data));
       } catch (err) {
         if (err.name !== 'AbortError') {
           setMovies([]);
@@ -76,7 +97,9 @@ export default function MoviesContainer() {
   const submitSearch = () => {
     const query = search.trim();
     if (!query) return;
-    setGenre(''); setCountry(''); setYear('');
+    setGenre('');
+    setCountry('');
+    setYear('');
     selectEndpoint(`/films/search?keyword=${encodeURIComponent(query)}`, `Kết quả tìm kiếm: ${query}`);
   };
 
@@ -103,21 +126,27 @@ export default function MoviesContainer() {
   };
 
   const changeGenre = value => {
-    setGenre(value); setCountry(''); setYear('');
+    setGenre(value);
+    setCountry('');
+    setYear('');
     if (!value) return selectEndpoint('/films/phim-moi-cap-nhat', 'Phim mới cập nhật');
-    const label = GENRES.find(item => item[1] === value)?.[0] || value;
+    const label = genres.find(item => item[1] === value)?.[0] || value;
     selectEndpoint(`/films/the-loai/${value}`, `Thể loại: ${label}`);
   };
 
   const changeCountry = value => {
-    setCountry(value); setGenre(''); setYear('');
+    setCountry(value);
+    setGenre('');
+    setYear('');
     if (!value) return selectEndpoint('/films/phim-moi-cap-nhat', 'Phim mới cập nhật');
-    const label = COUNTRIES.find(item => item[1] === value)?.[0] || value;
+    const label = countries.find(item => item[1] === value)?.[0] || value;
     selectEndpoint(`/films/quoc-gia/${value}`, `Quốc gia: ${label}`);
   };
 
   const changeYear = value => {
-    setYear(value); setGenre(''); setCountry('');
+    setYear(value);
+    setGenre('');
+    setCountry('');
     if (!value) return selectEndpoint('/films/phim-moi-cap-nhat', 'Phim mới cập nhật');
     selectEndpoint(`/films/nam-phat-hanh/${value}`, `Năm phát hành ${value}`);
   };
@@ -129,7 +158,7 @@ export default function MoviesContainer() {
 
     const type = String(movie.type || movie.movie_type || '').toLowerCase();
     const episodeCurrent = String(movie.episode_current || movie.current_episode || '').toLowerCase();
-    const isCompleted = episodeCurrent.includes('hoan tat') || episodeCurrent.includes('hoàn tất') || episodeCurrent.includes('full');
+    const isCompleted = episodeCurrent.includes('hoàn tất') || episodeCurrent.includes('full');
     if (movieStatus === 'completed' && !isCompleted) return false;
     if (movieStatus === 'ongoing' && isCompleted) return false;
     if (movieStatus === 'series' && !(type.includes('series') || type.includes('phim-bo') || movie.episode_total)) return false;
@@ -151,12 +180,14 @@ export default function MoviesContainer() {
         <button onClick={() => { setGenre(''); setCountry(''); setYear(''); selectEndpoint('/films/phim-moi-cap-nhat', 'Phim mới cập nhật'); }} className="rounded-md bg-[#ED2C25] px-3 py-2 text-sm font-medium text-white">Mới cập nhật</button>
         <button onClick={() => selectEndpoint('/films/danh-sach/phim-bo', 'Phim bộ')} className="rounded-md bg-[#1A1A1A] px-3 py-2 text-sm text-white/75 hover:bg-white/10">Phim bộ</button>
         <button onClick={() => selectEndpoint('/films/danh-sach/phim-le', 'Phim lẻ')} className="rounded-md bg-[#1A1A1A] px-3 py-2 text-sm text-white/75 hover:bg-white/10">Phim lẻ</button>
+        <button onClick={() => selectEndpoint('/films/danh-sach/tv-shows', 'TV Shows')} className="rounded-md bg-[#1A1A1A] px-3 py-2 text-sm text-white/75 hover:bg-white/10">TV Shows</button>
+        <button onClick={() => selectEndpoint('/films/danh-sach/hoat-hinh', 'Hoạt hình')} className="rounded-md bg-[#1A1A1A] px-3 py-2 text-sm text-white/75 hover:bg-white/10">Hoạt hình</button>
         <button onClick={loadFavorites} className="rounded-md bg-[#1A1A1A] px-3 py-2 text-sm text-white/75 hover:bg-white/10">Yêu thích</button>
-        <select value={genre} onChange={event => changeGenre(event.target.value)} className="min-w-[150px] rounded-md border border-white/10 bg-[#171717] px-3 py-2 text-sm text-white outline-none focus:border-[#ED2C25]"><option value="">Thể loại</option>{GENRES.map(([label, value]) => <option key={value} value={value}>{label}</option>)}</select>
-        <select value={country} onChange={event => changeCountry(event.target.value)} className="min-w-[150px] rounded-md border border-white/10 bg-[#171717] px-3 py-2 text-sm text-white outline-none focus:border-[#ED2C25]"><option value="">Quốc gia</option>{COUNTRIES.map(([label, value]) => <option key={value} value={value}>{label}</option>)}</select>
+        <select value={genre} onChange={event => changeGenre(event.target.value)} className="min-w-[150px] rounded-md border border-white/10 bg-[#171717] px-3 py-2 text-sm text-white outline-none focus:border-[#ED2C25]"><option value="">Thể loại</option>{genres.map(([label, value]) => <option key={value} value={value}>{label}</option>)}</select>
+        <select value={country} onChange={event => changeCountry(event.target.value)} className="min-w-[150px] rounded-md border border-white/10 bg-[#171717] px-3 py-2 text-sm text-white outline-none focus:border-[#ED2C25]"><option value="">Quốc gia</option>{countries.map(([label, value]) => <option key={value} value={value}>{label}</option>)}</select>
         <select value={year} onChange={event => changeYear(event.target.value)} className="min-w-[105px] rounded-md border border-white/10 bg-[#171717] px-3 py-2 text-sm text-white outline-none focus:border-[#ED2C25]"><option value="">Năm</option>{YEARS.map(value => <option key={value} value={value}>{value}</option>)}</select>
-        <select value={quality} onChange={event => setQuality(event.target.value)} className="min-w-[120px] rounded-md border border-white/10 bg-[#171717] px-3 py-2 text-sm text-white outline-none focus:border-[#ED2C25]"><option value="">Chat luong</option>{QUALITIES.map(value => <option key={value} value={value}>{value}</option>)}</select>
-        <select value={movieStatus} onChange={event => setMovieStatus(event.target.value)} className="min-w-[130px] rounded-md border border-white/10 bg-[#171717] px-3 py-2 text-sm text-white outline-none focus:border-[#ED2C25]"><option value="">Trang thai</option>{STATUSES.map(([label, value]) => <option key={value} value={value}>{label}</option>)}</select>
+        <select value={quality} onChange={event => setQuality(event.target.value)} className="min-w-[120px] rounded-md border border-white/10 bg-[#171717] px-3 py-2 text-sm text-white outline-none focus:border-[#ED2C25]"><option value="">Chất lượng</option>{QUALITIES.map(value => <option key={value} value={value}>{value}</option>)}</select>
+        <select value={movieStatus} onChange={event => setMovieStatus(event.target.value)} className="min-w-[130px] rounded-md border border-white/10 bg-[#171717] px-3 py-2 text-sm text-white outline-none focus:border-[#ED2C25]"><option value="">Trạng thái</option>{STATUSES.map(([label, value]) => <option key={value} value={value}>{label}</option>)}</select>
       </div>
 
       {loading ? (
@@ -167,11 +198,11 @@ export default function MoviesContainer() {
         <>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
             {filteredMovies.map(movie => (
-              <a key={movie.slug || movie.id} href={`/movie-detail/?slug=${encodeURIComponent(movie.slug)}`} className="group relative aspect-[2/3] overflow-hidden rounded-lg border border-white/5 bg-[#1A1A1A] hover:border-[#ED2C25]/50">
-                <img src={getOPhimImageUrl(movie.thumb_url || movie.poster_url)} alt={movie.name} className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" onError={event => { event.currentTarget.src = '/poster.jpg'; }} />
+              <a key={movie.slug || movie.id || movie._id} href={`/movie-detail/?slug=${encodeURIComponent(movie.slug)}`} className="group relative aspect-[2/3] overflow-hidden rounded-lg border border-white/5 bg-[#1A1A1A] hover:border-[#ED2C25]/50">
+                <img src={getKKPhimImageUrl(movie.thumb_url || movie.poster_url)} alt={movie.name} className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" onError={event => { event.currentTarget.src = '/poster.jpg'; }} />
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-black/10 to-transparent" />
                 <span className="absolute right-2 top-2 rounded bg-[#ED2C25] px-2 py-1 text-[10px] font-bold text-white">{movie.quality || movie.episode_current || 'HD'}</span>
-                <div className="absolute bottom-0 left-0 right-0 p-3"><h3 className="line-clamp-1 text-sm font-bold text-white group-hover:text-[#ED2C25]">{movie.name}</h3><p className="truncate text-xs text-white/55">{movie.original_name || movie.year}</p></div>
+                <div className="absolute bottom-0 left-0 right-0 p-3"><h3 className="line-clamp-1 text-sm font-bold text-white group-hover:text-[#ED2C25]">{movie.name}</h3><p className="truncate text-xs text-white/55">{movie.origin_name || movie.original_name || movie.year}</p></div>
                 <span className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100"><span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#ED2C25]"><Play size={19} fill="currentColor" className="ml-0.5" /></span></span>
               </a>
             ))}

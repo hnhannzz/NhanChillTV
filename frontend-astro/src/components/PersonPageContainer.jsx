@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Camera, Clapperboard, Film, Search, UserRound } from 'lucide-react';
-import { fetchOPhimJson, getOPhimImageUrl, getOPhimItems } from '../lib/OPhimApi';
+import { fetchKKPhimJson, getKKPhimImageUrl, getKKPhimItems } from '../lib/KKPhimApi';
 
 function normalizeText(value) {
   return String(value || '')
@@ -38,7 +38,7 @@ export default function PersonPageContainer() {
     if (!personName.trim()) {
       setError('Thiếu tên diễn viên hoặc đạo diễn.');
       setLoading(false);
-      return;
+      return undefined;
     }
 
     let cancelled = false;
@@ -46,13 +46,13 @@ export default function PersonPageContainer() {
       setLoading(true);
       setError('');
       try {
-        const searchData = await fetchOPhimJson(`/films/search?keyword=${encodeURIComponent(personName)}&page=1`);
-        const searchItems = getOPhimItems(searchData).slice(0, 12);
+        const searchData = await fetchKKPhimJson(`/films/search?keyword=${encodeURIComponent(personName)}&page=1`);
+        const searchItems = getKKPhimItems(searchData).slice(0, 12);
         const details = await Promise.allSettled(
           searchItems
             .filter(item => item.slug)
             .map(async item => {
-              const detailData = await fetchOPhimJson(`/phim/${item.slug}`);
+              const detailData = await fetchKKPhimJson(`/phim/${item.slug}`);
               return getMovieDetail(detailData) || item;
             })
         );
@@ -71,7 +71,7 @@ export default function PersonPageContainer() {
         const directMatches = hydrated.filter(movie => movie.actorHit || movie.directorHit);
         if (!cancelled) setItems(directMatches.length ? directMatches : hydrated);
       } catch (err) {
-        if (!cancelled) setError('Không tải được dữ liệu từ OPhim lúc này.');
+        if (!cancelled) setError('Không tải được dữ liệu từ KKPhim lúc này.');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -109,11 +109,11 @@ export default function PersonPageContainer() {
         <div className="min-w-0 flex-1">
           <div className="mb-2 inline-flex items-center gap-2 rounded-md border border-[#ED2C25]/25 bg-[#ED2C25]/10 px-3 py-1 text-xs font-extrabold uppercase tracking-wide text-[#ED2C25]">
             <UserRound size={14} />
-            OPhim Person
+            KKPhim Person
           </div>
           <h1 className="break-words text-3xl font-black text-white md:text-5xl">{personName}</h1>
           <p className="mt-2 text-sm text-white/50">
-            Tìm thấy {actorMovies.length} phim đã đóng và {directorMovies.length} phim đạo diễn từ metadata OPhim.
+            Tìm thấy {actorMovies.length} phim đã đóng và {directorMovies.length} phim đạo diễn từ metadata KKPhim.
           </p>
         </div>
         <a href={`/movies/?search=${encodeURIComponent(personName)}`} className="inline-flex items-center justify-center gap-2 rounded-md bg-white/10 px-4 py-2 text-sm font-bold text-white hover:bg-white/15">
@@ -145,20 +145,20 @@ export default function PersonPageContainer() {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
             {images.map(movie => (
               <a key={movie.slug || movie._id || movie.name} href={`/movie-detail/?slug=${encodeURIComponent(movie.slug)}`} className="group overflow-hidden rounded-lg border border-white/8 bg-[#151515]">
-                <img src={getOPhimImageUrl(movie.thumb_url || movie.poster_url)} alt={movie.name} className="aspect-[2/3] w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                <img src={getKKPhimImageUrl(movie.thumb_url || movie.poster_url)} alt={movie.name} className="aspect-[2/3] w-full object-cover transition-transform duration-500 group-hover:scale-105" />
                 <div className="p-2 text-xs font-semibold text-white/75 line-clamp-2">{movie.name}</div>
               </a>
             ))}
           </div>
         ) : (
-          <EmptyPersonState text="Chưa có hình ảnh phù hợp từ OPhim." />
+          <EmptyPersonState text="Chưa có hình ảnh phù hợp từ KKPhim." />
         )
       ) : relatedMovies.length ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
           {relatedMovies.map(movie => (
             <a key={movie.slug || movie._id || movie.name} href={`/movie-detail/?slug=${encodeURIComponent(movie.slug)}`} className="group min-w-0">
               <div className="relative aspect-[2/3] overflow-hidden rounded-lg border border-white/8 bg-[#151515]">
-                <img src={getOPhimImageUrl(movie.thumb_url || movie.poster_url)} alt={movie.name} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" onError={event => { event.currentTarget.src = '/poster.jpg'; }} />
+                <img src={getKKPhimImageUrl(movie.thumb_url || movie.poster_url)} alt={movie.name} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" onError={event => { event.currentTarget.src = '/poster.jpg'; }} />
                 <span className="absolute right-1.5 top-1.5 rounded bg-[#ED2C25] px-1.5 py-0.5 text-[9px] font-bold text-white">{movie.quality || movie.episode_current || 'HD'}</span>
               </div>
               <div className="mt-2 line-clamp-2 text-sm font-bold text-white group-hover:text-[#ED2C25]">{movie.name}</div>
@@ -167,7 +167,7 @@ export default function PersonPageContainer() {
           ))}
         </div>
       ) : (
-        <EmptyPersonState text="Chưa tìm thấy phim phù hợp trong metadata OPhim." />
+        <EmptyPersonState text="Chưa tìm thấy phim phù hợp trong metadata KKPhim." />
       )}
     </div>
   );

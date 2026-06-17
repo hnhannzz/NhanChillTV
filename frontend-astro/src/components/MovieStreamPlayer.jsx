@@ -4,7 +4,7 @@ const UnifiedPlayer = lazy(() => import('./UnifiedPlayer.jsx'));
 const LegacyPlayer = lazy(() => import('./LegacyPlayer.jsx'));
 
 export default function MovieStreamPlayer({ episode, movie, movieSlug, onNextEpisode, onCinemaMode }) {
-  // Ưu tiên m3u8 từ OPhim, nếu không có fallback sang embed
+  // Ưu tiên m3u8 từ KKPhim, nếu không có fallback sang embed.
   const streamUrl = episode?.link_m3u8 || episode?.link_hls || '';
   const embedUrl = episode?.link_embed || episode?.embed || '';
   
@@ -50,9 +50,14 @@ export default function MovieStreamPlayer({ episode, movie, movieSlug, onNextEpi
         existing = [];
       }
       const nextItem = {
+        provider: movie?.provider || 'kkphim',
         slug: resolvedMovieSlug,
         name: movie?.name || 'Phim',
+        origin_name: movie?.origin_name || movie?.original_name || '',
         thumb_url: movie?.thumb_url || movie?.poster_url || '',
+        poster_url: movie?.poster_url || '',
+        tmdbId: movie?.tmdb?.id || null,
+        tmdbType: movie?.tmdb?.type || null,
         episodeName: episode?.name || '',
         episodeKey: resolvedEpisodeKey,
         currentTime,

@@ -16,8 +16,17 @@ export default function HomeFavoriteUpdates() {
         const data = await response.json();
         const favorites = data.success ? (data.data.movies || []).slice(0, 8) : [];
         const details = await Promise.allSettled(favorites.map(async favorite => {
-          const detail = await fetchOPhimJson(`/phim/${favorite.slug}`);
-          const movie = detail.movie || detail.item || detail.data?.item;
+          let detail = null;
+          try {
+            detail = await fetchOPhimJson(`/phim/${favorite.slug}`);
+          } catch {
+            if (favorite.name) {
+              const search = await fetchOPhimJson(`/films/search?keyword=${encodeURIComponent(favorite.name)}&page=1&limit=1`);
+              const match = search.items?.[0] || search.data?.items?.[0] || null;
+              if (match?.slug) detail = await fetchOPhimJson(`/phim/${match.slug}`);
+            }
+          }
+          const movie = detail?.movie || detail?.item || detail?.data?.item;
           if (!movie) return null;
           const currentEpisode = movie.episode_current || movie.current_episode || '';
           const previousEpisode = favorite.episode_current || favorite.current_episode || '';
@@ -67,7 +76,7 @@ export default function HomeFavoriteUpdates() {
               <span className="absolute bottom-2 right-2 rounded bg-black/65 px-2 py-1 text-[10px] font-bold text-white">{movie.currentEpisode || movie.episode_current || 'HD'}</span>
             </div>
             <h3 className="truncate text-sm font-bold text-white/90 group-hover:text-[#ED2C25]">{movie.name}</h3>
-            <p className="mt-1 truncate text-xs text-white/45">{movie.original_name || movie.year}</p>
+            <p className="mt-1 truncate text-xs text-white/45">{movie.origin_name || movie.original_name || movie.year}</p>
           </a>
         ))}
       </div>

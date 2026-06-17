@@ -199,7 +199,7 @@ export default function AdminDashboard() {
             const response = await fetch(`${API_BASE}/worldcup/refresh`, { method: 'POST' });
             const data = await response.json();
             if (!response.ok || !data.success) throw new Error(data.error || `HTTP ${response.status}`);
-          }, 'Đã refresh cache World Cup.')} onPrewarmMovieCache={() => runAction(() => adminRequest('/admin/movie-cache/prewarm', { method: 'POST' }), 'Đã prewarm cache OPhim.')} onClearMovieCache={() => runAction(() => adminRequest('/admin/movie-cache/clear', { method: 'POST' }), 'Đã xóa cache OPhim.')} onRestart={() => {
+          }, 'Đã refresh cache World Cup.')} onPrewarmMovieCache={() => runAction(() => adminRequest('/admin/movie-cache/prewarm', { method: 'POST' }), 'Đã prewarm cache KKPhim.')} onClearMovieCache={() => runAction(() => adminRequest('/admin/movie-cache/clear', { method: 'POST' }), 'Đã xóa cache KKPhim.')} onRestart={() => {
             if (window.confirm('Khởi động lại dịch vụ backend và reload Nginx?')) runAction(() => adminRequest('/admin/system/restart', { method: 'POST' }), 'Đã gửi lệnh khởi động lại.');
           }} />}
           {activeTab === 'events' && <EventsTab events={events} onAdd={() => setEventModal({ mode: 'create', event: null })} onEdit={event => setEventModal({ mode: 'edit', event })} onDelete={event => {
@@ -252,7 +252,7 @@ function DashboardTab({ health, systemOverview, homeAgent, movieCache, status, s
   const cards = [
     ['Kênh IPTV', status?.channelsCount ?? 0, ListVideo], ['Nguồn đang bật', sources.filter(source => source.active).length, Server],
     ['Người xem', viewers, Eye], ['FFmpeg', ffmpegProcesses, Activity],
-    ['Home Agent', homeAgentOnline ? 'Online' : 'Offline', UploadCloud], ['OPhim cache', movieCacheEntries, Server],
+    ['Home Agent', homeAgentOnline ? 'Online' : 'Offline', UploadCloud], ['KKPhim cache', movieCacheEntries, Server],
   ];
   return (
     <section>
@@ -281,7 +281,8 @@ function DashboardTab({ health, systemOverview, homeAgent, movieCache, status, s
           <InfoRow label="Kenh loi" value={homeAgent?.channelHealth ? `${homeAgent.channelHealth.failed || 0}/${homeAgent.channelHealth.total || 0}` : '--'} />
           <InfoRow label="Backup" value={homeAgent?.backup?.lastPulledAt ? `${new Date(homeAgent.backup.lastPulledAt).toLocaleString('vi-VN')} · ${formatBytesCompact(homeAgent.backup.bytes)}` : '--'} />
         </Panel>
-        <Panel title="OPhim cache">
+        <Panel title="KKPhim cache">
+          <InfoRow label="Nguon phim" value={movieCache?.provider || movieCache?.stats?.provider || 'kkphim'} />
           <InfoRow label="Entry" value={movieCache?.entries ?? 0} />
           <InfoRow label="Hit / Miss" value={`${movieCache?.stats?.hits || 0} / ${movieCache?.stats?.misses || 0}`} />
           <InfoRow label="Stale / Error" value={`${movieCache?.stats?.stale || 0} / ${movieCache?.stats?.errors || 0}`} />
@@ -420,7 +421,7 @@ function SystemTab({ settings, setSettings, busy, onSave }) {
           <option value="shaka">Unified Player (Shaka Player - Mặc định)</option>
           <option value="legacy">Legacy Player (Video.js - Dự phòng lỗi Shaka)</option>
         </select>
-        <p className="text-xs text-white/50 mt-2">Chọn Legacy Player nếu nhiều phim OPhim hoặc kênh TV báo lỗi Shaka 6012.</p>
+        <p className="text-xs text-white/50 mt-2">Chọn Legacy Player nếu nhiều phim KKPhim hoặc kênh TV báo lỗi Shaka 6012.</p>
       </Field>
     </div>
   </section>;

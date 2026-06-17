@@ -134,13 +134,18 @@ export default function MovieDetailContainer() {
           type: 'movies',
           itemId: slug,
           itemData: {
+            provider: movie.provider || 'kkphim',
             slug: movie.slug,
             name: movie.name,
+            origin_name: movie.origin_name || movie.original_name || '',
             thumb_url: movie.thumb_url,
+            poster_url: movie.poster_url,
             quality: movie.quality,
             year: movie.year,
             episode_current: movie.episode_current || movie.current_episode || '',
             episode_total: movie.episode_total || '',
+            tmdbId: movie.tmdb?.id || null,
+            tmdbType: movie.tmdb?.type || null,
             modified: movie.modified || null
           }
         })
