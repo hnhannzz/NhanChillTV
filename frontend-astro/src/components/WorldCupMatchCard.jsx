@@ -19,12 +19,12 @@ function streamHref(match) {
 
 function TeamBlock({ name, flag, align = 'left' }) {
   return (
-    <div className={`flex min-w-0 flex-1 items-center gap-3 ${align === 'right' ? 'justify-end text-right' : ''}`}>
+    <div className={`flex min-w-0 flex-1 items-center gap-2 sm:gap-3 ${align === 'right' ? 'justify-end text-right' : ''}`}>
       {align === 'left' && (
         flag ? <img src={flag} alt={name} loading="lazy" className="h-8 w-11 shrink-0 rounded object-cover ring-1 ring-white/10" /> : <Shield size={28} className="shrink-0 text-white/20" />
       )}
       <div className="min-w-0">
-        <div className="truncate text-sm font-extrabold text-white md:text-base">{name}</div>
+        <div className="line-clamp-2 break-words text-xs font-extrabold leading-tight text-white sm:text-sm md:text-base">{name}</div>
       </div>
       {align === 'right' && (
         flag ? <img src={flag} alt={name} loading="lazy" className="h-8 w-11 shrink-0 rounded object-cover ring-1 ring-white/10" /> : <Shield size={28} className="shrink-0 text-white/20" />
@@ -53,9 +53,9 @@ export default function WorldCupMatchCard({ match, compact = false }) {
         </span>
       </div>
 
-      <div className={`grid items-center gap-3 px-3 ${compact ? 'py-3' : 'py-4'} grid-cols-[1fr_auto_1fr]`}>
+      <div className={`grid items-center gap-2 px-3 sm:gap-3 ${compact ? 'py-3' : 'py-4'} grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]`}>
         <TeamBlock name={match.home_team_display || match.home_team_name_vi} flag={match.home_team_flag} />
-        <div className="flex min-w-[72px] flex-col items-center">
+        <div className="flex min-w-[62px] flex-col items-center sm:min-w-[72px]">
           <div className={`rounded-md border border-white/10 bg-black/35 px-3 py-2 text-center font-black tracking-wide text-white ${match.isUpcoming ? 'text-base text-white/45' : 'text-xl'}`}>
             {scoreText(match)}
           </div>
@@ -74,7 +74,7 @@ export default function WorldCupMatchCard({ match, compact = false }) {
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/8 px-3 py-2 text-[11px] text-white/45">
         <span className="inline-flex min-w-0 items-center gap-1.5">
           <CalendarClock size={13} className="shrink-0" />
-          <span className="truncate">{match.kickoffAtVN || 'Đang cập nhật giờ Việt Nam'}</span>
+          <span className="line-clamp-1">{match.kickoffAtVN || 'Đang cập nhật giờ Việt Nam'}</span>
         </span>
         {!compact && (
           <span className="inline-flex min-w-0 items-center gap-1.5">

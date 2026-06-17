@@ -101,6 +101,12 @@ export default function HeroBanner() {
   const description = String(currentSlide.description || 'Khám phá nội dung đang được nhiều khán giả quan tâm trên NhanChillTV.').replace(/<[^>]+>/g, ' ');
   const originalTitle = String(currentSlide.origin_name || currentSlide.original_name || '').trim();
   const shouldShowOriginalTitle = originalTitle && originalTitle.toLowerCase() !== String(currentSlide.name || '').trim().toLowerCase();
+  const titleLength = String(currentSlide.name || '').length;
+  const titleClass = titleLength > 58
+    ? 'text-[1.65rem] md:text-5xl'
+    : titleLength > 36
+    ? 'text-[1.9rem] md:text-[3.35rem]'
+    : 'text-3xl md:text-6xl';
   const movieDetailSlug = !currentSlide.isWorldCup && !currentSlide.isEvent ? currentSlide.slug : '';
   const watchUrl = currentSlide.isWorldCup
     ? '/worldcup/'
@@ -158,7 +164,7 @@ export default function HeroBanner() {
             <motion.span variants={fadeSlideUp} className="mb-3 inline-block rounded bg-[#ED2C25] px-2 py-1 text-[10px] font-bold tracking-wide text-white md:text-xs">
               {currentSlide.isWorldCup ? 'FIFA WORLD CUP 2026' : currentSlide.isEvent ? (currentSlide.status === 'live' ? 'SỰ KIỆN TRỰC TIẾP' : 'SỰ KIỆN ĐÃ GHIM') : 'PHIM PHỔ BIẾN'}
             </motion.span>
-            <motion.h1 variants={fadeSlideUp} className="line-clamp-2 text-3xl font-black leading-tight text-white md:text-6xl">{currentSlide.name}</motion.h1>
+            <motion.h1 variants={fadeSlideUp} className={`max-w-4xl break-words font-black leading-tight text-white ${titleClass}`}>{currentSlide.name}</motion.h1>
             {shouldShowOriginalTitle && (
               <motion.h2 variants={fadeIn} className="mt-2 text-xs font-bold text-white/70 md:text-sm">{originalTitle}</motion.h2>
             )}

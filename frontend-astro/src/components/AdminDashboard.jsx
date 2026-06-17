@@ -182,18 +182,18 @@ export default function AdminDashboard() {
   tabs.splice(4, 0, ['worldcup', 'World Cup', Trophy]);
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[#090909] text-white">
+    <div className="flex min-h-screen flex-col bg-[#090909] text-white">
       <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-white/10 bg-[#111] px-3 md:h-16 md:px-6">
         <div className="min-w-0"><div className="truncate text-sm font-black sm:text-base">NhanChillTV Admin</div><div className="text-[11px] text-white/40 sm:text-xs">Điều khiển hệ thống</div></div>
         <button onClick={logout} className="flex items-center gap-2 rounded-md p-2 text-sm text-white/60 hover:bg-white/5 hover:text-white sm:px-3" title="Đăng xuất"><LogOut size={18} /> <span className="hidden sm:inline">Đăng xuất</span></button>
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col md:h-[calc(100vh-64px)] md:flex-row">
-        <nav className="hide-scrollbar sticky top-14 z-30 flex shrink-0 gap-1 overflow-x-auto border-b border-white/10 bg-[#111] px-2 py-1.5 md:static md:w-56 md:flex-col md:border-b-0 md:border-r md:p-3">
-          {tabs.map(([id, label, Icon]) => <button key={id} onClick={() => setActiveTab(id)} className={`flex min-w-[80px] shrink-0 flex-col items-center gap-1.5 rounded-md px-3 py-2.5 text-center text-xs font-medium md:min-w-0 md:flex-row md:gap-2 md:px-3 md:py-2.5 md:text-left md:text-sm ${activeTab === id ? 'bg-[#ED2C25] text-white' : 'text-white/55 hover:bg-white/5 hover:text-white'}`}><Icon size={17} /> {label}</button>)}
+        <nav className="hide-scrollbar sticky top-14 z-30 flex shrink-0 gap-1 overflow-x-auto border-b border-white/10 bg-[#111] px-2 py-1.5 md:static md:w-64 md:flex-col md:border-b-0 md:border-r md:p-3">
+          {tabs.map(([id, label, Icon]) => <button key={id} onClick={() => setActiveTab(id)} className={`flex min-w-[82px] shrink-0 flex-col items-center gap-1.5 rounded-md px-3 py-2.5 text-center text-xs font-medium md:min-w-0 md:flex-row md:gap-2 md:px-3 md:py-2.5 md:text-left md:text-sm ${activeTab === id ? 'bg-[#ED2C25] text-white' : 'text-white/55 hover:bg-white/5 hover:text-white'}`}><Icon size={17} /> <span className="md:truncate">{label}</span></button>)}
         </nav>
 
-        <main className="admin-scroll min-h-0 min-w-0 flex-1 overflow-y-auto p-3 pb-8 sm:p-4 md:p-6">
+        <main className="admin-scroll min-h-0 min-w-0 flex-1 overflow-y-auto p-3 pb-8 sm:p-4 md:p-5 xl:p-6">
           {notice && <div className={`mb-4 rounded-md border px-4 py-3 text-sm ${notice.startsWith('Lỗi:') ? 'border-red-500/30 bg-red-500/10 text-red-300' : 'border-green-500/30 bg-green-500/10 text-green-300'}`}>{notice}</div>}
           {activeTab === 'dashboard' && <DashboardTab health={health} systemOverview={systemOverview} homeAgent={homeAgent} movieCache={movieCache} status={status} sources={sources} events={events} streams={streams} busy={busy} onRefresh={() => runAction(() => adminRequest('/admin/m3u-sources/refresh', { method: 'POST' }), 'Đã cập nhật danh sách M3U.')} onRefreshWorldCup={() => runAction(async () => {
             const response = await fetch(`${API_BASE}/worldcup/refresh`, { method: 'POST' });
@@ -258,7 +258,7 @@ function DashboardTab({ health, systemOverview, homeAgent, movieCache, status, s
     <section>
       <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-xl font-bold sm:text-2xl">Tổng quan</h1><p className="text-xs text-white/45 sm:text-sm">Trạng thái backend và dữ liệu IPTV.</p></div><div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto"><button disabled={busy} onClick={onRefresh} className="flex items-center justify-center gap-2 rounded-md bg-white/10 px-2 py-2 text-xs hover:bg-white/15 sm:px-3 sm:text-sm"><RefreshCw size={16} className={busy ? 'animate-spin' : ''} /> Cập nhật M3U</button><button disabled={busy} onClick={onRefreshWorldCup} className="flex items-center justify-center gap-2 rounded-md bg-white/10 px-2 py-2 text-xs hover:bg-white/15 sm:px-3 sm:text-sm"><Trophy size={16} /> World Cup cache</button><button onClick={onRestart} className="flex items-center justify-center gap-2 rounded-md border border-red-500/30 px-2 py-2 text-xs text-red-300 hover:bg-red-500/10 sm:px-3 sm:text-sm"><RotateCcw size={16} /> Khởi động lại</button></div></div>
       <div className="mt-4 grid grid-cols-2 gap-2 sm:mt-5 sm:gap-3 lg:grid-cols-3 xl:grid-cols-6">{cards.map(([label, value, Icon]) => <div key={label} className="rounded-lg border border-white/8 bg-[#151515] p-3 sm:p-4"><Icon size={18} className="mb-2 text-[#ED2C25] sm:mb-3" /><div className="text-xl font-black sm:text-2xl">{value}</div><div className="truncate text-[11px] text-white/45 sm:text-xs">{label}</div></div>)}</div>
-      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+      <div className="mt-5 grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
         <Panel title="Tài nguyên realtime">
           <MetricBar label="CPU" value={cpuPercent} detail={`${cpuPercent.toFixed(1)}%`} />
           <MetricBar label="RAM" value={memoryPercent} detail={`${memoryPercent.toFixed(1)}% · ${formatBytes(memory?.used)} / ${formatBytes(memory?.total)}`} />
@@ -269,21 +269,21 @@ function DashboardTab({ health, systemOverview, homeAgent, movieCache, status, s
         </Panel>
         <Panel title="Cập nhật M3U"><InfoRow label="Lần cập nhật" value={status?.lastRefreshAt ? new Date(status.lastRefreshAt).toLocaleString('vi-VN') : 'Chưa có'} /><InfoRow label="Trạng thái" value={status?.isRefreshing ? 'Đang cập nhật' : 'Sẵn sàng'} /><InfoRow label="Chu kỳ" value="1 giờ/lần" />{status?.lastError && <div className="mt-3 rounded bg-red-500/10 p-2 text-xs text-red-300">{status.lastError}</div>}</Panel>
         <Panel title="Home Agent">
-          <InfoRow label="Trang thai" value={homeAgent?.tokenConfigured ? (homeAgentOnline ? 'Online' : 'Offline') : 'Chua cau hinh token'} />
-          <InfoRow label="Thiet bi" value={homeAgent?.agent?.hostname || homeAgent?.agent?.id || '--'} />
-          <InfoRow label="Lan gap" value={homeAgent?.agent?.lastSeenAt ? new Date(homeAgent.agent.lastSeenAt).toLocaleString('vi-VN') : '--'} />
+          <InfoRow label="Tình trạng" value={homeAgent?.tokenConfigured ? (homeAgentOnline ? 'Online' : 'Offline') : 'Chưa cấu hình token'} />
+          <InfoRow label="Thiết bị" value={homeAgent?.agent?.hostname || homeAgent?.agent?.id || '--'} />
+          <InfoRow label="Lần gặp" value={homeAgent?.agent?.lastSeenAt ? new Date(homeAgent.agent.lastSeenAt).toLocaleString('vi-VN') : '--'} />
           <MetricBar label="CPU box" value={agentCpuPercent} detail={`${agentCpuPercent.toFixed(1)}%`} />
           <MetricBar label="RAM box" value={agentMemoryPercent} detail={`${agentMemoryPercent.toFixed(1)}% - ${formatBytesCompact(agentMemoryUsed)} / ${formatBytesCompact(agentMemoryTotal)}`} />
           <MetricBar label="Disk box" value={agentDiskPercent} detail={`${agentDiskPercent.toFixed(1)}% - ${formatBytesCompact(agentDiskUsed)} / ${formatBytesCompact(agentDiskTotal)}`} />
-          <InfoRow label="Nhiet do" value={agentMetrics.temperatureC ? `${agentMetrics.temperatureC}°C` : '--'} />
+          <InfoRow label="Nhiệt độ" value={agentMetrics.temperatureC ? `${agentMetrics.temperatureC}°C` : '--'} />
           <InfoRow label="Network" value={agentNetwork ? `${agentNetwork[0]} · ${agentNetwork[1].speedMbps || '--'}Mbps · ${agentNetwork[1].operstate}` : '--'} />
           <InfoRow label="EPG Home" value={homeAgent?.epg?.updatedAt ? `${new Date(homeAgent.epg.updatedAt).toLocaleString('vi-VN')} · ${formatBytesCompact(homeAgent.epg.bytes)}` : '--'} />
-          <InfoRow label="Kenh loi" value={homeAgent?.channelHealth ? `${homeAgent.channelHealth.failed || 0}/${homeAgent.channelHealth.total || 0}` : '--'} />
+          <InfoRow label="Kênh lỗi" value={homeAgent?.channelHealth ? `${homeAgent.channelHealth.failed || 0}/${homeAgent.channelHealth.total || 0}` : '--'} />
           <InfoRow label="Backup" value={homeAgent?.backup?.lastPulledAt ? `${new Date(homeAgent.backup.lastPulledAt).toLocaleString('vi-VN')} · ${formatBytesCompact(homeAgent.backup.bytes)}` : '--'} />
         </Panel>
         <Panel title="KKPhim cache">
-          <InfoRow label="Nguon phim" value={movieCache?.provider || movieCache?.stats?.provider || 'kkphim'} />
-          <InfoRow label="Entry" value={movieCache?.entries ?? 0} />
+          <InfoRow label="Nguồn phim" value={movieCache?.provider || movieCache?.stats?.provider || 'kkphim'} />
+          <InfoRow label="Mục cache" value={movieCache?.entries ?? 0} />
           <InfoRow label="Hit / Miss" value={`${movieCache?.stats?.hits || 0} / ${movieCache?.stats?.misses || 0}`} />
           <InfoRow label="Stale / Error" value={`${movieCache?.stats?.stale || 0} / ${movieCache?.stats?.errors || 0}`} />
           <InfoRow label="Prewarm" value={movieCache?.stats?.lastPrewarmAt ? new Date(movieCache.stats.lastPrewarmAt).toLocaleString('vi-VN') : '--'} />
@@ -813,12 +813,12 @@ function Transcode247Tab({ channels, settings, setSettings, busy, adminRequest, 
 }
 
 function SectionHeader({ title, subtitle, action }) { return <div className="flex flex-wrap items-center justify-between gap-3"><div className="min-w-0"><h1 className="text-xl font-bold sm:text-2xl">{title}</h1><p className="text-xs text-white/45 sm:text-sm">{subtitle}</p></div>{action && <div className="w-full sm:w-auto [&>button]:w-full [&>button]:justify-center sm:[&>button]:w-auto">{action}</div>}</div>; }
-function Panel({ title, children }) { return <div className="rounded-lg border border-white/10 bg-[#151515] p-4"><h2 className="mb-3 font-bold">{title}</h2>{children}</div>; }
+function Panel({ title, children }) { return <div className="min-w-0 rounded-lg border border-white/10 bg-[#151515] p-4"><h2 className="mb-3 font-bold">{title}</h2>{children}</div>; }
 function MetricBar({ label, value, detail }) {
   const percent = Math.max(0, Math.min(100, Number(value || 0)));
   return <div className="mb-3"><div className="mb-1 flex items-center justify-between text-sm"><span className="text-white/55">{label}</span><span className="font-bold text-white">{detail}</span></div><div className="h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-[#ED2C25] transition-[width] duration-500" style={{ width: `${percent}%` }} /></div></div>;
 }
-function InfoRow({ label, value }) { return <div className="flex justify-between border-b border-white/5 py-2 text-sm last:border-0"><span className="text-white/45">{label}</span><span>{value}</span></div>; }
+function InfoRow({ label, value }) { return <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1 border-b border-white/5 py-2 text-sm last:border-0"><span className="shrink-0 text-white/45">{label}</span><span className="min-w-0 break-words text-right">{value}</span></div>; }
 function Empty({ text }) { return <div className="p-10 text-center text-sm text-white/45">{text}</div>; }
 function Field({ label, children }) { return <label className="block text-sm"><span className="mb-1.5 block text-white/55">{label}</span>{children}</label>; }
 function formatBytes(value) { const bytes = Number(value || 0); if (!bytes) return '--'; return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`; }

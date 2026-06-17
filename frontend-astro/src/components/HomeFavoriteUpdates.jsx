@@ -66,9 +66,9 @@ export default function HomeFavoriteUpdates() {
         </div>
         <a href="/movies/" className="rounded-md bg-white/10 px-3 py-2 text-sm font-bold text-white/70 hover:bg-white/15 hover:text-white">Quản lý</a>
       </div>
-      <div className="hide-scrollbar flex gap-4 overflow-x-auto pb-2">
+      <div className="hide-scrollbar flex gap-3 overflow-x-auto pb-2 md:gap-4">
         {items.map(movie => (
-          <a key={movie.slug} href={`/movie-detail/?slug=${encodeURIComponent(movie.slug)}`} className="group w-[150px] shrink-0 md:w-[180px]">
+          <a key={movie.slug} href={`/movie-detail/?slug=${encodeURIComponent(movie.slug)}`} className="group w-[128px] shrink-0 md:w-[150px]">
             <div className="relative mb-3 aspect-[2/3] overflow-hidden rounded-lg border border-white/8 bg-[#141414] group-hover:border-[#ED2C25]/50">
               <img src={getOPhimImageUrl(movie.thumb_url || movie.poster_url)} alt={movie.name} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" onError={event => { event.currentTarget.src = '/poster.jpg'; }} />
               <div className="absolute inset-0 flex items-center justify-center bg-black/35 opacity-0 transition-opacity group-hover:opacity-100"><Play size={20} fill="currentColor" className="text-white" /></div>

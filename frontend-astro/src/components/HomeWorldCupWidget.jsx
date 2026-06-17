@@ -60,7 +60,7 @@ export default function HomeWorldCupWidget() {
 
   if (loading && games.length === 0) {
     return (
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
         {[1, 2, 3, 4].map(idx => (
           <div key={idx} className="h-32 w-full animate-pulse rounded-xl bg-[#151515] border border-white/5" />
         ))}
@@ -113,9 +113,9 @@ export default function HomeWorldCupWidget() {
               </div>
 
               {/* Match Scoreboard */}
-              <div className="flex items-center justify-between px-1 py-1.5">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-1 py-1.5">
                 {/* Home */}
-                <div className="flex w-[40%] flex-col items-center text-center gap-1.5 min-w-0">
+                <div className="flex min-w-0 flex-col items-center gap-1.5 text-center">
                   {homeTeam?.flag ? (
                     <img 
                       src={homeTeam.flag} 
@@ -125,11 +125,11 @@ export default function HomeWorldCupWidget() {
                   ) : (
                     <div className="h-7 w-10.5 rounded bg-white/5 border border-white/5" />
                   )}
-                  <span className="text-xs font-bold text-white truncate w-full">{game.home_team_name_en}</span>
+                  <span className="line-clamp-2 w-full break-words text-xs font-bold leading-tight text-white">{game.home_team_name_en}</span>
                 </div>
 
                 {/* VS / Score */}
-                <div className="flex flex-col items-center justify-center w-[20%] text-center">
+                <div className="flex min-w-[54px] flex-col items-center justify-center text-center">
                   <div className="text-lg font-black text-white leading-none">
                     {(game.time_elapsed === 'not_started' || game.time_elapsed === 'notstarted') && !isFinished ? (
                       <span className="text-white/30 text-sm">VS</span>
@@ -140,7 +140,7 @@ export default function HomeWorldCupWidget() {
                 </div>
 
                 {/* Away */}
-                <div className="flex w-[40%] flex-col items-center text-center gap-1.5 min-w-0">
+                <div className="flex min-w-0 flex-col items-center gap-1.5 text-center">
                   {awayTeam?.flag ? (
                     <img 
                       src={awayTeam.flag} 
@@ -150,7 +150,7 @@ export default function HomeWorldCupWidget() {
                   ) : (
                     <div className="h-7 w-10.5 rounded bg-white/5 border border-white/5" />
                   )}
-                  <span className="text-xs font-bold text-white truncate w-full">{game.away_team_name_en}</span>
+                  <span className="line-clamp-2 w-full break-words text-xs font-bold leading-tight text-white">{game.away_team_name_en}</span>
                 </div>
               </div>
 

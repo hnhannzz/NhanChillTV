@@ -689,15 +689,15 @@ export default function UnifiedPlayer({
 
       {/* Continue Watching Prompt */}
       {showContinuePrompt && (
-        <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-40 backdrop-blur-sm px-4">
-          <div className="w-full max-w-[300px] rounded-xl border border-white/10 bg-[#121212] p-4 text-center shadow-2xl sm:max-w-sm sm:p-6">
-            <h3 className="text-base font-bold text-white sm:text-lg">Xem tiếp?</h3>
-            <p className="mb-4 mt-1 text-sm text-white/70">Bạn đã dừng ở {formatTime(initialTime)}</p>
-            <div className="flex flex-col gap-3">
-              <button onClick={continueWatching} className="w-full bg-[#ED2C25] text-white font-bold py-2.5 px-4 rounded-lg hover:bg-red-700 transition-colors">
+        <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-40 backdrop-blur-sm px-3">
+          <div className="w-full max-w-[210px] rounded-lg border border-white/10 bg-[#121212] p-3 text-center shadow-2xl sm:max-w-sm sm:p-6">
+            <h3 className="text-sm font-bold text-white sm:text-lg">Xem tiếp?</h3>
+            <p className="mb-3 mt-1 text-xs text-white/70 sm:mb-4 sm:text-sm">Bạn đã dừng ở {formatTime(initialTime)}</p>
+            <div className="flex flex-col gap-2 sm:gap-3">
+              <button onClick={continueWatching} className="w-full bg-[#ED2C25] text-white font-bold py-2 px-3 text-xs rounded-lg hover:bg-red-700 transition-colors sm:py-2.5 sm:px-4 sm:text-base">
                 Tiếp tục xem
               </button>
-              <button onClick={restartWatching} className="w-full bg-white/10 text-white font-bold py-2.5 px-4 rounded-lg hover:bg-white/20 transition-colors">
+              <button onClick={restartWatching} className="w-full bg-white/10 text-white font-bold py-2 px-3 text-xs rounded-lg hover:bg-white/20 transition-colors sm:py-2.5 sm:px-4 sm:text-base">
                 Xem lại từ đầu
               </button>
             </div>
