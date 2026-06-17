@@ -182,18 +182,18 @@ export default function AdminDashboard() {
   tabs.splice(4, 0, ['worldcup', 'World Cup', Trophy]);
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#090909] text-white">
+    <div className="flex min-h-[100dvh] flex-col bg-[#090909] text-white md:h-screen md:overflow-hidden">
       <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-white/10 bg-[#111] px-3 md:h-16 md:px-6">
         <div className="min-w-0"><div className="truncate text-sm font-black sm:text-base">NhanChillTV Admin</div><div className="text-[11px] text-white/40 sm:text-xs">Điều khiển hệ thống</div></div>
         <button onClick={logout} className="flex items-center gap-2 rounded-md p-2 text-sm text-white/60 hover:bg-white/5 hover:text-white sm:px-3" title="Đăng xuất"><LogOut size={18} /> <span className="hidden sm:inline">Đăng xuất</span></button>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col md:h-[calc(100vh-64px)] md:flex-row">
-        <nav className="hide-scrollbar sticky top-14 z-30 flex shrink-0 gap-1 overflow-x-auto border-b border-white/10 bg-[#111] px-2 py-1.5 md:static md:w-64 md:flex-col md:border-b-0 md:border-r md:p-3">
+      <div className="flex flex-1 flex-col md:min-h-0 md:h-[calc(100vh-64px)] md:flex-row">
+        <nav className="hide-scrollbar sticky top-14 z-30 flex shrink-0 touch-pan-x gap-1 overflow-x-auto border-b border-white/10 bg-[#111] px-2 py-1.5 md:static md:w-64 md:flex-col md:border-b-0 md:p-3 md:border-r">
           {tabs.map(([id, label, Icon]) => <button key={id} onClick={() => setActiveTab(id)} className={`flex min-w-[82px] shrink-0 flex-col items-center gap-1.5 rounded-md px-3 py-2.5 text-center text-xs font-medium md:min-w-0 md:flex-row md:gap-2 md:px-3 md:py-2.5 md:text-left md:text-sm ${activeTab === id ? 'bg-[#ED2C25] text-white' : 'text-white/55 hover:bg-white/5 hover:text-white'}`}><Icon size={17} /> <span className="md:truncate">{label}</span></button>)}
         </nav>
 
-        <main className="admin-scroll min-h-0 min-w-0 flex-1 overflow-y-auto p-3 pb-8 sm:p-4 md:p-5 xl:p-6">
+        <main className="admin-main-scroll min-w-0 flex-1 overflow-visible p-3 pb-[calc(2rem+env(safe-area-inset-bottom))] sm:p-4 md:min-h-0 md:overflow-y-auto md:p-5 xl:p-6">
           {notice && <div className={`mb-4 rounded-md border px-4 py-3 text-sm ${notice.startsWith('Lỗi:') ? 'border-red-500/30 bg-red-500/10 text-red-300' : 'border-green-500/30 bg-green-500/10 text-green-300'}`}>{notice}</div>}
           {activeTab === 'dashboard' && <DashboardTab health={health} systemOverview={systemOverview} homeAgent={homeAgent} movieCache={movieCache} status={status} sources={sources} events={events} streams={streams} busy={busy} onRefresh={() => runAction(() => adminRequest('/admin/m3u-sources/refresh', { method: 'POST' }), 'Đã cập nhật danh sách M3U.')} onRefreshWorldCup={() => runAction(async () => {
             const response = await fetch(`${API_BASE}/worldcup/refresh`, { method: 'POST' });

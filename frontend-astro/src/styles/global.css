@@ -12,6 +12,7 @@
   .mobile-scroll,
   .mobile-horizontal-scroll,
   .mobile-search-results,
+  .admin-main-scroll,
   .admin-scroll {
     -webkit-overflow-scrolling: touch;
   }
@@ -19,6 +20,11 @@
   .mobile-scroll,
   .admin-scroll {
     overscroll-behavior-y: contain;
+    touch-action: pan-y;
+  }
+
+  .admin-main-scroll {
+    overscroll-behavior-y: auto;
     touch-action: pan-y;
   }
 
@@ -74,6 +80,7 @@
 @media (min-width: 768px) {
   .mobile-scroll,
   .custom-scrollbar,
+  .admin-main-scroll,
   .admin-scroll,
   .mobile-horizontal-scroll,
   .mobile-search-results {
@@ -83,6 +90,7 @@
 
   .mobile-scroll::-webkit-scrollbar,
   .custom-scrollbar::-webkit-scrollbar,
+  .admin-main-scroll::-webkit-scrollbar,
   .admin-scroll::-webkit-scrollbar,
   .mobile-horizontal-scroll::-webkit-scrollbar,
   .mobile-search-results::-webkit-scrollbar {
