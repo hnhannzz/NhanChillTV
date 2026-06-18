@@ -6,6 +6,8 @@ const {
   normalizeListPayload,
   normalizeDetailPayload,
   normalizeImageUrl,
+  buildCacheKeyFromPath,
+  ingestMovieCacheEntry,
   resolveKkphimRequest,
 } = moviesRouter._internal;
 
@@ -92,4 +94,31 @@ test('KKPhim image helper resolves relative images and preserves legacy OPhim im
     normalizeImageUrl('uploads/movies/legacy.jpg'),
     'https://img.ophim.live/uploads/movies/legacy.jpg'
   );
+});
+
+test('movie cache key filters empty query and normalizes Home Agent payload', () => {
+  const key = buildCacheKeyFromPath('kkphim', 'popular', { page: '1', empty: '' });
+  assert.equal(key, 'kkphim:/popular?page=1');
+
+  const result = ingestMovieCacheEntry({
+    requestPath: '/popular',
+    query: { page: '1' },
+    provider: 'home-agent-kkphim',
+    fetchedAt: '2026-06-18T00:00:00Z',
+    data: {
+      items: [
+        {
+          name: 'Phim test',
+          slug: 'phim-test',
+          origin_name: 'Test Movie',
+          episode_current: 'Tập 1',
+        },
+      ],
+    },
+  });
+
+  assert.equal(result.key, 'kkphim:/popular?page=1');
+  assert.equal(result.provider, 'kkphim');
+  assert.equal(result.fetchedVia, 'home-agent-kkphim');
+  assert.equal(result.items, 1);
 });

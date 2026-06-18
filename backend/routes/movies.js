@@ -1,5 +1,9 @@
 const express = require('express');
 const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
+const config = require('../config');
+const { homeAgentService } = require('../services/homeAgentService');
 
 const router = express.Router();
 
@@ -9,19 +13,87 @@ const KKPHIM_API_BASE = (process.env.KKPHIM_API_BASE || process.env.MOVIE_API_BA
 const KKPHIM_IMAGE_BASE = (process.env.KKPHIM_IMAGE_BASE || 'https://phimimg.com').replace(/\/+$/, '');
 const OPHIM_API_BASE = (process.env.OPHIM_API_BASE || 'https://ophim1.com/v1/api').replace(/\/+$/, '');
 const CACHE_TTL_MS = Number(process.env.MOVIE_API_CACHE_TTL_MS || 5 * 60 * 1000);
+const STALE_TTL_MS = Number(process.env.MOVIE_API_STALE_TTL_MS || 7 * 24 * 60 * 60 * 1000);
 const MAX_CACHE_ENTRIES = Number(process.env.MOVIE_API_MAX_CACHE_ENTRIES || 200);
+const PERSIST_INTERVAL_MS = Number(process.env.MOVIE_CACHE_PERSIST_INTERVAL_MS || 2000);
 
 const cache = new Map();
 const inFlight = new Map();
+let persistTimer = null;
 const cacheStats = {
   hits: 0,
   misses: 0,
   stale: 0,
   errors: 0,
+  diskLoads: 0,
+  diskWrites: 0,
+  backgroundRefreshes: 0,
+  homeAgentJobs: 0,
   lastPrewarmAt: null,
   lastPrewarmError: null,
+  lastPersistAt: null,
+  lastIngestAt: null,
   provider: DEFAULT_PROVIDER,
 };
+
+function serializeQuery(query = {}) {
+  const params = new URLSearchParams(cleanQuery(query));
+  return params.toString();
+}
+
+function buildCacheKeyFromPath(provider, requestPath, query = {}) {
+  const normalizedPath = requestPath.startsWith('/') ? requestPath : `/${requestPath}`;
+  return `${provider}:${normalizedPath}?${serializeQuery(query)}`;
+}
+
+function loadPersistentCache() {
+  try {
+    if (!fs.existsSync(config.movieCachePath)) return;
+    const payload = JSON.parse(fs.readFileSync(config.movieCachePath, 'utf8'));
+    const entries = Array.isArray(payload.entries) ? payload.entries : [];
+    entries.forEach(entry => {
+      if (!entry?.key || !entry?.value?.data) return;
+      cache.set(entry.key, entry.value);
+    });
+    cacheStats.diskLoads += entries.length;
+    pruneCache();
+    console.log(`[Movies] Loaded ${entries.length} persistent cache entries`);
+  } catch (err) {
+    console.warn('[Movies] Failed to load persistent cache:', err.message);
+  }
+}
+
+function persistCacheNow() {
+  try {
+    fs.mkdirSync(path.dirname(config.movieCachePath), { recursive: true });
+    const entries = [...cache.entries()]
+      .sort((a, b) => b[1].timestamp - a[1].timestamp)
+      .slice(0, MAX_CACHE_ENTRIES)
+      .map(([key, value]) => ({ key, value }));
+    const payload = {
+      version: 1,
+      provider: DEFAULT_PROVIDER,
+      updatedAt: new Date().toISOString(),
+      entries,
+    };
+    const tempPath = `${config.movieCachePath}.${process.pid}.tmp`;
+    fs.writeFileSync(tempPath, JSON.stringify(payload));
+    fs.renameSync(tempPath, config.movieCachePath);
+    cacheStats.diskWrites += 1;
+    cacheStats.lastPersistAt = payload.updatedAt;
+  } catch (err) {
+    console.warn('[Movies] Failed to persist cache:', err.message);
+  }
+}
+
+function schedulePersistCache() {
+  if (persistTimer) return;
+  persistTimer = setTimeout(() => {
+    persistTimer = null;
+    persistCacheNow();
+  }, PERSIST_INTERVAL_MS);
+  persistTimer.unref?.();
+}
 
 function pruneCache() {
   if (cache.size <= MAX_CACHE_ENTRIES) return;
@@ -34,29 +106,40 @@ function pruneCache() {
 }
 
 function buildCacheKey(req, provider) {
-  const params = new URLSearchParams(req.query);
-  return `${provider}:${req.path}?${params.toString()}`;
+  return buildCacheKeyFromPath(provider, req.path, req.query);
 }
 
 function setCacheEntry(cacheKey, status, data) {
   cache.set(cacheKey, { timestamp: Date.now(), status, data });
   pruneCache();
+  schedulePersistCache();
 }
 
 function getCacheStatus() {
   const now = Date.now();
+  const agentStatus = homeAgentService.getStatus?.() || {};
+  const jobs = Array.isArray(agentStatus.jobs) ? agentStatus.jobs : [];
   const entries = [...cache.entries()].map(([key, value]) => ({
     key,
     status: value.status,
     ageMs: now - value.timestamp,
     fresh: now - value.timestamp < CACHE_TTL_MS,
+    staleUsable: now - value.timestamp < STALE_TTL_MS,
   }));
   return {
     provider: DEFAULT_PROVIDER,
     fallbackProvider: FALLBACK_PROVIDER || null,
     ttlMs: CACHE_TTL_MS,
+    staleTtlMs: STALE_TTL_MS,
     maxEntries: MAX_CACHE_ENTRIES,
+    cachePath: config.movieCachePath,
     entries: cache.size,
+    homeAgent: {
+      online: Boolean(agentStatus.online),
+      queuedJobs: jobs.filter(job => job.status === 'queued').length,
+      leasedJobs: jobs.filter(job => job.status === 'leased').length,
+      movieCache: agentStatus.movieCache || null,
+    },
     stats: cacheStats,
     hotEntries: entries.sort((a, b) => a.ageMs - b.ageMs).slice(0, 20),
   };
@@ -65,6 +148,7 @@ function getCacheStatus() {
 function clearMovieCache() {
   cache.clear();
   inFlight.clear();
+  schedulePersistCache();
 }
 
 function cleanQuery(query = {}) {
@@ -260,6 +344,78 @@ async function fetchMovieData(requestPath, query = {}) {
   }
 }
 
+function queueHomeAgentMovieJob(requestPath, query = {}, reason = 'refresh', priority = 5) {
+  if (!config.homeAgentToken) return null;
+  try {
+    const job = homeAgentService.enqueueMovieFetch(requestPath, query, reason, priority);
+    cacheStats.homeAgentJobs += 1;
+    return job;
+  } catch (err) {
+    console.warn('[Movies] Failed to queue Home Agent movie job:', err.message);
+    return null;
+  }
+}
+
+function refreshMovieCacheInBackground(cacheKey, requestPath, query = {}, reason = 'stale-refresh', priority = 5) {
+  const job = queueHomeAgentMovieJob(requestPath, query, reason, priority);
+  if (inFlight.has(cacheKey)) return job;
+
+  cacheStats.backgroundRefreshes += 1;
+  const request = fetchMovieData(requestPath, query)
+    .then(data => {
+      setCacheEntry(cacheKey, 200, {
+        ...data,
+        refreshedAt: new Date().toISOString(),
+      });
+      return data;
+    })
+    .catch(err => {
+      cacheStats.errors += 1;
+      console.warn(`[Movies] Background refresh failed for ${requestPath}:`, err.message);
+      return null;
+    })
+    .finally(() => inFlight.delete(cacheKey));
+  inFlight.set(cacheKey, request);
+  return job;
+}
+
+function ingestMovieCacheEntry(payload = {}) {
+  const requestPath = payload.requestPath || payload.path;
+  if (!requestPath) {
+    const err = new Error('Missing movie requestPath');
+    err.statusCode = 400;
+    throw err;
+  }
+  if (!payload.data || typeof payload.data !== 'object') {
+    const err = new Error('Missing movie cache data');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const resolved = resolveRequest(DEFAULT_PROVIDER, requestPath, payload.query || {});
+  const cacheKey = buildCacheKeyFromPath(DEFAULT_PROVIDER, requestPath, payload.query || {});
+  const fetchedAt = payload.fetchedAt || new Date().toISOString();
+  const normalized = normalizePayload(payload.data, resolved.kind, DEFAULT_PROVIDER);
+  const data = {
+    ...normalized,
+    provider: DEFAULT_PROVIDER,
+    fetchedVia: payload.provider || 'home-agent',
+    fetchedAt,
+  };
+
+  setCacheEntry(cacheKey, 200, data);
+  cacheStats.lastIngestAt = new Date().toISOString();
+  return {
+    key: cacheKey,
+    status: 200,
+    provider: data.provider,
+    fetchedVia: data.fetchedVia,
+    fetchedAt,
+    items: getItems(data).length,
+    kind: resolved.kind,
+  };
+}
+
 function normalizeImageUrl(value) {
   const input = String(value || '').trim();
   if (!input) return '';
@@ -268,6 +424,8 @@ function normalizeImageUrl(value) {
   if (cleaned.startsWith('uploads/movies/')) return `https://img.ophim.live/${cleaned}`;
   return `${KKPHIM_IMAGE_BASE}/${cleaned}`;
 }
+
+loadPersistentCache();
 
 async function prewarmMovieCache() {
   const targets = [
@@ -281,10 +439,10 @@ async function prewarmMovieCache() {
 
   const results = [];
   for (const target of targets) {
+    queueHomeAgentMovieJob(target.path, target.query, 'prewarm', 2);
     try {
       const data = await fetchMovieData(target.path, target.query);
-      const params = new URLSearchParams(target.query);
-      setCacheEntry(`${DEFAULT_PROVIDER}:${target.path}?${params.toString()}`, 200, data);
+      setCacheEntry(buildCacheKeyFromPath(DEFAULT_PROVIDER, target.path, target.query), 200, data);
       results.push({ key: target.key, ok: true, status: 200, provider: data.provider });
     } catch (err) {
       results.push({ key: target.key, ok: false, error: err.message });
@@ -297,21 +455,41 @@ async function prewarmMovieCache() {
 }
 
 async function handleMovieRequest(req, res, requestPath) {
-  const cacheKey = buildCacheKey(req, DEFAULT_PROVIDER);
+  const cacheKey = buildCacheKeyFromPath(DEFAULT_PROVIDER, requestPath, req.query);
   const cached = cache.get(cacheKey);
   const now = Date.now();
+  const cachedAge = cached ? now - cached.timestamp : Infinity;
 
-  if (cached && now - cached.timestamp < CACHE_TTL_MS) {
+  if (cached && cachedAge < CACHE_TTL_MS) {
     cacheStats.hits += 1;
     return res
       .status(cached.status)
       .set('Content-Type', 'application/json; charset=utf-8')
+      .set('Cache-Control', 'public, max-age=60, stale-while-revalidate=604800')
       .set('X-Movie-Cache', 'hit')
       .json(cached.data);
   }
 
+  if (cached && cachedAge < STALE_TTL_MS) {
+    cacheStats.stale += 1;
+    refreshMovieCacheInBackground(cacheKey, requestPath, req.query, 'stale-refresh', 4);
+    return res
+      .status(cached.status)
+      .set('Content-Type', 'application/json; charset=utf-8')
+      .set('Cache-Control', 'public, max-age=30, stale-while-revalidate=604800')
+      .set('X-Movie-Cache', 'stale')
+      .json({
+        ...cached.data,
+        cache: {
+          status: 'stale',
+          updatedAt: new Date(cached.timestamp).toISOString(),
+        },
+      });
+  }
+
   try {
     cacheStats.misses += 1;
+    const queuedJob = queueHomeAgentMovieJob(requestPath, req.query, cached ? 'expired-cache' : 'miss', cached ? 3 : 1);
     let request = inFlight.get(cacheKey);
     if (!request) {
       request = fetchMovieData(requestPath, req.query).finally(() => inFlight.delete(cacheKey));
@@ -323,8 +501,12 @@ async function handleMovieRequest(req, res, requestPath) {
     return res
       .status(200)
       .set('Content-Type', 'application/json; charset=utf-8')
+      .set('Cache-Control', 'public, max-age=60, stale-while-revalidate=604800')
       .set('X-Movie-Cache', 'miss')
-      .json(data);
+      .json({
+        ...data,
+        queuedHomeAgentJob: Boolean(queuedJob),
+      });
   } catch (err) {
     cacheStats.errors += 1;
     if (cached) {
@@ -332,8 +514,15 @@ async function handleMovieRequest(req, res, requestPath) {
       return res
         .status(200)
         .set('Content-Type', 'application/json; charset=utf-8')
-        .set('X-Movie-Cache', 'stale')
-        .json(cached.data);
+        .set('Cache-Control', 'public, max-age=30, stale-while-revalidate=604800')
+        .set('X-Movie-Cache', 'expired-stale')
+        .json({
+          ...cached.data,
+          cache: {
+            status: 'expired-stale',
+            updatedAt: new Date(cached.timestamp).toISOString(),
+          },
+        });
     }
 
     return res.status(502).json({
@@ -341,6 +530,7 @@ async function handleMovieRequest(req, res, requestPath) {
       status: 'error',
       provider: DEFAULT_PROVIDER,
       error: `Movie API failed: ${err.message}`,
+      queuedHomeAgentJob: Boolean(config.homeAgentToken),
     });
   }
 }
@@ -359,6 +549,8 @@ router._cache = {
   getStatus: getCacheStatus,
   clear: clearMovieCache,
   prewarm: prewarmMovieCache,
+  ingest: ingestMovieCacheEntry,
+  queue: queueHomeAgentMovieJob,
 };
 
 router._internal = {
@@ -368,6 +560,8 @@ router._internal = {
   normalizeListPayload,
   normalizeDetailPayload,
   normalizeImageUrl,
+  buildCacheKeyFromPath,
+  ingestMovieCacheEntry,
   resolveKkphimRequest,
   resolveOphimRequest,
 };

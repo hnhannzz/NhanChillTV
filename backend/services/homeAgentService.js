@@ -24,6 +24,13 @@ const DEFAULT_STATE = {
     lastPulledAt: null,
     bytes: 0,
   },
+  movieCache: {
+    updatedAt: null,
+    entries: 0,
+    lastJobAt: null,
+    lastError: null,
+  },
+  jobs: [],
 };
 
 function ensureDir(filePath) {
@@ -165,6 +172,112 @@ class HomeAgentService {
     };
     this.save();
     return this.state.channelHealth;
+  }
+
+  recordMovieCache(payload = {}) {
+    this.state.movieCache = {
+      ...(this.state.movieCache || {}),
+      updatedAt: new Date().toISOString(),
+      entries: Number(payload.entries ?? this.state.movieCache?.entries ?? 0),
+      lastPath: payload.path || payload.requestPath || this.state.movieCache?.lastPath || null,
+      lastProvider: payload.provider || this.state.movieCache?.lastProvider || null,
+      lastJobAt: payload.jobId ? new Date().toISOString() : this.state.movieCache?.lastJobAt || null,
+      lastError: payload.error || null,
+    };
+    this.save();
+    return this.state.movieCache;
+  }
+
+  enqueueMovieFetch(requestPath, query = {}, reason = 'refresh', priority = 5) {
+    const pathKey = String(requestPath || '/popular');
+    const cleanQuery = Object.fromEntries(
+      Object.entries(query || {})
+        .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .map(([key, value]) => [key, String(value)])
+    );
+    const key = `movie:${pathKey}?${new URLSearchParams(cleanQuery).toString()}`;
+    const now = new Date().toISOString();
+    this.state.jobs = Array.isArray(this.state.jobs) ? this.state.jobs : [];
+
+    const existing = this.state.jobs.find(job => job.key === key && ['queued', 'leased'].includes(job.status));
+    if (existing) {
+      existing.priority = Math.min(Number(existing.priority || priority), Number(priority || 5));
+      existing.updatedAt = now;
+      existing.reason = reason;
+      this.save();
+      return existing;
+    }
+
+    const job = {
+      id: `job_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
+      key,
+      type: 'movie-fetch',
+      status: 'queued',
+      priority: Number(priority || 5),
+      requestPath: pathKey,
+      query: cleanQuery,
+      reason,
+      createdAt: now,
+      updatedAt: now,
+      leasedAt: null,
+      attempts: 0,
+    };
+    this.state.jobs.push(job);
+    this.pruneJobs();
+    this.save();
+    return job;
+  }
+
+  leaseJobs(maxJobs = 5) {
+    const nowMs = Date.now();
+    const leaseMs = Number(process.env.HOME_AGENT_JOB_LEASE_MS || 2 * 60 * 1000);
+    this.state.jobs = Array.isArray(this.state.jobs) ? this.state.jobs : [];
+    const jobs = this.state.jobs
+      .filter(job => {
+        if (job.status === 'queued') return true;
+        if (job.status !== 'leased') return false;
+        const leasedAt = job.leasedAt ? new Date(job.leasedAt).getTime() : 0;
+        return !leasedAt || nowMs - leasedAt > leaseMs;
+      })
+      .sort((a, b) => Number(a.priority || 5) - Number(b.priority || 5) || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+      .slice(0, Math.max(1, Math.min(20, Number(maxJobs || 5))));
+
+    const now = new Date().toISOString();
+    jobs.forEach(job => {
+      job.status = 'leased';
+      job.leasedAt = now;
+      job.updatedAt = now;
+      job.attempts = Number(job.attempts || 0) + 1;
+    });
+    if (jobs.length) this.save();
+    return jobs;
+  }
+
+  completeJob(jobId, ok, result = {}) {
+    this.state.jobs = Array.isArray(this.state.jobs) ? this.state.jobs : [];
+    const job = this.state.jobs.find(item => item.id === jobId);
+    if (!job) return null;
+    job.status = ok ? 'done' : 'failed';
+    job.completedAt = new Date().toISOString();
+    job.updatedAt = job.completedAt;
+    job.error = ok ? null : String(result.error || 'unknown error').slice(0, 240);
+    if (!ok && Number(job.attempts || 0) < Number(process.env.HOME_AGENT_JOB_MAX_ATTEMPTS || 3)) {
+      job.status = 'queued';
+      job.leasedAt = null;
+    }
+    this.pruneJobs();
+    this.save();
+    return job;
+  }
+
+  pruneJobs() {
+    const keep = Number(process.env.HOME_AGENT_JOB_HISTORY || 60);
+    const active = this.state.jobs.filter(job => ['queued', 'leased'].includes(job.status));
+    const history = this.state.jobs
+      .filter(job => !['queued', 'leased'].includes(job.status))
+      .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime())
+      .slice(0, keep);
+    this.state.jobs = [...active, ...history];
   }
 
   createBackupArchive() {

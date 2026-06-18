@@ -32,6 +32,10 @@ def api_base():
     return os.getenv("NHANCHILL_API_BASE", "https://tv.nhanchill.lol/api").rstrip("/")
 
 
+def movie_api_base():
+    return os.getenv("KKPHIM_API_BASE", "https://phimapi.com").rstrip("/")
+
+
 def agent_token():
     return os.getenv("HOME_AGENT_TOKEN", "").strip()
 
@@ -74,6 +78,164 @@ def get_agent(path, timeout=60):
         timeout=timeout,
         headers={"Authorization": f"Bearer {token}"},
     )
+
+
+def clean_query(query):
+    cleaned = {}
+    for key, value in (query or {}).items():
+        if isinstance(value, list):
+            value = value[0] if value else ""
+        if value is None or value == "":
+            continue
+        cleaned[str(key)] = str(value)
+    return cleaned
+
+
+def resolve_kkphim_request(request_path, query=None):
+    path = str(request_path or "/popular")
+    if not path.startswith("/"):
+        path = "/" + path
+    clean = clean_query(query)
+
+    if path in ("/popular", "/films/phim-moi-cap-nhat", "/danh-sach/phim-moi-cap-nhat"):
+        return "/danh-sach/phim-moi-cap-nhat-v3", {"page": clean.get("page", "1")}
+    if path in ("/the-loai", "/quoc-gia"):
+        return path, {}
+    if path.startswith("/phim/"):
+        return path, {}
+    if path.startswith("/tmdb/"):
+        return path, clean
+    if path.startswith("/films/search"):
+        return "/v1/api/tim-kiem", clean
+    if path.startswith("/films/the-loai/"):
+        return path.replace("/films/the-loai/", "/v1/api/the-loai/"), clean
+    if path.startswith("/films/quoc-gia/"):
+        return path.replace("/films/quoc-gia/", "/v1/api/quoc-gia/"), clean
+    if path.startswith("/films/nam-phat-hanh/"):
+        return path.replace("/films/nam-phat-hanh/", "/v1/api/nam/"), clean
+    if path.startswith("/films/nam/"):
+        return path.replace("/films/nam/", "/v1/api/nam/"), clean
+    if path.startswith("/films/danh-sach/"):
+        return path.replace("/films/danh-sach/", "/v1/api/danh-sach/"), clean
+    if path.startswith("/films/"):
+        return path.replace("/films/", "/v1/api/danh-sach/"), clean
+    if path.startswith("/danh-sach/"):
+        return path.replace("/danh-sach/", "/v1/api/danh-sach/"), clean
+    return path, clean
+
+
+def fetch_kkphim(request_path, query=None):
+    upstream_path, upstream_query = resolve_kkphim_request(request_path, query)
+    url = f"{movie_api_base()}{upstream_path}"
+    if upstream_query:
+        url = f"{url}?{urllib.parse.urlencode(upstream_query)}"
+    status, headers, body = request(
+        url,
+        timeout=env_int("MOVIE_FETCH_TIMEOUT_SECONDS", 25),
+        headers={
+            "Accept": "application/json, text/plain, */*",
+            "User-Agent": "Mozilla/5.0 (Linux; Android 9; NhanChillTV HomeAgent) AppleWebKit/537.36 Chrome/126 Safari/537.36",
+            "Referer": "https://kkphim1.com/",
+        },
+        max_bytes=env_int("MOVIE_FETCH_MAX_BYTES", 4 * 1024 * 1024),
+    )
+    content_type = headers.get("Content-Type", "")
+    if status < 200 or status >= 300:
+        raise RuntimeError(f"KKPhim returned HTTP {status}")
+    if "json" not in content_type.lower() and not body[:1] in (b"{", b"["):
+        raise RuntimeError(f"KKPhim returned non-JSON content: {content_type}")
+    return json.loads(body.decode("utf-8", "replace"))
+
+
+def post_movie_cache(request_path, query, data, provider="home-agent-kkphim", job_id=None):
+    return post_agent("/home-agent/movie-cache", {
+        "requestPath": request_path,
+        "query": clean_query(query),
+        "provider": provider,
+        "jobId": job_id,
+        "fetchedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "data": data,
+    })
+
+
+def default_movie_targets():
+    configured = os.getenv("MOVIE_CACHE_TARGETS_JSON", "").strip()
+    if configured:
+        try:
+            parsed = json.loads(configured)
+            if isinstance(parsed, list):
+                return parsed
+        except json.JSONDecodeError as err:
+            print(f"[movie-cache] invalid MOVIE_CACHE_TARGETS_JSON: {err}")
+    return [
+        {"path": "/popular", "query": {}},
+        {"path": "/films/phim-moi-cap-nhat", "query": {"page": 1}},
+        {"path": "/films/danh-sach/phim-bo", "query": {"page": 1, "limit": 24, "sort_field": "modified.time", "sort_type": "desc"}},
+        {"path": "/films/danh-sach/phim-le", "query": {"page": 1, "limit": 24, "sort_field": "modified.time", "sort_type": "desc"}},
+        {"path": "/films/danh-sach/hoat-hinh", "query": {"page": 1, "limit": 24, "sort_field": "modified.time", "sort_type": "desc"}},
+        {"path": "/the-loai", "query": {}},
+        {"path": "/quoc-gia", "query": {}},
+    ]
+
+
+def sync_movie_cache_targets():
+    started = time.time()
+    targets = default_movie_targets()[:max(1, env_int("MOVIE_CACHE_TARGET_LIMIT", 12))]
+    results = []
+    for target in targets:
+        request_path = target.get("path") or target.get("requestPath") or "/popular"
+        query = target.get("query") or {}
+        try:
+            data = fetch_kkphim(request_path, query)
+            post_movie_cache(request_path, query, data)
+            results.append({"path": request_path, "ok": True})
+        except Exception as err:
+            results.append({"path": request_path, "ok": False, "error": str(err)[:220]})
+    return {
+        "durationMs": int((time.time() - started) * 1000),
+        "total": len(results),
+        "ok": len([item for item in results if item["ok"]]),
+        "results": results,
+    }
+
+
+def poll_movie_jobs():
+    status, _, body = get_agent(f"/home-agent/jobs?limit={env_int('MOVIE_JOB_LIMIT', 5)}", timeout=30)
+    if status < 200 or status >= 300:
+        raise RuntimeError(f"job lease returned HTTP {status}")
+    payload = json.loads(body.decode("utf-8") or "{}")
+    jobs = payload.get("data", [])
+    results = []
+    for job in jobs:
+        job_id = str(job.get("id", ""))
+        request_path = job.get("requestPath") or "/popular"
+        query = job.get("query") or {}
+        job_type = job.get("type") or "movie-fetch"
+        result_path = f"/home-agent/jobs/{urllib.parse.quote(job_id, safe='')}/result"
+        try:
+            if job_type != "movie-fetch":
+                raise RuntimeError(f"Unsupported job type {job_type}")
+            data = fetch_kkphim(request_path, query)
+            post_agent(result_path, {
+                "success": True,
+                "type": "movie-fetch",
+                "requestPath": request_path,
+                "query": clean_query(query),
+                "provider": "home-agent-kkphim",
+                "fetchedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "data": data,
+            })
+            results.append({"id": job_id, "path": request_path, "ok": True})
+        except Exception as err:
+            post_agent(result_path, {
+                "success": False,
+                "type": job_type,
+                "requestPath": request_path,
+                "query": clean_query(query),
+                "error": str(err)[:240],
+            })
+            results.append({"id": job_id, "path": request_path, "ok": False, "error": str(err)[:220]})
+    return {"total": len(results), "ok": len([item for item in results if item["ok"]]), "results": results}
 
 
 def read_first(path, default=""):
@@ -160,7 +322,7 @@ def heartbeat():
         "uptimeSeconds": float(read_first("/proc/uptime", "0").split()[0]),
         "metrics": collect_metrics(),
         "network": collect_network(),
-        "capabilities": ["epg-fetch", "channel-health", "manifest-relay"],
+        "capabilities": ["epg-fetch", "channel-health", "manifest-relay", "movie-cache"],
     }
     return post_agent("/home-agent/heartbeat", payload)
 
@@ -333,6 +495,10 @@ def start_relay():
 def run_once():
     print("[home-agent] heartbeat")
     print(json.dumps(heartbeat(), ensure_ascii=False))
+    print("[home-agent] movie cache")
+    print(json.dumps(sync_movie_cache_targets(), ensure_ascii=False))
+    print("[home-agent] movie jobs")
+    print(json.dumps(poll_movie_jobs(), ensure_ascii=False))
     print("[home-agent] epg")
     print(json.dumps(fetch_epg(), ensure_ascii=False))
     print("[home-agent] channel health")
@@ -347,15 +513,35 @@ def run_loop():
     health_interval = env_int("HEALTH_INTERVAL_SECONDS", 10 * 60)
     heartbeat_interval = env_int("HEARTBEAT_INTERVAL_SECONDS", 60)
     backup_interval = env_int("BACKUP_INTERVAL_SECONDS", 24 * 60 * 60)
+    movie_cache_interval = env_int("MOVIE_CACHE_INTERVAL_SECONDS", 10 * 60)
+    movie_job_interval = env_int("MOVIE_JOB_INTERVAL_SECONDS", 60)
     next_epg = 0
     next_health = 0
     next_backup = 0
+    next_movie_cache = 0
+    next_movie_jobs = 0
     while True:
         now = time.time()
         try:
             heartbeat()
         except Exception as err:
             print(f"[heartbeat] {err}")
+        if now >= next_movie_jobs:
+            try:
+                print("[movie-jobs] poll")
+                poll_movie_jobs()
+                next_movie_jobs = now + movie_job_interval
+            except Exception as err:
+                print(f"[movie-jobs] {err}")
+                next_movie_jobs = now + min(120, movie_job_interval)
+        if now >= next_movie_cache:
+            try:
+                print("[movie-cache] sync")
+                sync_movie_cache_targets()
+                next_movie_cache = now + movie_cache_interval
+            except Exception as err:
+                print(f"[movie-cache] {err}")
+                next_movie_cache = now + min(300, movie_cache_interval)
         if now >= next_epg:
             try:
                 print("[epg] sync")

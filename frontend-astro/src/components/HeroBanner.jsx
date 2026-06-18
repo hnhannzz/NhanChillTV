@@ -40,7 +40,7 @@ export default function HeroBanner() {
     Promise.allSettled([
       fetch('/api/admin/events').then(response => response.ok ? response.json() : Promise.reject(new Error(`HTTP ${response.status}`))),
       fetchOPhimJson('/popular').catch(() => fetchOPhimJson('/danh-sach/phim-moi-cap-nhat')),
-    ]).then(async ([eventsResult, moviesResult]) => {
+    ]).then(([eventsResult, moviesResult]) => {
       const pinnedEvents = eventsResult.status === 'fulfilled' && eventsResult.value.success
         ? eventsResult.value.data
           .filter(event => event.isPinned && event.status !== 'ended')
@@ -54,24 +54,11 @@ export default function HeroBanner() {
         : [];
 
       const rawMovies = moviesResult.status === 'fulfilled' ? getOPhimItems(moviesResult.value).slice(0, 6) : [];
-      const movies = await Promise.all(
-        rawMovies.map(async movie => {
-          try {
-            const detailData = await fetchOPhimJson(`/phim/${movie.slug}`);
-            const detailItem = detailData.movie || detailData.item || detailData.data?.item;
-            if (detailItem) {
-              return {
-                ...movie,
-                original_name: detailItem.origin_name || detailItem.original_name || movie.origin_name || movie.original_name || '',
-                description: detailItem.content || detailItem.description || '',
-              };
-            }
-          } catch (err) {
-            console.error(`Failed to load details for banner movie ${movie.slug}:`, err);
-          }
-          return movie;
-        })
-      );
+      const movies = rawMovies.map(movie => ({
+        ...movie,
+        original_name: movie.origin_name || movie.original_name || '',
+        description: movie.content || movie.description || '',
+      }));
 
       setSlides([WORLD_CUP_SLIDE, ...pinnedEvents, ...movies]);
     }).finally(() => setLoading(false));
