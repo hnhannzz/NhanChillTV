@@ -8,7 +8,6 @@ import HomeFavoriteUpdates from '../components/HomeFavoriteUpdates.jsx';
 import HomeEvents from '../components/HomeEvents.jsx';
 import HomeChannels from '../components/HomeChannels.jsx';
 import HomeMovies from '../components/HomeMovies.jsx';
-import HomeAppDownload from '../components/HomeAppDownload.jsx';
 ---
 
 <Layout title="NhanChillTV - Xem Phim & Truyền Hình">
@@ -17,8 +16,6 @@ import HomeAppDownload from '../components/HomeAppDownload.jsx';
 
     <div class="bg-[#070707] px-4 py-10 pb-32 md:px-12 md:py-12">
       <div class="mx-auto flex max-w-[1600px] flex-col gap-12">
-        <HomeAppDownload client:only="react" />
-
         <section class="grid items-start gap-6">
           <WorldCupTodayWidget client:only="react" />
           <div class="grid min-w-0 gap-8 xl:grid-cols-2">

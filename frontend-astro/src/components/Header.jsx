@@ -4,6 +4,7 @@ import classNames from 'classnames';
 import AuthModal from './AuthModal';
 import { fetchOPhimJson, getOPhimImageUrl, getOPhimItems } from '../lib/OPhimApi';
 import AvatarPicker from './AvatarPicker';
+import AppDownloadButton from './AppDownloadButton';
 
 export default function Header({ toggleSidebar }) {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -195,6 +196,7 @@ export default function Header({ toggleSidebar }) {
         </div>
 
         <button onClick={() => setIsMobileSearchOpen(open => !open)} className="rounded-full p-2 hover:bg-white/10 md:hidden" title="Tìm kiếm"><Search size={22} /></button>
+        <AppDownloadButton />
         {user ? (
           <div className="flex items-center gap-2">
             <span className="hidden text-sm font-medium md:block">{user.username}</span>
