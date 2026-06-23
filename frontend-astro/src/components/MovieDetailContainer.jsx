@@ -3,6 +3,102 @@ import { Heart, Play, Send } from 'lucide-react';
 import { fetchOPhimJson, getOPhimImageUrl, getOPhimItems } from '../lib/OPhimApi';
 import MovieStreamPlayer from './MovieStreamPlayer';
 
+const getEpisodeList = (server) => {
+  const list = server?.server_data || server?.items || [];
+  return Array.isArray(list) ? list : [];
+};
+
+const getEpisodeKey = (episode) => (
+  episode?.slug ||
+  episode?.filename ||
+  episode?.name ||
+  episode?.link_m3u8 ||
+  episode?.link_hls ||
+  episode?.link_embed ||
+  episode?.embed ||
+  ''
+);
+
+const getEpisodeEmbed = (episode) => (
+  episode?.link_m3u8 ||
+  episode?.link_hls ||
+  episode?.link_embed ||
+  episode?.embed ||
+  ''
+);
+
+const normalizeText = (value) => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase();
+
+const inferAudioLabel = (serverName = '', movieLang = '') => {
+  const text = normalizeText(`${serverName} ${movieLang}`);
+  if (text.includes('long tieng') || text.includes('longtieng')) return 'Lồng tiếng';
+  if (text.includes('thuyet minh') || text.includes('thuyetminh')) return 'Thuyết minh';
+  return 'Vietsub';
+};
+
+const getEpisodeOptions = (movie) => (movie?.episodes || []).flatMap((server, serverIndex) =>
+  getEpisodeList(server).map((episode, episodeIndex) => ({
+    server,
+    serverIndex,
+    episode,
+    episodeIndex,
+    key: getEpisodeKey(episode),
+    embed: getEpisodeEmbed(episode),
+  }))
+);
+
+const getNextEpisodeOption = (movie, serverIndex, episodeIndex) => {
+  const server = movie?.episodes?.[serverIndex];
+  const episodes = getEpisodeList(server);
+  const nextIndex = episodeIndex + 1;
+  const episode = episodes[nextIndex];
+  if (!episode) return null;
+  return {
+    server,
+    serverIndex,
+    episode,
+    episodeIndex: nextIndex,
+    key: getEpisodeKey(episode),
+    embed: getEpisodeEmbed(episode),
+  };
+};
+
+const buildAudioVariants = (movie, currentEpisode, currentEpisodeIndex) => {
+  if (!movie || !currentEpisode) return [];
+  const currentSlug = currentEpisode?.slug;
+  const currentName = currentEpisode?.name;
+  const currentKey = getEpisodeKey(currentEpisode);
+
+  return (movie.episodes || []).map((server, serverIndex) => {
+    const episodes = getEpisodeList(server);
+    const matchedEpisode = episodes.find((episode, index) => (
+      (currentSlug && episode?.slug === currentSlug) ||
+      (currentName && episode?.name === currentName) ||
+      (Number.isInteger(currentEpisodeIndex) && index === currentEpisodeIndex) ||
+      getEpisodeKey(episode) === currentKey
+    ));
+    if (!matchedEpisode) return null;
+
+    const episodeIndex = episodes.indexOf(matchedEpisode);
+    const kind = inferAudioLabel(server?.server_name, movie?.lang || movie?.language);
+    const serverName = String(server?.server_name || `Server ${serverIndex + 1}`).trim();
+    const hasKindInServerName = normalizeText(serverName).includes(normalizeText(kind));
+    const detail = `${serverName.startsWith('#') ? '' : '#'}${serverName}${hasKindInServerName ? '' : ` (${kind})`}`;
+
+    return {
+      id: `${serverIndex}:${getEpisodeKey(matchedEpisode)}`,
+      label: `${kind} #${serverIndex + 1}`,
+      detail,
+      serverIndex,
+      episodeIndex,
+      episode: matchedEpisode,
+    };
+  }).filter(Boolean);
+};
+
 export default function MovieDetailContainer() {
   const [movie, setMovie] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -11,6 +107,8 @@ export default function MovieDetailContainer() {
   const [currentEmbed, setCurrentEmbed] = useState('');
   const [currentEpisode, setCurrentEpisode] = useState(null);
   const [currentEpName, setCurrentEpName] = useState('');
+  const [currentServerIndex, setCurrentServerIndex] = useState(0);
+  const [currentEpisodeIndex, setCurrentEpisodeIndex] = useState(0);
   
   const [isFavorite, setIsFavorite] = useState(false);
   
@@ -20,6 +118,18 @@ export default function MovieDetailContainer() {
 
   const slug = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('slug') : null;
   const episodeQuery = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('episode') : null;
+
+  const setActiveEpisode = (option, shouldScroll = false) => {
+    if (!option?.episode) return;
+    setCurrentEpisode(option.episode);
+    setCurrentEmbed(option.embed || getEpisodeEmbed(option.episode));
+    setCurrentEpName(option.episode.name);
+    setCurrentServerIndex(option.serverIndex || 0);
+    setCurrentEpisodeIndex(option.episodeIndex || 0);
+    if (shouldScroll && typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
 
   useEffect(() => {
     if (!slug) {
@@ -37,16 +147,9 @@ export default function MovieDetailContainer() {
           loadRelatedMovies(m);
           
           if (m.episodes && m.episodes[0] && (m.episodes[0].server_data || m.episodes[0].items)) {
-            const allEpisodes = m.episodes.flatMap(server => server.server_data || server.items || []);
-            const firstEpisode = allEpisodes.find(ep => {
-              const key = ep.slug || ep.filename || ep.name || ep.link_m3u8 || ep.link_embed || '';
-              return episodeQuery && key === episodeQuery;
-            }) || allEpisodes[0];
-            if (firstEpisode) {
-              setCurrentEpisode(firstEpisode);
-              setCurrentEmbed(firstEpisode.link_m3u8 || firstEpisode.link_embed || firstEpisode.embed || '');
-              setCurrentEpName(firstEpisode.name);
-            }
+            const allEpisodes = getEpisodeOptions(m);
+            const firstEpisode = allEpisodes.find(option => episodeQuery && option.key === episodeQuery) || allEpisodes[0];
+            setActiveEpisode(firstEpisode);
           }
 
           // Check favorite
@@ -101,6 +204,10 @@ export default function MovieDetailContainer() {
       setRelatedMovies([]);
     }
   };
+
+  const audioVariants = buildAudioVariants(movie, currentEpisode, currentEpisodeIndex);
+  const currentAudioVariantId = `${currentServerIndex}:${getEpisodeKey(currentEpisode)}`;
+  const nextEpisodeOption = getNextEpisodeOption(movie, currentServerIndex, currentEpisodeIndex);
 
   const renderPeopleLinks = (people, type) => (
     <span className="inline-flex flex-wrap gap-1.5 align-middle">
@@ -256,7 +363,15 @@ export default function MovieDetailContainer() {
       <div className="w-full bg-black rounded-xl overflow-hidden shadow-2xl border border-white/5 relative mx-auto">
         {currentEpisode ? (
           <div className="aspect-video w-full bg-[#0A0A0A]">
-            <MovieStreamPlayer episode={currentEpisode} movie={movie} movieSlug={slug} />
+            <MovieStreamPlayer
+              episode={currentEpisode}
+              movie={movie}
+              movieSlug={slug}
+              audioVariants={audioVariants}
+              currentAudioVariantId={currentAudioVariantId}
+              onSelectAudioVariant={(variant) => setActiveEpisode(variant)}
+              onNextEpisode={nextEpisodeOption ? () => setActiveEpisode(nextEpisodeOption, true) : null}
+            />
           </div>
         ) : (
           <div className="aspect-video flex items-center justify-center text-white/50 bg-[#121212]">
@@ -276,18 +391,21 @@ export default function MovieDetailContainer() {
               <div key={sIdx} className="mb-4 last:mb-0">
                 <h4 className="text-sm font-semibold text-white/50 mb-2">{server.server_name}</h4>
                 <div className="flex flex-wrap gap-2">
-                  {(server.server_data || server.items).map((ep, eIdx) => {
-                    const epEmbed = ep.link_m3u8 || ep.link_embed || ep.embed || '';
+                  {getEpisodeList(server).map((ep, eIdx) => {
+                    const epEmbed = getEpisodeEmbed(ep);
+                    const isActiveEpisode = currentServerIndex === sIdx && currentEpisodeIndex === eIdx;
                     return (
                       <button 
                         key={eIdx}
-                        onClick={() => {
-                          setCurrentEpisode(ep);
-                          setCurrentEmbed(epEmbed);
-                          setCurrentEpName(ep.name);
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
-                        }}
-                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${currentEmbed === epEmbed ? 'bg-[#ED2C25] text-white shadow-lg' : 'bg-[#1A1A1A] text-white/70 hover:bg-white/20'}`}
+                        onClick={() => setActiveEpisode({
+                          server,
+                          serverIndex: sIdx,
+                          episode: ep,
+                          episodeIndex: eIdx,
+                          key: getEpisodeKey(ep),
+                          embed: epEmbed,
+                        }, true)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${isActiveEpisode || currentEmbed === epEmbed ? 'bg-[#ED2C25] text-white shadow-lg' : 'bg-[#1A1A1A] text-white/70 hover:bg-white/20'}`}
                       >
                         {ep.name}
                       </button>

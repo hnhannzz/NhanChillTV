@@ -3,7 +3,16 @@ import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
 const UnifiedPlayer = lazy(() => import('./UnifiedPlayer.jsx'));
 const LegacyPlayer = lazy(() => import('./LegacyPlayer.jsx'));
 
-export default function MovieStreamPlayer({ episode, movie, movieSlug, onNextEpisode, onCinemaMode }) {
+export default function MovieStreamPlayer({
+  episode,
+  movie,
+  movieSlug,
+  onNextEpisode,
+  onCinemaMode,
+  audioVariants = [],
+  currentAudioVariantId = '',
+  onSelectAudioVariant,
+}) {
   // Ưu tiên m3u8 từ KKPhim, nếu không có fallback sang embed.
   const streamUrl = episode?.link_m3u8 || episode?.link_hls || '';
   const embedUrl = episode?.link_embed || episode?.embed || '';
@@ -79,6 +88,9 @@ export default function MovieStreamPlayer({ episode, movie, movieSlug, onNextEpi
           onTimeUpdate={handleTimeUpdate}
           onNextEpisode={onNextEpisode}
           onCinemaMode={onCinemaMode}
+          audioVariants={audioVariants}
+          currentAudioVariantId={currentAudioVariantId}
+          onSelectAudioVariant={onSelectAudioVariant}
           title={movie?.name || 'Phim'}
           subTitle={episode?.name || 'Tập phim'}
           autoplay={true}

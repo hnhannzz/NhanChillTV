@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, SkipForward, LightbulbOff, Settings } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, SkipForward, LightbulbOff, Settings, Mic, Cast, Check } from 'lucide-react';
 import { inferPlaybackType } from '../lib/playbackUrl';
 
 export default function UnifiedPlayer({
@@ -13,6 +13,9 @@ export default function UnifiedPlayer({
   streamType,
   onNextEpisode,
   onCinemaMode,
+  audioVariants = [],
+  currentAudioVariantId = '',
+  onSelectAudioVariant,
   title,
   subTitle,
   initialTime = 0,
@@ -48,6 +51,8 @@ export default function UnifiedPlayer({
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [availableQualities, setAvailableQualities] = useState([]);
   const [currentQuality, setCurrentQuality] = useState('auto');
+  const [showAudioMenu, setShowAudioMenu] = useState(false);
+  const [castMessage, setCastMessage] = useState('');
   
   // Context Menu & Custom Modals
   const [contextMenu, setContextMenu] = useState(null);
@@ -56,6 +61,8 @@ export default function UnifiedPlayer({
 
   const isLiveStream = isLive ?? (duration === Infinity || !isFinite(duration) || subTitle === 'Live TV');
   const shouldGateResume = initialTime > 5 && isLive !== true;
+  const hasAudioVariants = Array.isArray(audioVariants) && audioVariants.length > 0;
+  const selectedAudioVariant = audioVariants.find(item => item.id === currentAudioVariantId) || audioVariants[0];
 
   // Mobile/touch detection
   const [isMobile, setIsMobile] = useState(false);
@@ -94,7 +101,14 @@ export default function UnifiedPlayer({
   useEffect(() => {
     setCurrentTime(shouldGateResume ? 0 : initialTime);
     setShowContinuePrompt(shouldGateResume);
+    setShowAudioMenu(false);
   }, [url, initialTime, shouldGateResume]);
+
+  useEffect(() => {
+    if (!castMessage) return undefined;
+    const timer = window.setTimeout(() => setCastMessage(''), 3200);
+    return () => window.clearTimeout(timer);
+  }, [castMessage]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -521,6 +535,28 @@ export default function UnifiedPlayer({
     }
   };
 
+  const handleCast = () => {
+    const video = videoRef.current;
+    if (!video || typeof window === 'undefined') return;
+
+    if ((isIOS || isSafariOrIOS) && typeof video.webkitShowPlaybackTargetPicker === 'function') {
+      video.webkitShowPlaybackTargetPicker();
+      return;
+    }
+
+    if (window.chrome?.cast?.requestSession) {
+      window.chrome.cast.requestSession(
+        () => setCastMessage('Đã gửi yêu cầu kết nối Chromecast.'),
+        () => setCastMessage('Chưa kết nối được Chromecast trên trình duyệt này.')
+      );
+      return;
+    }
+
+    setCastMessage(isIOS || isSafariOrIOS
+      ? 'AirPlay chưa khả dụng trên trình duyệt này.'
+      : 'Chromecast cần Chrome và thiết bị Cast cùng mạng.');
+  };
+
   const handleSeekChange = (e) => {
     const val = parseFloat(e.target.value);
     setSeekingTime(val);
@@ -655,7 +691,8 @@ export default function UnifiedPlayer({
         poster={poster}
         playsInline={true}
         {...{
-          "webkit-playsinline": "true"
+          "webkit-playsinline": "true",
+          "x-webkit-airplay": "allow"
         }}
       />
 
@@ -727,6 +764,12 @@ export default function UnifiedPlayer({
       {error && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-red-600 text-white px-4 py-2 rounded-md shadow-lg text-xs font-semibold max-w-[90%] text-center">
           {error}
+        </div>
+      )}
+
+      {castMessage && (
+        <div className="absolute top-4 right-4 z-50 max-w-[82%] rounded-lg border border-white/10 bg-[#151515]/95 px-3 py-2 text-xs font-semibold text-white shadow-2xl backdrop-blur-md">
+          {castMessage}
         </div>
       )}
 
@@ -869,6 +912,49 @@ export default function UnifiedPlayer({
             </div>
 
             <div className="flex items-center gap-2.5 md:gap-5">
+              {hasAudioVariants && (
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setShowAudioMenu(value => !value);
+                      setShowSettings(false);
+                    }}
+                    className="text-white/80 hover:text-white transition-colors focus:outline-none group/btn"
+                    title={selectedAudioVariant?.label || 'Âm thanh'}
+                  >
+                    <Mic size={20} className="group-hover/btn:scale-110 transition-transform" />
+                  </button>
+
+                  <div
+                    onClick={(event) => event.stopPropagation()}
+                    className={`absolute bottom-9 left-1/2 z-[60] w-56 -translate-x-1/2 overflow-hidden rounded-xl border border-white/10 bg-[#18181C]/95 text-left text-sm text-white shadow-2xl backdrop-blur-md transition-all duration-200 origin-bottom ${showAudioMenu ? 'opacity-100 translate-y-0 scale-100' : 'pointer-events-none opacity-0 translate-y-2 scale-95'}`}
+                  >
+                    {audioVariants.map((variant) => {
+                      const selected = variant.id === selectedAudioVariant?.id;
+                      return (
+                        <button
+                          key={variant.id}
+                          type="button"
+                          onClick={() => {
+                            onSelectAudioVariant?.(variant);
+                            setShowAudioMenu(false);
+                          }}
+                          className={`flex w-full flex-col gap-1 px-4 py-3 transition-colors ${selected ? 'bg-[#4A2A24] text-[#FFD66B]' : 'text-white hover:bg-white/8'}`}
+                        >
+                          <span className="flex w-full items-center justify-between gap-3 font-bold">
+                            <span className="truncate">{variant.label}</span>
+                            {selected && <Check size={16} />}
+                          </span>
+                          <span className="w-full truncate text-left text-xs font-semibold text-white/85">{variant.detail}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {onNextEpisode && (
                 <button onClick={onNextEpisode} className="flex items-center gap-1.5 text-white/80 hover:text-white transition-colors focus:outline-none group/btn">
                   <SkipForward size={20} className="group-hover/btn:scale-110 transition-transform" />
@@ -876,6 +962,10 @@ export default function UnifiedPlayer({
                 </button>
               )}
               
+              <button type="button" onClick={handleCast} className="text-white/80 hover:text-white transition-colors focus:outline-none group/btn" title={isIOS || isSafariOrIOS ? 'AirPlay' : 'Chromecast'}>
+                <Cast size={21} className="group-hover/btn:scale-110 transition-transform" />
+              </button>
+
               {onCinemaMode && (
                 <button onClick={onCinemaMode} className="hidden sm:flex items-center gap-1.5 text-white/80 hover:text-white transition-colors focus:outline-none group/btn" title="Tắt đèn">
                   <LightbulbOff size={20} className="group-hover/btn:text-yellow-400 transition-colors" />
