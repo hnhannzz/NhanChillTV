@@ -304,9 +304,8 @@ export default function LegacyPlayer({
 
             <div className="flex items-center gap-5">
               {onNextEpisode && (
-                <button onClick={onNextEpisode} className="flex items-center gap-1.5 text-white/80 hover:text-white transition-colors focus:outline-none group/btn">
+                <button type="button" onClick={onNextEpisode} className="text-white/80 hover:text-white transition-colors focus:outline-none group/btn" title="Tập tiếp">
                   <SkipForward size={20} className="group-hover/btn:scale-110 transition-transform" />
-                  <span className="text-sm font-medium hidden sm:block">Tập tiếp</span>
                 </button>
               )}
               

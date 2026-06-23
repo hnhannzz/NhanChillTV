@@ -2,6 +2,57 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, SkipForward, LightbulbOff, Settings, Mic, Cast, Check } from 'lucide-react';
 import { inferPlaybackType } from '../lib/playbackUrl';
 
+let castSenderScriptPromise = null;
+
+const loadCastSenderFramework = () => {
+  if (typeof window === 'undefined') return Promise.reject(new Error('Cast only works in the browser'));
+  if (window.cast?.framework && window.chrome?.cast) return Promise.resolve();
+
+  if (!castSenderScriptPromise) {
+    castSenderScriptPromise = new Promise((resolve, reject) => {
+      const existingScript = document.querySelector('script[data-nhanchill-cast-sdk="true"]');
+      const timeout = window.setTimeout(() => reject(new Error('Cast SDK load timeout')), 10000);
+
+      window.__onGCastApiAvailable = (isAvailable) => {
+        window.clearTimeout(timeout);
+        if (isAvailable && window.cast?.framework && window.chrome?.cast) {
+          resolve();
+        } else {
+          reject(new Error('Cast SDK is not available'));
+        }
+      };
+
+      if (existingScript) {
+        const checkReady = () => {
+          if (window.cast?.framework && window.chrome?.cast) {
+            window.clearTimeout(timeout);
+            resolve();
+            return;
+          }
+          window.setTimeout(checkReady, 100);
+        };
+        checkReady();
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = 'https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1';
+      script.async = true;
+      script.dataset.nhanchillCastSdk = 'true';
+      script.onerror = () => {
+        window.clearTimeout(timeout);
+        reject(new Error('Cannot load Cast SDK'));
+      };
+      document.head.appendChild(script);
+    }).catch((error) => {
+      castSenderScriptPromise = null;
+      throw error;
+    });
+  }
+
+  return castSenderScriptPromise;
+};
+
 export default function UnifiedPlayer({
   url,
   poster,
@@ -90,6 +141,14 @@ export default function UnifiedPlayer({
     if (streamType === 'mpegts') return 'mpegts';
     if (streamType === 'progressive' || streamType === 'mp4') return 'mp4';
     return inferPlaybackType(url);
+  };
+
+  const getCastContentType = () => {
+    const playbackType = getResolvedPlaybackType();
+    if (playbackType === 'dash') return 'application/dash+xml';
+    if (playbackType === 'mp4') return 'video/mp4';
+    if (playbackType === 'mpegts') return 'video/mp2t';
+    return 'application/x-mpegURL';
   };
 
   useEffect(() => {
@@ -535,9 +594,58 @@ export default function UnifiedPlayer({
     }
   };
 
-  const handleCast = () => {
+  const handleCast = async () => {
     const video = videoRef.current;
     if (!video || typeof window === 'undefined') return;
+
+    if (!isIOS && !isSafariOrIOS) {
+      setCastMessage('Đang tìm thiết bị Chromecast...');
+
+      try {
+        await loadCastSenderFramework();
+        const castContext = window.cast.framework.CastContext.getInstance();
+        castContext.setOptions({
+          receiverApplicationId: window.chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
+          autoJoinPolicy: window.chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED,
+        });
+
+        await castContext.requestSession();
+        const session = castContext.getCurrentSession();
+        if (!session) throw new Error('No Cast session');
+
+        const castUrl = new URL(url, window.location.href).href;
+        const mediaInfo = new window.chrome.cast.media.MediaInfo(castUrl, getCastContentType());
+        mediaInfo.metadata = new window.chrome.cast.media.GenericMediaMetadata();
+        mediaInfo.metadata.title = title || 'NhanChillTV';
+        mediaInfo.metadata.subtitle = subTitle || '';
+        if (poster) {
+          mediaInfo.metadata.images = [new window.chrome.cast.Image(new URL(poster, window.location.href).href)];
+        }
+
+        const request = new window.chrome.cast.media.LoadRequest(mediaInfo);
+        request.autoplay = true;
+        request.currentTime = isLiveStream ? 0 : Math.max(0, Math.floor(video.currentTime || currentTime || 0));
+
+        await session.loadMedia(request);
+        setCastMessage('Đã gửi phim sang Chromecast.');
+        return;
+      } catch (castError) {
+        console.warn('[Player] Chromecast sender failed:', castError);
+      }
+
+      try {
+        if (video.remote && typeof video.remote.prompt === 'function') {
+          await video.remote.prompt();
+          setCastMessage('Đã mở trình chọn thiết bị phát.');
+          return;
+        }
+      } catch (remoteError) {
+        console.warn('[Player] Remote playback failed:', remoteError);
+      }
+
+      setCastMessage('Chrome chưa tìm thấy thiết bị Chromecast cùng mạng.');
+      return;
+    }
 
     if ((isIOS || isSafariOrIOS) && typeof video.webkitShowPlaybackTargetPicker === 'function') {
       video.webkitShowPlaybackTargetPicker();
@@ -805,7 +913,7 @@ export default function UnifiedPlayer({
         </div>
 
         {/* Bottom Gradient & Controls */}
-        <div className="bg-gradient-to-t from-black/90 via-black/50 to-transparent pt-12 pb-3 md:pb-4 px-3 md:px-6 pointer-events-auto">
+        <div className="bg-gradient-to-t from-black/90 via-black/50 to-transparent px-2 pb-3 pt-10 sm:px-3 sm:pt-12 md:px-6 md:pb-4 pointer-events-auto">
           {/* Progress Bar */}
           {!isLiveStream && (
             <div className="group/progress relative flex items-center h-4 cursor-pointer mb-2">
@@ -834,8 +942,8 @@ export default function UnifiedPlayer({
             </div>
           )}
 
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 md:gap-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex w-full min-w-0 items-center justify-between gap-2 sm:w-auto sm:justify-start md:gap-4">
               {/* Skip backward 5s */}
               {!isLiveStream && (
                 <button
@@ -911,7 +1019,7 @@ export default function UnifiedPlayer({
               )}
             </div>
 
-            <div className="flex items-center gap-2.5 md:gap-5">
+            <div className="flex w-full items-center justify-around gap-2 sm:w-auto sm:justify-start sm:gap-2.5 md:gap-5">
               {hasAudioVariants && (
                 <div className="relative">
                   <button
@@ -921,7 +1029,7 @@ export default function UnifiedPlayer({
                       setShowAudioMenu(value => !value);
                       setShowSettings(false);
                     }}
-                    className="text-white/80 hover:text-white transition-colors focus:outline-none group/btn"
+                    className="grid h-8 w-8 shrink-0 place-items-center text-white/80 hover:text-white transition-colors focus:outline-none group/btn"
                     title={selectedAudioVariant?.label || 'Âm thanh'}
                   >
                     <Mic size={20} className="group-hover/btn:scale-110 transition-transform" />
@@ -929,7 +1037,7 @@ export default function UnifiedPlayer({
 
                   <div
                     onClick={(event) => event.stopPropagation()}
-                    className={`absolute bottom-9 left-1/2 z-[60] w-56 -translate-x-1/2 overflow-hidden rounded-xl border border-white/10 bg-[#18181C]/95 text-left text-sm text-white shadow-2xl backdrop-blur-md transition-all duration-200 origin-bottom ${showAudioMenu ? 'opacity-100 translate-y-0 scale-100' : 'pointer-events-none opacity-0 translate-y-2 scale-95'}`}
+                    className={`absolute bottom-10 left-0 z-[60] w-[min(18rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-[#ED2C25]/25 bg-[#101010]/95 text-left text-sm text-white shadow-2xl backdrop-blur-md transition-all duration-200 origin-bottom-left sm:left-1/2 sm:w-64 sm:-translate-x-1/2 sm:origin-bottom ${showAudioMenu ? 'opacity-100 translate-y-0 scale-100' : 'pointer-events-none opacity-0 translate-y-2 scale-95'}`}
                   >
                     {audioVariants.map((variant) => {
                       const selected = variant.id === selectedAudioVariant?.id;
@@ -941,13 +1049,13 @@ export default function UnifiedPlayer({
                             onSelectAudioVariant?.(variant);
                             setShowAudioMenu(false);
                           }}
-                          className={`flex w-full flex-col gap-1 px-4 py-3 transition-colors ${selected ? 'bg-[#4A2A24] text-[#FFD66B]' : 'text-white hover:bg-white/8'}`}
+                          className={`flex w-full flex-col gap-1 px-4 py-3 transition-colors ${selected ? 'bg-[#ED2C25]/20 text-white ring-1 ring-inset ring-[#ED2C25]/45' : 'text-white hover:bg-white/8'}`}
                         >
                           <span className="flex w-full items-center justify-between gap-3 font-bold">
-                            <span className="truncate">{variant.label}</span>
-                            {selected && <Check size={16} />}
+                            <span className="min-w-0 break-words">{variant.label}</span>
+                            {selected && <Check size={16} className="shrink-0 text-[#ED2C25]" />}
                           </span>
-                          <span className="w-full truncate text-left text-xs font-semibold text-white/85">{variant.detail}</span>
+                          <span className="w-full break-words text-left text-xs font-semibold leading-snug text-white/75">{variant.detail}</span>
                         </button>
                       );
                     })}
@@ -956,24 +1064,23 @@ export default function UnifiedPlayer({
               )}
 
               {onNextEpisode && (
-                <button onClick={onNextEpisode} className="flex items-center gap-1.5 text-white/80 hover:text-white transition-colors focus:outline-none group/btn">
+                <button type="button" onClick={onNextEpisode} className="grid h-8 w-8 shrink-0 place-items-center text-white/80 hover:text-white transition-colors focus:outline-none group/btn" title="Tập tiếp">
                   <SkipForward size={20} className="group-hover/btn:scale-110 transition-transform" />
-                  <span className="text-sm font-medium hidden sm:block">Tập tiếp</span>
                 </button>
               )}
               
-              <button type="button" onClick={handleCast} className="text-white/80 hover:text-white transition-colors focus:outline-none group/btn" title={isIOS || isSafariOrIOS ? 'AirPlay' : 'Chromecast'}>
+              <button type="button" onClick={handleCast} className="grid h-8 w-8 shrink-0 place-items-center text-white/80 hover:text-white transition-colors focus:outline-none group/btn" title={isIOS || isSafariOrIOS ? 'AirPlay' : 'Chromecast'}>
                 <Cast size={21} className="group-hover/btn:scale-110 transition-transform" />
               </button>
 
               {onCinemaMode && (
-                <button onClick={onCinemaMode} className="hidden sm:flex items-center gap-1.5 text-white/80 hover:text-white transition-colors focus:outline-none group/btn" title="Tắt đèn">
+                <button onClick={onCinemaMode} className="hidden h-8 w-8 shrink-0 place-items-center text-white/80 hover:text-white transition-colors focus:outline-none group/btn sm:grid" title="Tắt đèn">
                   <LightbulbOff size={20} className="group-hover/btn:text-yellow-400 transition-colors" />
                 </button>
               )}
 
               {isPipSupported && (
-                <button onClick={togglePip} className="text-white/80 hover:text-white transition-colors focus:outline-none group/btn" title="Xem hình trong hình (PiP)">
+                <button onClick={togglePip} className="grid h-8 w-8 shrink-0 place-items-center text-white/80 hover:text-white transition-colors focus:outline-none group/btn" title="Xem hình trong hình (PiP)">
                   <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21 16V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z" />
                     <rect x="13" y="13" width="8" height="8" rx="1" fill="currentColor" stroke="none" />
@@ -981,11 +1088,11 @@ export default function UnifiedPlayer({
                 </button>
               )}
 
-              <button onClick={() => setShowSettings(!showSettings)} className="text-white/80 hover:text-white transition-colors focus:outline-none group/btn" title="Cài đặt">
+              <button onClick={() => setShowSettings(!showSettings)} className="grid h-8 w-8 shrink-0 place-items-center text-white/80 hover:text-white transition-colors focus:outline-none group/btn" title="Cài đặt">
                 <Settings size={20} className="group-hover/btn:rotate-45 transition-transform duration-300" />
               </button>
 
-              <button onClick={toggleFullscreen} className="text-white/80 hover:text-white transition-colors focus:outline-none group/btn">
+              <button onClick={toggleFullscreen} className="grid h-8 w-8 shrink-0 place-items-center text-white/80 hover:text-white transition-colors focus:outline-none group/btn">
                 {isFullscreen ? <Minimize size={22} className="group-hover/btn:scale-90 transition-transform" /> : <Maximize size={22} className="group-hover/btn:scale-110 transition-transform" />}
               </button>
             </div>
