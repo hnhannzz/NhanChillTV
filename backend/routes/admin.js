@@ -410,6 +410,10 @@ router.post('/worldcup-streams/:matchId', auth, (req, res) => {
     sourceType,
     sourceChannelId: sourceType === 'iptv' ? String(req.body?.sourceChannelId || '').trim() : null,
     stream: sourceType === 'custom' ? String(req.body?.stream || '').trim() : null,
+    isCustom: true,
+    custom: true,
+    manual: true,
+    createdBy: 'admin',
   };
 
   if (!matchId) return res.status(400).json({ success: false, error: 'Match ID is required' });

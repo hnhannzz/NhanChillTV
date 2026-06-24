@@ -1,8 +1,8 @@
 const DEFAULT_WORLDCUP_STREAMS = [
-  { id: 'vtv3hd', name: 'Luồng bình luận miền bắc', sourceType: 'iptv', sourceChannelId: 'vtv3hd' },
-  { id: 'vtv6hd', name: 'Luồng bình luận miền bắc (dự phòng)', sourceType: 'iptv', sourceChannelId: 'vtv6hd' },
-  { id: 'vtv9hd', name: 'Luồng bình luận nam bộ', sourceType: 'iptv', sourceChannelId: 'vtv9hd' },
-  { id: 'vtv10hd', name: 'Luồng bình luận nam bộ (dự phòng)', sourceType: 'iptv', sourceChannelId: 'vtv10hd' },
+  { id: 'vtv3hd', name: 'Luồng bình luận miền bắc', sourceType: 'iptv', sourceChannelId: 'vtv3hd', isDefault: true },
+  { id: 'vtv6hd', name: 'Luồng bình luận miền bắc (dự phòng)', sourceType: 'iptv', sourceChannelId: 'vtv6hd', isDefault: true },
+  { id: 'vtv9hd', name: 'Luồng bình luận nam bộ', sourceType: 'iptv', sourceChannelId: 'vtv9hd', isDefault: true },
+  { id: 'vtv10hd', name: 'Luồng bình luận nam bộ (dự phòng)', sourceType: 'iptv', sourceChannelId: 'vtv10hd', isDefault: true },
 ];
 
 function isM3u8Url(url) {
@@ -30,6 +30,10 @@ function normalizeCustomWorldCupStream(stream, m3uManager) {
     sourceType,
     sourceChannelId: sourceType === 'iptv' ? String(stream.sourceChannelId || '').trim() : null,
     stream: sourceType === 'custom' ? String(stream.stream || '').trim() : null,
+    isCustom: true,
+    custom: true,
+    manual: true,
+    createdBy: 'admin',
   };
   if (normalized.sourceType === 'iptv') return resolveIptvStream(normalized, m3uManager);
   if (normalized.sourceType === 'custom' && isM3u8Url(normalized.stream)) {
@@ -45,7 +49,7 @@ function getWorldCupStreams(matchId, { db, m3uManager }) {
   const custom = db.getWorldCupStreams(matchId)
     .map(stream => normalizeCustomWorldCupStream(stream, m3uManager))
     .filter(Boolean);
-  return [...defaults, ...custom];
+  return [...custom, ...defaults];
 }
 
 module.exports = {

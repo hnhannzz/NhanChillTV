@@ -71,6 +71,7 @@ test('match kickoff is converted to Vietnam GMT+7 day key', () => {
 test('World Cup streams only expose M3U8 sources', () => {
   const db = {
     getWorldCupStreams: () => [
+      { id: 'wc-added-iptv', name: 'Added IPTV', sourceType: 'iptv', sourceChannelId: 'vtv9hd' },
       { id: 'custom-ok', name: 'Custom OK', sourceType: 'custom', stream: 'https://example.com/live/index.m3u8' },
       { id: 'custom-bad', name: 'Custom Bad', sourceType: 'custom', stream: 'https://example.com/live.ts' },
     ],
@@ -86,8 +87,12 @@ test('World Cup streams only expose M3U8 sources', () => {
 
   assert(streams.length >= 3);
   assert(streams.every(stream => isM3u8Url(stream.stream)));
+  assert.equal(streams[0].id, 'wc-added-iptv');
+  assert.equal(streams[0].isCustom, true);
+  assert.equal(streams[0].manual, true);
   assert.equal(streams.some(stream => stream.id === 'vtv6hd'), false);
   assert.equal(streams.some(stream => stream.id === 'custom-bad'), false);
+  assert.equal(streams.find(stream => stream.id === 'vtv3hd')?.isDefault, true);
 });
 
 test('finished World Cup matches do not render a player', async () => {
