@@ -152,6 +152,61 @@ export default function UnifiedPlayer({
     return 'application/x-mpegURL';
   };
 
+  const normalizeClearKeyHex = (value) => {
+    const clean = String(value || '').trim().replace(/^0x/i, '').replace(/-/g, '').toLowerCase();
+    return /^[0-9a-f]{32}$/.test(clean) ? clean : null;
+  };
+
+  const normalizeClearKeys = (source) => {
+    const keys = {};
+    if (!source) return keys;
+
+    const addKey = (kidValue, keyValue) => {
+      const kid = normalizeClearKeyHex(kidValue);
+      const key = normalizeClearKeyHex(keyValue);
+      if (kid && key) keys[kid] = key;
+    };
+
+    if (typeof source === 'string') {
+      const [kid, key] = source.split(':');
+      addKey(kid, key);
+    } else if (typeof source === 'object') {
+      Object.entries(source).forEach(([kid, key]) => addKey(kid, key));
+    }
+
+    return keys;
+  };
+
+  const getShakaErrorCodes = (err) => {
+    const codes = new Set();
+    const visit = (value, depth = 0) => {
+      if (!value || depth > 4) return;
+      if (typeof value.code === 'number') codes.add(value.code);
+      if (Array.isArray(value.data)) value.data.forEach(item => visit(item, depth + 1));
+    };
+    visit(err);
+    return codes;
+  };
+
+  const formatPlaybackError = (err, hasClearKeys) => {
+    const codes = getShakaErrorCodes(err);
+    if (hasClearKeys && codes.has(6007)) {
+      return 'Lỗi DRM ClearKey: key hiện tại không khớp với manifest hoặc nguồn đã đổi key. Vui lòng cập nhật lại key/nguồn trong M3U.';
+    }
+    if (codes.has(6014)) {
+      return 'Lỗi DRM: license/key đã hết hạn. Vui lòng cập nhật nguồn hoặc ClearKey mới.';
+    }
+    if (codes.has(6007)) {
+      return 'Lỗi DRM: không lấy được license từ nguồn phát. Có thể license server/proxy bị chặn hoặc nguồn đã đổi key.';
+    }
+    if (codes.has(6012)) {
+      return 'Lỗi DRM: nguồn yêu cầu license server nhưng hệ thống chưa có license URL.';
+    }
+    return `Lỗi phát video: ${err?.message || 'Không thể tải luồng video'}`;
+  };
+
+  const maskKeyIds = (clearKeysObj) => Object.keys(clearKeysObj).map(kid => `${kid.slice(0, 6)}...${kid.slice(-4)}`);
+
   useEffect(() => {
     if (typeof document !== 'undefined') {
       setIsPipSupported(document.pictureInPictureEnabled || false);
@@ -186,6 +241,7 @@ export default function UnifiedPlayer({
     const isDash = playbackType === 'dash';
     const isMpegTs = playbackType === 'mpegts';
     const isProgressive = playbackType === 'mp4';
+    let activeHasClearKeys = false;
 
     const handleNativeError = () => {
       const videoEl = videoRef.current;
@@ -339,23 +395,50 @@ export default function UnifiedPlayer({
         shakaPlayer = new shaka.Player(video);
         playerRef.current = shakaPlayer;
 
-        let clearKeysObj = {};
-        if (clearKey) {
-          if (typeof clearKey === 'string') {
-            if (clearKey.includes(':')) {
-              const [kid, key] = clearKey.split(':');
-              clearKeysObj[kid] = key;
-            }
-          } else if (typeof clearKey === 'object') {
-            clearKeysObj = clearKey;
-          }
+        const clearKeysObj = normalizeClearKeys(clearKey);
+        const hasClearKeys = Object.keys(clearKeysObj).length > 0;
+        activeHasClearKeys = hasClearKeys;
+        const clearKeyMappings = {
+          'com.widevine.alpha': 'org.w3.clearkey',
+          'com.microsoft.playready': 'org.w3.clearkey',
+          'com.microsoft.playready.recommendation': 'org.w3.clearkey',
+          'com.microsoft.playready.software': 'org.w3.clearkey',
+          'com.microsoft.playready.hardware': 'org.w3.clearkey',
+        };
+        const clearKeyUriMappings = {
+          'urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed': 'org.w3.clearkey',
+          'urn:uuid:EDEF8BA9-79D6-4ACE-A3C8-27DCD51D21ED': 'org.w3.clearkey',
+          'urn:uuid:9a04f079-9840-4286-ab92-e65be0885f95': 'org.w3.clearkey',
+          'urn:uuid:9A04F079-9840-4286-AB92-E65BE0885F95': 'org.w3.clearkey',
+          'urn:uuid:e2719d58-a985-b3c9-781a-b030af78d30e': 'org.w3.clearkey',
+          'urn:uuid:E2719D58-A985-B3C9-781A-B030AF78D30E': 'org.w3.clearkey',
+          'urn:uuid:1077efec-c0b2-4d02-ace3-3c1e52e2fb4b': 'org.w3.clearkey',
+          'urn:uuid:1077EFEC-C0B2-4D02-ACE3-3C1E52E2FB4B': 'org.w3.clearkey',
+        };
+
+        if (hasClearKeys) {
+          console.info('[Player] ClearKey mode enabled', {
+            keySystem: 'org.w3.clearkey',
+            keyCount: Object.keys(clearKeysObj).length,
+            keyIds: maskKeyIds(clearKeysObj),
+            streamType: playbackType,
+          });
         }
 
-        const drmConfig = Object.keys(clearKeysObj).length > 0 ? {
+        const drmConfig = hasClearKeys ? {
           clearKeys: clearKeysObj,
+          preferredKeySystems: ['org.w3.clearkey'],
+          keySystemsMapping: clearKeyMappings,
+          failureCallback: (drmError) => {
+            console.warn('[Player] DRM failure', {
+              codes: Array.from(getShakaErrorCodes(drmError)),
+              keySystem: drmError?.data?.[1]?.keySystem || 'org.w3.clearkey',
+              keyIds: maskKeyIds(clearKeysObj),
+            });
+          },
         } : undefined;
 
-        shakaPlayer.configure({
+        const shakaConfig = {
           streaming: {
             bufferingGoal: 45,
             rebufferingGoal: 5,
@@ -371,16 +454,34 @@ export default function UnifiedPlayer({
             },
           },
           drm: drmConfig,
-        });
+        };
+
+        if (hasClearKeys) {
+          shakaConfig.manifest = {
+            dash: {
+              keySystemsByURI: clearKeyUriMappings,
+            },
+          };
+        }
+
+        shakaPlayer.configure(shakaConfig);
 
         shakaPlayer.addEventListener('error', (event) => {
           console.error('Player error', event.detail);
-          setError('Lỗi phát video: ' + event.detail.message);
+          setError(formatPlaybackError(event.detail, hasClearKeys));
           onError?.(event.detail);
         });
 
         await shakaPlayer.load(url, shouldGateResume ? 0 : initialTime);
         if (cancelled) return;
+        if (hasClearKeys) {
+          const drmInfo = typeof shakaPlayer.drmInfo === 'function' ? shakaPlayer.drmInfo() : null;
+          console.info('[Player] DRM selected', {
+            keySystem: drmInfo?.keySystem || 'unknown',
+            licenseServer: drmInfo?.licenseServerUri ? 'configured' : 'none',
+            keyIds: maskKeyIds(clearKeysObj),
+          });
+        }
         if (autoplay && !shouldGateResume) {
           video.play().catch(() => {
             console.warn('Shaka autoplay unmuted prevented, trying muted...');
@@ -415,7 +516,7 @@ export default function UnifiedPlayer({
       } catch (err) {
         if (cancelled) return;
         console.error('Error loading video', err);
-        setError('Không thể tải luồng video: ' + err.message);
+        setError(formatPlaybackError(err, activeHasClearKeys));
         onError?.(err);
       }
     };
