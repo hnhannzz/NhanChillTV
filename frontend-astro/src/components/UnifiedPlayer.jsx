@@ -964,7 +964,7 @@ export default function UnifiedPlayer({
       {/* Custom Controls UI */}
       <div 
         onClick={triggerControlsTimeout}
-        className={`absolute inset-0 z-20 pointer-events-none transition-opacity duration-300 flex flex-col justify-between ${showControls || !isPlaying ? 'opacity-100' : 'opacity-0'}`}
+        className={`absolute inset-0 ${showAudioMenu ? 'z-[70]' : 'z-20'} pointer-events-none transition-opacity duration-300 flex flex-col justify-between ${showControls || !isPlaying || showAudioMenu ? 'opacity-100' : 'opacity-0'}`}
       >
         {/* Top Gradient & Title */}
         <div className="bg-gradient-to-b from-black/80 to-transparent px-4 pb-12 pt-3 sm:px-6 sm:pt-4 flex justify-between items-start pointer-events-auto">
@@ -1018,14 +1018,14 @@ export default function UnifiedPlayer({
           )}
 
           <div className="flex items-center justify-between gap-1 sm:gap-2">
-            <div className="flex min-w-0 flex-1 items-center justify-between gap-1 sm:hidden">
-              <div className="shrink-0">
+            <div className="flex min-w-0 flex-1 items-center justify-start gap-1.5 sm:hidden">
+              <div className="order-3 shrink-0">
                 <button onClick={toggleMute} className="grid h-7 w-7 place-items-center text-white hover:text-[#ED2C25] transition-colors focus:outline-none">
                   {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
                 </button>
               </div>
 
-              <div className="flex shrink-0 items-center justify-center gap-1.5">
+              <div className="order-1 flex shrink-0 items-center justify-center gap-1">
                 {!isLiveStream && (
                   <button
                     onClick={() => {
@@ -1046,6 +1046,12 @@ export default function UnifiedPlayer({
                   {isPlaying ? <Pause fill="currentColor" size={26} /> : <Play fill="currentColor" size={26} />}
                 </button>
 
+                {onNextEpisode && (
+                  <button type="button" onClick={onNextEpisode} className="grid h-7 w-7 shrink-0 place-items-center text-white/85 hover:text-white transition-colors focus:outline-none" title="Tập tiếp">
+                    <SkipForward size={19} />
+                  </button>
+                )}
+
                 {!isLiveStream && (
                   <button
                     onClick={() => {
@@ -1064,12 +1070,12 @@ export default function UnifiedPlayer({
               </div>
 
               {isLiveStream ? (
-                <span className="justify-self-end flex items-center gap-1.5 text-[#ED2C25] font-black text-[10px] uppercase bg-[#ED2C25]/10 px-2 py-0.5 rounded border border-[#ED2C25]/20 tracking-wider select-none">
+                <span className="order-4 ml-auto flex items-center gap-1.5 text-[#ED2C25] font-black text-[10px] uppercase bg-[#ED2C25]/10 px-2 py-0.5 rounded border border-[#ED2C25]/20 tracking-wider select-none">
                   <span className="h-1.5 w-1.5 bg-[#ED2C25] rounded-full animate-pulse" />
                   LIVE
                 </span>
               ) : (
-                <span className="shrink-0 whitespace-nowrap text-right text-[10px] font-semibold tracking-wide text-white/90">
+                <span className="order-4 ml-auto shrink-0 whitespace-nowrap rounded-full bg-black/20 px-1.5 py-0.5 text-center text-[10px] font-semibold tracking-wide text-white/90">
                   {formatTime(isSeeking ? seekingTime : currentTime)} <span className="text-white/40 mx-1">/</span> {formatTime(duration)}
                 </span>
               )}
@@ -1169,7 +1175,7 @@ export default function UnifiedPlayer({
 
                   <div
                     onClick={(event) => event.stopPropagation()}
-                    className={`absolute bottom-8 left-1/2 z-[60] w-[min(13.5rem,calc(100vw-1rem))] -translate-x-1/2 overflow-hidden rounded-lg border border-[#ED2C25]/25 bg-[#101010]/95 text-left text-xs text-white shadow-2xl backdrop-blur-md transition-all duration-200 origin-bottom sm:bottom-10 sm:w-64 sm:text-sm ${showAudioMenu ? 'opacity-100 translate-y-0 scale-100' : 'pointer-events-none opacity-0 translate-y-2 scale-95'}`}
+                    className={`absolute bottom-8 left-1/2 z-[90] w-[min(13.5rem,calc(100vw-1rem))] -translate-x-1/2 overflow-hidden rounded-lg border border-[#ED2C25]/25 bg-[#101010]/95 text-left text-xs text-white shadow-2xl backdrop-blur-md transition-all duration-200 origin-bottom sm:bottom-10 sm:w-64 sm:text-sm ${showAudioMenu ? 'opacity-100 translate-y-0 scale-100' : 'pointer-events-none opacity-0 translate-y-2 scale-95'}`}
                   >
                     {audioVariants.map((variant) => {
                       const selected = variant.id === selectedAudioVariant?.id;
@@ -1203,7 +1209,7 @@ export default function UnifiedPlayer({
               )}
 
               {onNextEpisode && (
-                <button type="button" onClick={onNextEpisode} className="grid h-6 w-6 shrink-0 place-items-center text-white/80 hover:text-white transition-colors focus:outline-none group/btn sm:h-8 sm:w-8" title="Tập tiếp">
+                <button type="button" onClick={onNextEpisode} className="hidden h-6 w-6 shrink-0 place-items-center text-white/80 hover:text-white transition-colors focus:outline-none group/btn sm:grid sm:h-8 sm:w-8" title="Tập tiếp">
                   <SkipForward size={20} className="group-hover/btn:scale-110 transition-transform" />
                 </button>
               )}
