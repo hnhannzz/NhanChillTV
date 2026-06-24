@@ -109,6 +109,7 @@ export default function MovieDetailContainer() {
   const [currentEpName, setCurrentEpName] = useState('');
   const [currentServerIndex, setCurrentServerIndex] = useState(0);
   const [currentEpisodeIndex, setCurrentEpisodeIndex] = useState(0);
+  const [playbackHandoff, setPlaybackHandoff] = useState(null);
   
   const [isFavorite, setIsFavorite] = useState(false);
   
@@ -208,6 +209,7 @@ export default function MovieDetailContainer() {
   const audioVariants = buildAudioVariants(movie, currentEpisode, currentEpisodeIndex);
   const currentAudioVariantId = `${currentServerIndex}:${getEpisodeKey(currentEpisode)}`;
   const nextEpisodeOption = getNextEpisodeOption(movie, currentServerIndex, currentEpisodeIndex);
+  const activePlaybackHandoff = playbackHandoff?.episodeKey === getEpisodeKey(currentEpisode) ? playbackHandoff : null;
 
   const renderPeopleLinks = (people, type) => (
     <span className="inline-flex flex-wrap gap-1.5 align-middle">
@@ -369,8 +371,20 @@ export default function MovieDetailContainer() {
               movieSlug={slug}
               audioVariants={audioVariants}
               currentAudioVariantId={currentAudioVariantId}
-              onSelectAudioVariant={(variant) => setActiveEpisode(variant)}
-              onNextEpisode={nextEpisodeOption ? () => setActiveEpisode(nextEpisodeOption, true) : null}
+              resumeAt={activePlaybackHandoff?.currentTime ?? null}
+              skipResumePrompt={Boolean(activePlaybackHandoff?.skipResumePrompt)}
+              onSelectAudioVariant={(variant, playback = {}) => {
+                setPlaybackHandoff({
+                  episodeKey: getEpisodeKey(variant?.episode),
+                  currentTime: Math.max(0, Number(playback.currentTime) || 0),
+                  skipResumePrompt: playback.skipResumePrompt !== false,
+                });
+                setActiveEpisode(variant);
+              }}
+              onNextEpisode={nextEpisodeOption ? () => {
+                setPlaybackHandoff(null);
+                setActiveEpisode(nextEpisodeOption, true);
+              } : null}
             />
           </div>
         ) : (
@@ -397,14 +411,17 @@ export default function MovieDetailContainer() {
                     return (
                       <button 
                         key={eIdx}
-                        onClick={() => setActiveEpisode({
-                          server,
-                          serverIndex: sIdx,
-                          episode: ep,
-                          episodeIndex: eIdx,
-                          key: getEpisodeKey(ep),
-                          embed: epEmbed,
-                        }, true)}
+                        onClick={() => {
+                          setPlaybackHandoff(null);
+                          setActiveEpisode({
+                            server,
+                            serverIndex: sIdx,
+                            episode: ep,
+                            episodeIndex: eIdx,
+                            key: getEpisodeKey(ep),
+                            embed: epEmbed,
+                          }, true);
+                        }}
                         className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${isActiveEpisode || currentEmbed === epEmbed ? 'bg-[#ED2C25] text-white shadow-lg' : 'bg-[#1A1A1A] text-white/70 hover:bg-white/20'}`}
                       >
                         {ep.name}

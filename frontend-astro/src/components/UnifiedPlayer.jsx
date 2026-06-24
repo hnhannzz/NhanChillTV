@@ -67,6 +67,7 @@ export default function UnifiedPlayer({
   audioVariants = [],
   currentAudioVariantId = '',
   onSelectAudioVariant,
+  skipResumePrompt = false,
   title,
   subTitle,
   initialTime = 0,
@@ -111,7 +112,7 @@ export default function UnifiedPlayer({
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
 
   const isLiveStream = isLive ?? (duration === Infinity || !isFinite(duration) || subTitle === 'Live TV');
-  const shouldGateResume = initialTime > 5 && isLive !== true;
+  const shouldGateResume = !skipResumePrompt && initialTime > 5 && isLive !== true;
   const hasAudioVariants = Array.isArray(audioVariants) && audioVariants.length > 0;
   const selectedAudioVariant = audioVariants.find(item => item.id === currentAudioVariantId) || audioVariants[0];
 
@@ -926,7 +927,7 @@ export default function UnifiedPlayer({
         </div>
 
         {/* Bottom Gradient & Controls */}
-        <div className="bg-gradient-to-t from-black/90 via-black/50 to-transparent px-2 pb-3 pt-10 sm:px-3 sm:pt-12 md:px-6 md:pb-4 pointer-events-auto">
+        <div className="bg-gradient-to-t from-black/90 via-black/50 to-transparent px-2 pb-2 pt-5 sm:px-3 sm:pt-12 md:px-6 md:pb-4 pointer-events-auto">
           {/* Progress Bar */}
           {!isLiveStream && (
             <div className="group/progress relative flex items-center h-4 cursor-pointer mb-2">
@@ -955,24 +956,24 @@ export default function UnifiedPlayer({
             </div>
           )}
 
-          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <div className="order-2 grid w-full grid-cols-[1fr_auto_1fr] items-center gap-2 sm:hidden">
               <div className="justify-self-start">
-                <button onClick={toggleMute} className="grid h-9 w-9 place-items-center text-white hover:text-[#ED2C25] transition-colors focus:outline-none">
-                  {isMuted ? <VolumeX size={24} /> : <Volume2 size={24} />}
+                <button onClick={toggleMute} className="grid h-8 w-8 place-items-center text-white hover:text-[#ED2C25] transition-colors focus:outline-none">
+                  {isMuted ? <VolumeX size={22} /> : <Volume2 size={22} />}
                 </button>
               </div>
 
-              <div className="flex items-center justify-center gap-5">
+              <div className="flex items-center justify-center gap-4">
                 {!isLiveStream && (
                   <button
                     onClick={() => {
                       if (videoRef.current) videoRef.current.currentTime = Math.max(0, videoRef.current.currentTime - 5);
                     }}
-                    className="grid h-10 w-10 place-items-center text-white hover:text-[#ED2C25] transition-colors focus:outline-none"
+                    className="grid h-9 w-9 place-items-center text-white hover:text-[#ED2C25] transition-colors focus:outline-none"
                     title="Lùi 5s"
                   >
-                    <svg className="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
                       <path d="M3 3v5h5" />
                       <text x="12" y="15" fontSize="8" fontWeight="bold" textAnchor="middle" fill="currentColor" stroke="none">5</text>
@@ -980,8 +981,8 @@ export default function UnifiedPlayer({
                   </button>
                 )}
 
-                <button onClick={togglePlay} className="grid h-11 w-11 place-items-center text-white hover:text-[#ED2C25] transition-colors focus:outline-none">
-                  {isPlaying ? <Pause fill="currentColor" size={34} /> : <Play fill="currentColor" size={34} />}
+                <button onClick={togglePlay} className="grid h-10 w-10 place-items-center text-white hover:text-[#ED2C25] transition-colors focus:outline-none">
+                  {isPlaying ? <Pause fill="currentColor" size={30} /> : <Play fill="currentColor" size={30} />}
                 </button>
 
                 {!isLiveStream && (
@@ -989,10 +990,10 @@ export default function UnifiedPlayer({
                     onClick={() => {
                       if (videoRef.current) videoRef.current.currentTime = Math.min(videoRef.current.duration || 0, videoRef.current.currentTime + 5);
                     }}
-                    className="grid h-10 w-10 place-items-center text-white hover:text-[#ED2C25] transition-colors focus:outline-none"
+                    className="grid h-9 w-9 place-items-center text-white hover:text-[#ED2C25] transition-colors focus:outline-none"
                     title="Tua 5s"
                   >
-                    <svg className="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
                       <path d="M21 3v5h-5" />
                       <text x="12" y="15" fontSize="8" fontWeight="bold" textAnchor="middle" fill="currentColor" stroke="none">5</text>
@@ -1007,7 +1008,7 @@ export default function UnifiedPlayer({
                   LIVE
                 </span>
               ) : (
-                <span className="justify-self-end whitespace-nowrap text-right text-sm font-semibold tracking-wide text-white/90">
+                <span className="justify-self-end whitespace-nowrap text-right text-xs font-semibold tracking-wide text-white/90">
                   {formatTime(isSeeking ? seekingTime : currentTime)} <span className="text-white/40 mx-1">/</span> {formatTime(duration)}
                 </span>
               )}
@@ -1089,7 +1090,7 @@ export default function UnifiedPlayer({
               )}
             </div>
 
-            <div className="order-1 flex w-full items-center justify-center gap-4 sm:order-none sm:w-auto sm:justify-start sm:gap-2.5 md:gap-5">
+            <div className="order-1 flex w-full items-center justify-center gap-3 sm:order-none sm:w-auto sm:justify-start sm:gap-2.5 md:gap-5">
               {hasAudioVariants && (
                 <div className="relative">
                   <button
@@ -1099,7 +1100,7 @@ export default function UnifiedPlayer({
                       setShowAudioMenu(value => !value);
                       setShowSettings(false);
                     }}
-                    className="grid h-8 w-8 shrink-0 place-items-center text-white/80 hover:text-white transition-colors focus:outline-none group/btn"
+                    className="grid h-7 w-7 shrink-0 place-items-center text-white/80 hover:text-white transition-colors focus:outline-none group/btn sm:h-8 sm:w-8"
                     title={selectedAudioVariant?.label || 'Âm thanh'}
                   >
                     <Mic size={20} className="group-hover/btn:scale-110 transition-transform" />
@@ -1107,7 +1108,7 @@ export default function UnifiedPlayer({
 
                   <div
                     onClick={(event) => event.stopPropagation()}
-                    className={`absolute bottom-10 left-0 z-[60] w-[min(18rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-[#ED2C25]/25 bg-[#101010]/95 text-left text-sm text-white shadow-2xl backdrop-blur-md transition-all duration-200 origin-bottom-left sm:left-1/2 sm:w-64 sm:-translate-x-1/2 sm:origin-bottom ${showAudioMenu ? 'opacity-100 translate-y-0 scale-100' : 'pointer-events-none opacity-0 translate-y-2 scale-95'}`}
+                    className={`absolute bottom-8 left-1/2 z-[60] w-[min(13.5rem,calc(100vw-1rem))] -translate-x-1/2 overflow-hidden rounded-lg border border-[#ED2C25]/25 bg-[#101010]/95 text-left text-xs text-white shadow-2xl backdrop-blur-md transition-all duration-200 origin-bottom sm:bottom-10 sm:w-64 sm:text-sm ${showAudioMenu ? 'opacity-100 translate-y-0 scale-100' : 'pointer-events-none opacity-0 translate-y-2 scale-95'}`}
                   >
                     {audioVariants.map((variant) => {
                       const selected = variant.id === selectedAudioVariant?.id;
@@ -1116,16 +1117,21 @@ export default function UnifiedPlayer({
                           key={variant.id}
                           type="button"
                           onClick={() => {
-                            onSelectAudioVariant?.(variant);
+                            const video = videoRef.current;
+                            onSelectAudioVariant?.(variant, {
+                              currentTime: video?.currentTime ?? currentTime,
+                              shouldPlay: video ? !video.paused : autoplay,
+                              skipResumePrompt: true,
+                            });
                             setShowAudioMenu(false);
                           }}
-                          className={`flex w-full flex-col gap-1 px-4 py-3 transition-colors ${selected ? 'bg-[#ED2C25]/20 text-white ring-1 ring-inset ring-[#ED2C25]/45' : 'text-white hover:bg-white/8'}`}
+                          className={`flex w-full flex-col gap-1 px-3 py-2 transition-colors sm:px-4 sm:py-3 ${selected ? 'bg-[#ED2C25]/20 text-white ring-1 ring-inset ring-[#ED2C25]/45' : 'text-white hover:bg-white/8'}`}
                         >
                           <span className="flex w-full items-center justify-between gap-3 font-bold">
-                            <span className="min-w-0 break-words">{variant.label}</span>
+                            <span className="min-w-0 break-words text-sm sm:text-base">{variant.label}</span>
                             {selected && <Check size={16} className="shrink-0 text-[#ED2C25]" />}
                           </span>
-                          <span className="w-full break-words text-left text-xs font-semibold leading-snug text-white/75">{variant.detail}</span>
+                          <span className="w-full break-words text-left text-[11px] font-semibold leading-snug text-white/75 sm:text-xs">{variant.detail}</span>
                         </button>
                       );
                     })}
@@ -1134,7 +1140,7 @@ export default function UnifiedPlayer({
               )}
 
               {onNextEpisode && (
-                <button type="button" onClick={onNextEpisode} className="grid h-8 w-8 shrink-0 place-items-center text-white/80 hover:text-white transition-colors focus:outline-none group/btn" title="Tập tiếp">
+                <button type="button" onClick={onNextEpisode} className="grid h-7 w-7 shrink-0 place-items-center text-white/80 hover:text-white transition-colors focus:outline-none group/btn sm:h-8 sm:w-8" title="Tập tiếp">
                   <SkipForward size={20} className="group-hover/btn:scale-110 transition-transform" />
                 </button>
               )}
@@ -1158,11 +1164,11 @@ export default function UnifiedPlayer({
                 </button>
               )}
 
-              <button onClick={() => setShowSettings(!showSettings)} className="grid h-8 w-8 shrink-0 place-items-center text-white/80 hover:text-white transition-colors focus:outline-none group/btn" title="Cài đặt">
+              <button onClick={() => setShowSettings(!showSettings)} className="grid h-7 w-7 shrink-0 place-items-center text-white/80 hover:text-white transition-colors focus:outline-none group/btn sm:h-8 sm:w-8" title="Cài đặt">
                 <Settings size={20} className="group-hover/btn:rotate-45 transition-transform duration-300" />
               </button>
 
-              <button onClick={toggleFullscreen} className="grid h-8 w-8 shrink-0 place-items-center text-white/80 hover:text-white transition-colors focus:outline-none group/btn">
+              <button onClick={toggleFullscreen} className="grid h-7 w-7 shrink-0 place-items-center text-white/80 hover:text-white transition-colors focus:outline-none group/btn sm:h-8 sm:w-8">
                 {isFullscreen ? <Minimize size={22} className="group-hover/btn:scale-90 transition-transform" /> : <Maximize size={22} className="group-hover/btn:scale-110 transition-transform" />}
               </button>
             </div>

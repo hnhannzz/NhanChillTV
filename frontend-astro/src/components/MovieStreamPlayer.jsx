@@ -12,6 +12,8 @@ export default function MovieStreamPlayer({
   audioVariants = [],
   currentAudioVariantId = '',
   onSelectAudioVariant,
+  resumeAt = null,
+  skipResumePrompt = false,
 }) {
   // Ưu tiên m3u8 từ KKPhim, nếu không có fallback sang embed.
   const streamUrl = episode?.link_m3u8 || episode?.link_hls || '';
@@ -23,6 +25,8 @@ export default function MovieStreamPlayer({
   const [initialTime, setInitialTime] = useState(0);
   const [playerType, setPlayerType] = useState('shaka');
   const lastProgressSaveRef = useRef(0);
+  const handoffInitialTime = resumeAt !== null && resumeAt !== undefined && Number.isFinite(Number(resumeAt)) ? Number(resumeAt) : null;
+  const effectiveInitialTime = handoffInitialTime ?? initialTime;
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -82,9 +86,10 @@ export default function MovieStreamPlayer({
     return (
       <Suspense fallback={<div className="flex h-full w-full items-center justify-center bg-black text-sm font-semibold text-white/55">Đang tải trình phát...</div>}>
         <PlayerComponent
-          key={`${streamUrl}_${playerType}_${progressKey}_${initialTime}`}
+          key={`${streamUrl}_${playerType}_${progressKey}_${effectiveInitialTime}_${skipResumePrompt ? 'handoff' : 'normal'}`}
           url={streamUrl}
-          initialTime={initialTime}
+          initialTime={effectiveInitialTime}
+          skipResumePrompt={skipResumePrompt}
           onTimeUpdate={handleTimeUpdate}
           onNextEpisode={onNextEpisode}
           onCinemaMode={onCinemaMode}
