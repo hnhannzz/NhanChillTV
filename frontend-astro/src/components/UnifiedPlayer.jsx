@@ -955,8 +955,8 @@ export default function UnifiedPlayer({
             </div>
           )}
 
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="grid w-full grid-cols-[1fr_auto_1fr] items-center gap-2 sm:hidden">
+          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="order-2 grid w-full grid-cols-[1fr_auto_1fr] items-center gap-2 sm:hidden">
               <div className="justify-self-start">
                 <button onClick={toggleMute} className="grid h-9 w-9 place-items-center text-white hover:text-[#ED2C25] transition-colors focus:outline-none">
                   {isMuted ? <VolumeX size={24} /> : <Volume2 size={24} />}
@@ -1089,7 +1089,7 @@ export default function UnifiedPlayer({
               )}
             </div>
 
-            <div className="flex w-full items-center justify-center gap-3 sm:w-auto sm:justify-start sm:gap-2.5 md:gap-5">
+            <div className="order-1 flex w-full items-center justify-center gap-4 sm:order-none sm:w-auto sm:justify-start sm:gap-2.5 md:gap-5">
               {hasAudioVariants && (
                 <div className="relative">
                   <button
