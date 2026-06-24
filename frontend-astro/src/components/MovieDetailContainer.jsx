@@ -83,15 +83,12 @@ const buildAudioVariants = (movie, currentEpisode, currentEpisodeIndex) => {
     if (!matchedEpisode) return null;
 
     const episodeIndex = episodes.indexOf(matchedEpisode);
-    const kind = inferAudioLabel(server?.server_name, movie?.lang || movie?.language);
     const serverName = String(server?.server_name || `Server ${serverIndex + 1}`).trim();
-    const hasKindInServerName = normalizeText(serverName).includes(normalizeText(kind));
-    const detail = `${serverName.startsWith('#') ? '' : '#'}${serverName}${hasKindInServerName ? '' : ` (${kind})`}`;
 
     return {
       id: `${serverIndex}:${getEpisodeKey(matchedEpisode)}`,
-      label: `${kind} #${serverIndex + 1}`,
-      detail,
+      label: serverName,
+      detail: '',
       serverIndex,
       episodeIndex,
       episode: matchedEpisode,

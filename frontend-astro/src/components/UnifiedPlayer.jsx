@@ -680,6 +680,17 @@ export default function UnifiedPlayer({
     setIsSeeking(false);
   };
 
+  const seekBy = (seconds) => {
+    if (!videoRef.current || isLiveStream) return;
+    const video = videoRef.current;
+    const maxTime = Number.isFinite(video.duration) && video.duration > 0
+      ? video.duration
+      : (duration > 0 ? duration : Number.POSITIVE_INFINITY);
+    const nextTime = Math.min(maxTime, Math.max(0, video.currentTime + seconds));
+    video.currentTime = nextTime;
+    setCurrentTime(nextTime);
+  };
+
   const formatTime = (seconds) => {
     if (isNaN(seconds)) return '00:00';
     const h = Math.floor(seconds / 3600);
@@ -829,25 +840,75 @@ export default function UnifiedPlayer({
       {/* Center Play Button Overlay */}
       {(!isPlaying || showControls) && (
         <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
-          <button 
-            onTouchEnd={(e) => {
-              e.stopPropagation();
-              e.preventDefault();
-              togglePlay();
-            }}
-            onClick={(e) => {
-              if (isMobile) return;
-              e.stopPropagation();
-              togglePlay();
-            }}
-            className="pointer-events-auto flex items-center justify-center h-16 w-16 md:h-20 md:w-20 rounded-full bg-black/50 border border-white/20 text-white hover:bg-[#ED2C25] hover:border-[#ED2C25] hover:scale-110 active:scale-95 transition-all duration-300 backdrop-blur-md shadow-2xl"
-          >
-            {isPlaying ? (
-              <Pause fill="currentColor" size={28} className="md:h-8 md:w-8" />
-            ) : (
-              <Play fill="currentColor" size={28} className="translate-x-0.5 md:h-8 md:w-8" />
+          <div className="pointer-events-auto flex items-center justify-center gap-6 sm:gap-8 md:gap-10">
+            {!isLiveStream && (
+              <button
+                type="button"
+                onTouchEnd={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  seekBy(-5);
+                }}
+                onClick={(e) => {
+                  if (isMobile) return;
+                  e.stopPropagation();
+                  seekBy(-5);
+                }}
+                className="grid h-12 w-12 place-items-center rounded-full bg-black/45 text-white shadow-2xl backdrop-blur-md transition-all duration-300 hover:bg-[#ED2C25] active:scale-95 sm:h-14 sm:w-14"
+                title="Lui 5s"
+              >
+                <svg className="h-7 w-7 sm:h-8 sm:w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                  <path d="M3 3v5h5" />
+                  <text x="12" y="15" fontSize="8" fontWeight="bold" textAnchor="middle" fill="currentColor" stroke="none">5</text>
+                </svg>
+              </button>
             )}
-          </button>
+
+            <button
+              onTouchEnd={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                togglePlay();
+              }}
+              onClick={(e) => {
+                if (isMobile) return;
+                e.stopPropagation();
+                togglePlay();
+              }}
+              className="flex h-16 w-16 items-center justify-center rounded-full border border-white/20 bg-black/50 text-white shadow-2xl backdrop-blur-md transition-all duration-300 hover:scale-110 hover:border-[#ED2C25] hover:bg-[#ED2C25] active:scale-95 md:h-20 md:w-20"
+            >
+              {isPlaying ? (
+                <Pause fill="currentColor" size={28} className="md:h-8 md:w-8" />
+              ) : (
+                <Play fill="currentColor" size={28} className="translate-x-0.5 md:h-8 md:w-8" />
+              )}
+            </button>
+
+            {!isLiveStream && (
+              <button
+                type="button"
+                onTouchEnd={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  seekBy(5);
+                }}
+                onClick={(e) => {
+                  if (isMobile) return;
+                  e.stopPropagation();
+                  seekBy(5);
+                }}
+                className="grid h-12 w-12 place-items-center rounded-full bg-black/45 text-white shadow-2xl backdrop-blur-md transition-all duration-300 hover:bg-[#ED2C25] active:scale-95 sm:h-14 sm:w-14"
+                title="Tua 5s"
+              >
+                <svg className="h-7 w-7 sm:h-8 sm:w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                  <path d="M21 3v5h-5" />
+                  <text x="12" y="15" fontSize="8" fontWeight="bold" textAnchor="middle" fill="currentColor" stroke="none">5</text>
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -970,7 +1031,7 @@ export default function UnifiedPlayer({
                     onClick={() => {
                       if (videoRef.current) videoRef.current.currentTime = Math.max(0, videoRef.current.currentTime - 5);
                     }}
-                    className="grid h-7 w-7 place-items-center text-white hover:text-[#ED2C25] transition-colors focus:outline-none"
+                    className="hidden h-7 w-7 place-items-center text-white hover:text-[#ED2C25] transition-colors focus:outline-none"
                     title="Lùi 5s"
                   >
                     <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -990,7 +1051,7 @@ export default function UnifiedPlayer({
                     onClick={() => {
                       if (videoRef.current) videoRef.current.currentTime = Math.min(videoRef.current.duration || 0, videoRef.current.currentTime + 5);
                     }}
-                    className="grid h-7 w-7 place-items-center text-white hover:text-[#ED2C25] transition-colors focus:outline-none"
+                    className="hidden h-7 w-7 place-items-center text-white hover:text-[#ED2C25] transition-colors focus:outline-none"
                     title="Tua 5s"
                   >
                     <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1131,7 +1192,9 @@ export default function UnifiedPlayer({
                             <span className="min-w-0 break-words text-sm sm:text-base">{variant.label}</span>
                             {selected && <Check size={16} className="shrink-0 text-[#ED2C25]" />}
                           </span>
-                          <span className="w-full break-words text-left text-[11px] font-semibold leading-snug text-white/75 sm:text-xs">{variant.detail}</span>
+                          {variant.detail && (
+                            <span className="w-full break-words text-left text-[11px] font-semibold leading-snug text-white/75 sm:text-xs">{variant.detail}</span>
+                          )}
                         </button>
                       );
                     })}
