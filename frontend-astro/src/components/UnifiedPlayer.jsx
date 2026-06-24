@@ -956,24 +956,24 @@ export default function UnifiedPlayer({
             </div>
           )}
 
-          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-            <div className="order-2 grid w-full grid-cols-[1fr_auto_1fr] items-center gap-2 sm:hidden">
-              <div className="justify-self-start">
-                <button onClick={toggleMute} className="grid h-8 w-8 place-items-center text-white hover:text-[#ED2C25] transition-colors focus:outline-none">
-                  {isMuted ? <VolumeX size={22} /> : <Volume2 size={22} />}
+          <div className="flex items-center justify-between gap-1 sm:gap-2">
+            <div className="flex min-w-0 flex-1 items-center justify-between gap-1 sm:hidden">
+              <div className="shrink-0">
+                <button onClick={toggleMute} className="grid h-7 w-7 place-items-center text-white hover:text-[#ED2C25] transition-colors focus:outline-none">
+                  {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
                 </button>
               </div>
 
-              <div className="flex items-center justify-center gap-4">
+              <div className="flex shrink-0 items-center justify-center gap-1.5">
                 {!isLiveStream && (
                   <button
                     onClick={() => {
                       if (videoRef.current) videoRef.current.currentTime = Math.max(0, videoRef.current.currentTime - 5);
                     }}
-                    className="grid h-9 w-9 place-items-center text-white hover:text-[#ED2C25] transition-colors focus:outline-none"
+                    className="grid h-7 w-7 place-items-center text-white hover:text-[#ED2C25] transition-colors focus:outline-none"
                     title="Lùi 5s"
                   >
-                    <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
                       <path d="M3 3v5h5" />
                       <text x="12" y="15" fontSize="8" fontWeight="bold" textAnchor="middle" fill="currentColor" stroke="none">5</text>
@@ -981,8 +981,8 @@ export default function UnifiedPlayer({
                   </button>
                 )}
 
-                <button onClick={togglePlay} className="grid h-10 w-10 place-items-center text-white hover:text-[#ED2C25] transition-colors focus:outline-none">
-                  {isPlaying ? <Pause fill="currentColor" size={30} /> : <Play fill="currentColor" size={30} />}
+                <button onClick={togglePlay} className="grid h-8 w-8 place-items-center text-white hover:text-[#ED2C25] transition-colors focus:outline-none">
+                  {isPlaying ? <Pause fill="currentColor" size={26} /> : <Play fill="currentColor" size={26} />}
                 </button>
 
                 {!isLiveStream && (
@@ -990,10 +990,10 @@ export default function UnifiedPlayer({
                     onClick={() => {
                       if (videoRef.current) videoRef.current.currentTime = Math.min(videoRef.current.duration || 0, videoRef.current.currentTime + 5);
                     }}
-                    className="grid h-9 w-9 place-items-center text-white hover:text-[#ED2C25] transition-colors focus:outline-none"
+                    className="grid h-7 w-7 place-items-center text-white hover:text-[#ED2C25] transition-colors focus:outline-none"
                     title="Tua 5s"
                   >
-                    <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
                       <path d="M21 3v5h-5" />
                       <text x="12" y="15" fontSize="8" fontWeight="bold" textAnchor="middle" fill="currentColor" stroke="none">5</text>
@@ -1008,7 +1008,7 @@ export default function UnifiedPlayer({
                   LIVE
                 </span>
               ) : (
-                <span className="justify-self-end whitespace-nowrap text-right text-xs font-semibold tracking-wide text-white/90">
+                <span className="shrink-0 whitespace-nowrap text-right text-[10px] font-semibold tracking-wide text-white/90">
                   {formatTime(isSeeking ? seekingTime : currentTime)} <span className="text-white/40 mx-1">/</span> {formatTime(duration)}
                 </span>
               )}
@@ -1090,7 +1090,7 @@ export default function UnifiedPlayer({
               )}
             </div>
 
-            <div className="order-1 flex w-full items-center justify-center gap-3 sm:order-none sm:w-auto sm:justify-start sm:gap-2.5 md:gap-5">
+            <div className="flex shrink-0 items-center justify-end gap-1 sm:w-auto sm:justify-start sm:gap-2.5 md:gap-5">
               {hasAudioVariants && (
                 <div className="relative">
                   <button
@@ -1100,7 +1100,7 @@ export default function UnifiedPlayer({
                       setShowAudioMenu(value => !value);
                       setShowSettings(false);
                     }}
-                    className="grid h-7 w-7 shrink-0 place-items-center text-white/80 hover:text-white transition-colors focus:outline-none group/btn sm:h-8 sm:w-8"
+                    className="grid h-6 w-6 shrink-0 place-items-center text-white/80 hover:text-white transition-colors focus:outline-none group/btn sm:h-8 sm:w-8"
                     title={selectedAudioVariant?.label || 'Âm thanh'}
                   >
                     <Mic size={20} className="group-hover/btn:scale-110 transition-transform" />
@@ -1140,7 +1140,7 @@ export default function UnifiedPlayer({
               )}
 
               {onNextEpisode && (
-                <button type="button" onClick={onNextEpisode} className="grid h-7 w-7 shrink-0 place-items-center text-white/80 hover:text-white transition-colors focus:outline-none group/btn sm:h-8 sm:w-8" title="Tập tiếp">
+                <button type="button" onClick={onNextEpisode} className="grid h-6 w-6 shrink-0 place-items-center text-white/80 hover:text-white transition-colors focus:outline-none group/btn sm:h-8 sm:w-8" title="Tập tiếp">
                   <SkipForward size={20} className="group-hover/btn:scale-110 transition-transform" />
                 </button>
               )}
@@ -1164,11 +1164,11 @@ export default function UnifiedPlayer({
                 </button>
               )}
 
-              <button onClick={() => setShowSettings(!showSettings)} className="grid h-7 w-7 shrink-0 place-items-center text-white/80 hover:text-white transition-colors focus:outline-none group/btn sm:h-8 sm:w-8" title="Cài đặt">
+              <button onClick={() => setShowSettings(!showSettings)} className="grid h-6 w-6 shrink-0 place-items-center text-white/80 hover:text-white transition-colors focus:outline-none group/btn sm:h-8 sm:w-8" title="Cài đặt">
                 <Settings size={20} className="group-hover/btn:rotate-45 transition-transform duration-300" />
               </button>
 
-              <button onClick={toggleFullscreen} className="grid h-7 w-7 shrink-0 place-items-center text-white/80 hover:text-white transition-colors focus:outline-none group/btn sm:h-8 sm:w-8">
+              <button onClick={toggleFullscreen} className="grid h-6 w-6 shrink-0 place-items-center text-white/80 hover:text-white transition-colors focus:outline-none group/btn sm:h-8 sm:w-8">
                 {isFullscreen ? <Minimize size={22} className="group-hover/btn:scale-90 transition-transform" /> : <Maximize size={22} className="group-hover/btn:scale-110 transition-transform" />}
               </button>
             </div>
