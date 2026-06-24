@@ -876,7 +876,7 @@ export default function UnifiedPlayer({
       )}
 
       {castMessage && (
-        <div className="absolute top-4 right-4 z-50 max-w-[82%] rounded-lg border border-white/10 bg-[#151515]/95 px-3 py-2 text-xs font-semibold text-white shadow-2xl backdrop-blur-md">
+        <div className="absolute right-3 top-16 z-50 max-w-[82%] rounded-lg border border-white/10 bg-[#151515]/95 px-3 py-2 text-xs font-semibold text-white shadow-2xl backdrop-blur-md sm:right-4 sm:top-4">
           {castMessage}
         </div>
       )}
@@ -905,10 +905,23 @@ export default function UnifiedPlayer({
         className={`absolute inset-0 z-20 pointer-events-none transition-opacity duration-300 flex flex-col justify-between ${showControls || !isPlaying ? 'opacity-100' : 'opacity-0'}`}
       >
         {/* Top Gradient & Title */}
-        <div className="bg-gradient-to-b from-black/80 to-transparent pt-4 pb-12 px-6 flex justify-between items-start pointer-events-auto">
-          <div>
-            <h2 className="text-white font-bold text-base md:text-xl drop-shadow-md">{title}</h2>
+        <div className="bg-gradient-to-b from-black/80 to-transparent px-4 pb-12 pt-3 sm:px-6 sm:pt-4 flex justify-between items-start pointer-events-auto">
+          <div className="min-w-0 pr-3">
+            <h2 className="max-w-[calc(100vw-8rem)] text-white font-bold text-base leading-tight drop-shadow-md sm:max-w-none md:text-xl">{title}</h2>
             {subTitle && <p className="text-white/80 text-xs md:text-sm drop-shadow-md">{subTitle}</p>}
+          </div>
+          <div className="flex shrink-0 items-center gap-2 sm:hidden">
+            <button type="button" onClick={handleCast} className="grid h-9 w-9 place-items-center rounded-full bg-black/25 text-white/90 backdrop-blur-sm transition-colors hover:bg-[#ED2C25]/80 hover:text-white focus:outline-none" title={isIOS || isSafariOrIOS ? 'AirPlay' : 'Chromecast'}>
+              <Cast size={20} />
+            </button>
+            {isPipSupported && (
+              <button type="button" onClick={togglePip} className="grid h-9 w-9 place-items-center rounded-full bg-black/25 text-white/90 backdrop-blur-sm transition-colors hover:bg-[#ED2C25]/80 hover:text-white focus:outline-none" title="Xem hình trong hình (PiP)">
+                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 16V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z" />
+                  <rect x="13" y="13" width="8" height="8" rx="1" fill="currentColor" stroke="none" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
 
@@ -943,7 +956,64 @@ export default function UnifiedPlayer({
           )}
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex w-full min-w-0 items-center justify-between gap-2 sm:w-auto sm:justify-start md:gap-4">
+            <div className="grid w-full grid-cols-[1fr_auto_1fr] items-center gap-2 sm:hidden">
+              <div className="justify-self-start">
+                <button onClick={toggleMute} className="grid h-9 w-9 place-items-center text-white hover:text-[#ED2C25] transition-colors focus:outline-none">
+                  {isMuted ? <VolumeX size={24} /> : <Volume2 size={24} />}
+                </button>
+              </div>
+
+              <div className="flex items-center justify-center gap-5">
+                {!isLiveStream && (
+                  <button
+                    onClick={() => {
+                      if (videoRef.current) videoRef.current.currentTime = Math.max(0, videoRef.current.currentTime - 5);
+                    }}
+                    className="grid h-10 w-10 place-items-center text-white hover:text-[#ED2C25] transition-colors focus:outline-none"
+                    title="Lùi 5s"
+                  >
+                    <svg className="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                      <path d="M3 3v5h5" />
+                      <text x="12" y="15" fontSize="8" fontWeight="bold" textAnchor="middle" fill="currentColor" stroke="none">5</text>
+                    </svg>
+                  </button>
+                )}
+
+                <button onClick={togglePlay} className="grid h-11 w-11 place-items-center text-white hover:text-[#ED2C25] transition-colors focus:outline-none">
+                  {isPlaying ? <Pause fill="currentColor" size={34} /> : <Play fill="currentColor" size={34} />}
+                </button>
+
+                {!isLiveStream && (
+                  <button
+                    onClick={() => {
+                      if (videoRef.current) videoRef.current.currentTime = Math.min(videoRef.current.duration || 0, videoRef.current.currentTime + 5);
+                    }}
+                    className="grid h-10 w-10 place-items-center text-white hover:text-[#ED2C25] transition-colors focus:outline-none"
+                    title="Tua 5s"
+                  >
+                    <svg className="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                      <path d="M21 3v5h-5" />
+                      <text x="12" y="15" fontSize="8" fontWeight="bold" textAnchor="middle" fill="currentColor" stroke="none">5</text>
+                    </svg>
+                  </button>
+                )}
+              </div>
+
+              {isLiveStream ? (
+                <span className="justify-self-end flex items-center gap-1.5 text-[#ED2C25] font-black text-[10px] uppercase bg-[#ED2C25]/10 px-2 py-0.5 rounded border border-[#ED2C25]/20 tracking-wider select-none">
+                  <span className="h-1.5 w-1.5 bg-[#ED2C25] rounded-full animate-pulse" />
+                  LIVE
+                </span>
+              ) : (
+                <span className="justify-self-end whitespace-nowrap text-right text-sm font-semibold tracking-wide text-white/90">
+                  {formatTime(isSeeking ? seekingTime : currentTime)} <span className="text-white/40 mx-1">/</span> {formatTime(duration)}
+                </span>
+              )}
+            </div>
+
+            <div className="hidden w-full min-w-0 items-center justify-between gap-2 sm:flex sm:w-auto sm:justify-start md:gap-4">
               {/* Skip backward 5s */}
               {!isLiveStream && (
                 <button
@@ -1019,7 +1089,7 @@ export default function UnifiedPlayer({
               )}
             </div>
 
-            <div className="flex w-full items-center justify-around gap-2 sm:w-auto sm:justify-start sm:gap-2.5 md:gap-5">
+            <div className="flex w-full items-center justify-center gap-3 sm:w-auto sm:justify-start sm:gap-2.5 md:gap-5">
               {hasAudioVariants && (
                 <div className="relative">
                   <button
@@ -1069,7 +1139,7 @@ export default function UnifiedPlayer({
                 </button>
               )}
               
-              <button type="button" onClick={handleCast} className="grid h-8 w-8 shrink-0 place-items-center text-white/80 hover:text-white transition-colors focus:outline-none group/btn" title={isIOS || isSafariOrIOS ? 'AirPlay' : 'Chromecast'}>
+              <button type="button" onClick={handleCast} className="hidden h-8 w-8 shrink-0 place-items-center text-white/80 hover:text-white transition-colors focus:outline-none group/btn sm:grid" title={isIOS || isSafariOrIOS ? 'AirPlay' : 'Chromecast'}>
                 <Cast size={21} className="group-hover/btn:scale-110 transition-transform" />
               </button>
 
@@ -1080,7 +1150,7 @@ export default function UnifiedPlayer({
               )}
 
               {isPipSupported && (
-                <button onClick={togglePip} className="grid h-8 w-8 shrink-0 place-items-center text-white/80 hover:text-white transition-colors focus:outline-none group/btn" title="Xem hình trong hình (PiP)">
+                <button onClick={togglePip} className="hidden h-8 w-8 shrink-0 place-items-center text-white/80 hover:text-white transition-colors focus:outline-none group/btn sm:grid" title="Xem hình trong hình (PiP)">
                   <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21 16V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z" />
                     <rect x="13" y="13" width="8" height="8" rx="1" fill="currentColor" stroke="none" />
