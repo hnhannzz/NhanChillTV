@@ -26,6 +26,10 @@ function isUnsupportedAppleDrmBrowser() {
   return isIOS || isSafari;
 }
 
+function uniqueUrls(urls) {
+  return [...new Set((urls || []).filter(Boolean))];
+}
+
 export default function LivePlayerView({ channelId, streamParam, channelName, isLive = true, preferDirectStream = false }) {
   const [streamUrl, setStreamUrl] = useState(null);
   const [fallbackUrls, setFallbackUrls] = useState([]);
@@ -37,6 +41,7 @@ export default function LivePlayerView({ channelId, streamParam, channelName, is
   const [viewers, setViewers] = useState(0);
   const [playerType, setPlayerType] = useState('shaka');
   const heartbeatIntervalRef = useRef(null);
+  const fallbackQueueRef = useRef([]);
 
   useEffect(() => {
     let isMounted = true;
@@ -59,17 +64,29 @@ export default function LivePlayerView({ channelId, streamParam, channelName, is
       })
       .catch(err => console.error('Failed to load system settings:', err));
 
-    const useDirectWithProxyFallback = (rawUrl, proxyUrl) => {
+    const setPlaybackUrls = (primaryUrl, fallbackCandidates = []) => {
+      const fallbacks = uniqueUrls(fallbackCandidates)
+        .filter(item => item !== primaryUrl)
+        .filter(item => String(item).startsWith('/api/proxy/') || canUseDirectUrl(item));
+      fallbackQueueRef.current = fallbacks;
+      setStreamUrl(primaryUrl);
+      setFallbackUrls(fallbacks);
+    };
+
+    const useDirectWithProxyFallback = (rawUrl, proxyUrl, extraFallbackUrls = []) => {
       const hasInternalProxy = typeof proxyUrl === 'string' && proxyUrl.startsWith('/api/proxy/');
       if (hasInternalProxy) {
-        setStreamUrl(proxyUrl);
-        setFallbackUrls(canUseDirectUrl(rawUrl) && rawUrl !== proxyUrl ? [rawUrl] : []);
+        setPlaybackUrls(proxyUrl, [
+          ...(canUseDirectUrl(rawUrl) && rawUrl !== proxyUrl ? [rawUrl] : []),
+          ...extraFallbackUrls,
+        ]);
       } else if (canUseDirectUrl(rawUrl)) {
-        setStreamUrl(rawUrl);
-        setFallbackUrls(proxyUrl && proxyUrl !== rawUrl ? [proxyUrl] : []);
+        setPlaybackUrls(rawUrl, [
+          ...(proxyUrl && proxyUrl !== rawUrl ? [proxyUrl] : []),
+          ...extraFallbackUrls,
+        ]);
       } else {
-        setStreamUrl(proxyUrl || rawUrl);
-        setFallbackUrls([]);
+        setPlaybackUrls(proxyUrl || rawUrl, extraFallbackUrls);
       }
     };
 
@@ -79,6 +96,8 @@ export default function LivePlayerView({ channelId, streamParam, channelName, is
         setError(null);
         setClearKey(null);
         setStreamType('hls');
+        fallbackQueueRef.current = [];
+        setFallbackUrls([]);
 
         if (streamParam && !channelId) {
           const mpd = streamParam.toLowerCase().includes('.mpd');
@@ -86,7 +105,7 @@ export default function LivePlayerView({ channelId, streamParam, channelName, is
             setStreamUrl(streamParam);
             setFallbackUrls([]);
           } else {
-            const proxyUrl = await resolveProxyPlaybackUrl(streamParam);
+            const proxyUrl = await resolveProxyPlaybackUrl(streamParam, { playbackType: mpd ? 'mpd' : undefined });
             useDirectWithProxyFallback(streamParam, proxyUrl);
           }
           setIsMpd(mpd);
@@ -104,13 +123,14 @@ export default function LivePlayerView({ channelId, streamParam, channelName, is
         const cKey = data.data.clearKey;
         const mpdFlag = Boolean(data.data.isMpd);
         const detectedType = data.data.streamType || (mpdFlag ? 'mpd' : 'hls');
+        const apiFallbackUrls = Array.isArray(data.data.fallbackUrls) ? data.data.fallbackUrls : [];
 
         if (mpdFlag && cKey && isUnsupportedAppleDrmBrowser()) {
           throw new Error('Kênh DRM MPD này chưa hỗ trợ iOS, iPadOS hoặc Safari. Vui lòng dùng Chrome/Edge trên Windows hoặc Android.');
         }
 
         if (data.data.isDirect) {
-          useDirectWithProxyFallback(rawUrl, proxyUrl);
+          useDirectWithProxyFallback(rawUrl, proxyUrl, apiFallbackUrls);
           setIsMpd(mpdFlag);
           setStreamType(detectedType);
           setClearKey(cKey || null);
@@ -170,6 +190,18 @@ export default function LivePlayerView({ channelId, streamParam, channelName, is
     };
   }, [channelId, streamParam]);
 
+  const handlePlayerError = (err) => {
+    const nextUrl = fallbackQueueRef.current.find(item => item && item !== streamUrl);
+    if (!nextUrl) return;
+
+    const remaining = fallbackQueueRef.current.filter(item => item && item !== streamUrl && item !== nextUrl);
+    console.warn('[LivePlayer] Switching to fallback URL after playback error:', err?.code || err?.message || err);
+    fallbackQueueRef.current = remaining;
+    setFallbackUrls(remaining);
+    setError(null);
+    setStreamUrl(nextUrl);
+  };
+
   if (error) {
     return (
       <div className="flex aspect-video w-full flex-col items-center justify-center rounded-lg border border-white/10 bg-black p-6 text-center text-white">
@@ -209,6 +241,7 @@ export default function LivePlayerView({ channelId, streamParam, channelName, is
           title={channelName || channelId || streamParam}
           subTitle={isLive ? 'Live TV' : 'Highlight'}
           isLive={isLive}
+          onError={handlePlayerError}
         />
       </Suspense>
       {isLive && <div className="pointer-events-none absolute right-4 top-4 z-50 flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">

@@ -26,6 +26,9 @@ export async function resolveProxyPlaybackUrl(url, options = {}) {
 
   const params = new URLSearchParams({ url });
   if (options.userAgent) params.set('ua', options.userAgent);
+  if (options.referer) params.set('ref', options.referer);
+  if (options.origin) params.set('origin', options.origin);
+  if (options.playbackType) params.set('pt', options.playbackType);
 
   try {
     const response = await fetch(`/api/proxy/resolve?${params.toString()}`);
@@ -38,6 +41,12 @@ export async function resolveProxyPlaybackUrl(url, options = {}) {
   }
 
   const fallback = `/api/proxy/${url}`;
-  if (!options.userAgent) return fallback;
-  return `${fallback}${fallback.includes('?') ? '&' : '?'}ua=${encodeURIComponent(options.userAgent)}`;
+  const fallbackParams = new URLSearchParams();
+  if (options.userAgent) fallbackParams.set('ua', options.userAgent);
+  if (options.referer) fallbackParams.set('ref', options.referer);
+  if (options.origin) fallbackParams.set('origin', options.origin);
+  if (options.playbackType) fallbackParams.set('pt', options.playbackType);
+  const query = fallbackParams.toString();
+  if (!query) return fallback;
+  return `${fallback}${fallback.includes('?') ? '&' : '?'}${query}`;
 }

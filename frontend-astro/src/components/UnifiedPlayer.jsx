@@ -157,21 +157,75 @@ export default function UnifiedPlayer({
     return /^[0-9a-f]{32}$/.test(clean) ? clean : null;
   };
 
+  const base64KeyToHex = (value) => {
+    const raw = String(value || '').trim();
+    if (!raw) return null;
+    try {
+      const normalized = raw.replace(/-/g, '+').replace(/_/g, '/');
+      const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+      const binary = window.atob(padded);
+      const hex = Array.from(binary, char => char.charCodeAt(0).toString(16).padStart(2, '0')).join('');
+      return /^[0-9a-f]{32}$/.test(hex) ? hex : null;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const normalizeClearKeyValue = (value) => normalizeClearKeyHex(value) || base64KeyToHex(value);
+
   const normalizeClearKeys = (source) => {
     const keys = {};
     if (!source) return keys;
 
     const addKey = (kidValue, keyValue) => {
-      const kid = normalizeClearKeyHex(kidValue);
-      const key = normalizeClearKeyHex(keyValue);
+      const kid = normalizeClearKeyValue(kidValue);
+      const key = normalizeClearKeyValue(keyValue);
       if (kid && key) keys[kid] = key;
     };
 
+    const collectFromJson = (value) => {
+      if (!value) return;
+      if (Array.isArray(value)) {
+        value.forEach(collectFromJson);
+        return;
+      }
+      if (typeof value !== 'object') return;
+
+      const kid = value.kid || value.keyid || value.keyId || value.KID;
+      const key = value.k || value.key || value.KEY || value.value;
+      if (kid && key) addKey(kid, key);
+
+      const nested = value.keys || value.clearkey || value.clearKey || value.clearKeys;
+      if (Array.isArray(nested)) {
+        nested.forEach(collectFromJson);
+      } else if (nested && typeof nested === 'object') {
+        Object.entries(nested).forEach(([entryKid, entryKey]) => {
+          if (typeof entryKey === 'string') addKey(entryKid, entryKey);
+          else collectFromJson(entryKey);
+        });
+      }
+
+      Object.entries(value).forEach(([entryKid, entryValue]) => {
+        if (typeof entryValue === 'string') addKey(entryKid, entryValue);
+        else if (entryValue && typeof entryValue === 'object') collectFromJson(entryValue);
+      });
+    };
+
     if (typeof source === 'string') {
-      const [kid, key] = source.split(':');
-      addKey(kid, key);
+      const raw = source.trim();
+      if (raw.startsWith('{') || raw.startsWith('[')) {
+        try {
+          collectFromJson(JSON.parse(raw));
+        } catch (e) {}
+      }
+
+      const pairPattern = /([0-9a-fA-F]{32}|[0-9a-fA-F-]{36}|[A-Za-z0-9_-]{22})\s*[:=]\s*([0-9a-fA-F]{32}|[0-9a-fA-F-]{36}|[A-Za-z0-9_-]{22})/g;
+      let match;
+      while ((match = pairPattern.exec(raw)) !== null) {
+        addKey(match[1], match[2]);
+      }
     } else if (typeof source === 'object') {
-      Object.entries(source).forEach(([kid, key]) => addKey(kid, key));
+      collectFromJson(source);
     }
 
     return keys;

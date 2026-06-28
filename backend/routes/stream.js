@@ -36,11 +36,53 @@ function buildDirectProxyTarget(channel, playbackType = null) {
     finalTarget += finalTarget.includes('?') ? `&ua=${encodedUa}` : `?ua=${encodedUa}`;
   }
 
+  if (channel.referer) {
+    const encodedReferer = encodeURIComponent(channel.referer);
+    finalTarget += finalTarget.includes('?') ? `&ref=${encodedReferer}` : `?ref=${encodedReferer}`;
+  }
+
+  if (channel.origin) {
+    const encodedOrigin = encodeURIComponent(channel.origin);
+    finalTarget += finalTarget.includes('?') ? `&origin=${encodedOrigin}` : `?origin=${encodedOrigin}`;
+  }
+
   if (playbackType) {
     finalTarget += finalTarget.includes('?') ? `&pt=${encodeURIComponent(playbackType)}` : `?pt=${encodeURIComponent(playbackType)}`;
   }
 
   return finalTarget;
+}
+
+function buildForcedProxyTarget(channel, playbackType = null) {
+  const encryptedUrl = encryptUrl(channel.url);
+  let finalTarget = encryptedUrl ? `/api/proxy/${encryptedUrl}` : `/api/proxy/${channel.url}`;
+
+  const appendParam = (key, value) => {
+    if (!value) return;
+    finalTarget += finalTarget.includes('?') ? `&${key}=${encodeURIComponent(value)}` : `?${key}=${encodeURIComponent(value)}`;
+  };
+
+  appendParam('ua', channel.userAgent);
+  appendParam('ref', channel.referer);
+  appendParam('origin', channel.origin);
+  appendParam('pt', playbackType);
+
+  return finalTarget;
+}
+
+function buildFallbackUrls(channel, playbackType, primaryUrl) {
+  const fallbacks = [];
+  const proxiedTarget = buildForcedProxyTarget(channel, playbackType);
+  const isPrimaryProxy = String(primaryUrl || '').startsWith('/api/proxy/');
+  const shouldOfferProxyFallback = playbackType === 'mpd' || Boolean(channel.clearKey);
+
+  if (isPrimaryProxy && channel.url && channel.url !== primaryUrl) {
+    fallbacks.push(channel.url);
+  } else if (shouldOfferProxyFallback && proxiedTarget && proxiedTarget !== primaryUrl) {
+    fallbacks.push(proxiedTarget);
+  }
+
+  return [...new Set(fallbacks.filter(Boolean))];
 }
 
 // Start stream
@@ -98,6 +140,7 @@ router.post('/start/:channelId', async (req, res) => {
     if (shouldGoDirect) {
       const manifestType = isMpd ? 'mpd' : isHls ? 'hls' : null;
       const finalTarget = buildDirectProxyTarget(channel, manifestType);
+      const fallbackUrls = buildFallbackUrls(channel, manifestType, finalTarget);
       const clearKey = isMpd ? channel.clearKey : null;
 
       return res.json({
@@ -113,6 +156,9 @@ router.post('/start/:channelId', async (req, res) => {
           detectionSource: playbackType.source || 'unknown',
           rawUrl: channel.url,
           userAgent: channel.userAgent || null,
+          referer: channel.referer || null,
+          origin: channel.origin || null,
+          fallbackUrls,
           clearKey
         }
       });

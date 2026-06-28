@@ -29,7 +29,8 @@ function getAbsoluteUrl(baseUrl, targetUrl) {
   }
 }
 
-const INTERNAL_QUERY_PARAMS = new Set(['ua', 'pt']);
+const DEFAULT_USER_AGENT_FOR_PROXY = 'Dalvik/2.1.0 (Linux; U; Android 10; TV Box Build/QQ3A.200805.001)';
+const INTERNAL_QUERY_PARAMS = new Set(['ua', 'pt', 'ref', 'origin']);
 
 function appendForwardedQuery(targetUrl, req) {
   const params = new URLSearchParams(req.query);
@@ -42,9 +43,44 @@ function appendForwardedQuery(targetUrl, req) {
   return targetUrl + (targetUrl.includes('?') ? '&' : '?') + query;
 }
 
-function appendProxyUa(url, customUa) {
-  if (!customUa) return url;
-  return url + (url.includes('?') ? '&' : '?') + `ua=${encodeURIComponent(customUa)}`;
+function appendQueryParam(url, key, value) {
+  if (!value) return url;
+  return url + (url.includes('?') ? '&' : '?') + `${key}=${encodeURIComponent(value)}`;
+}
+
+function appendProxyHeaders(url, customHeaders = {}) {
+  let nextUrl = url;
+  nextUrl = appendQueryParam(nextUrl, 'ua', customHeaders.userAgent);
+  nextUrl = appendQueryParam(nextUrl, 'ref', customHeaders.referer);
+  nextUrl = appendQueryParam(nextUrl, 'origin', customHeaders.origin);
+  return nextUrl;
+}
+
+function decodeXmlEntities(value) {
+  return String(value || '')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
+}
+
+function escapeXmlText(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function escapeXmlAttribute(value) {
+  return escapeXmlText(value).replace(/"/g, '&quot;');
+}
+
+function shouldRewriteXmlUrl(url) {
+  const clean = decodeXmlEntities(url).trim();
+  if (!clean || clean.startsWith('#')) return false;
+  if (/^(urn|data|mailto|javascript):/i.test(clean)) return false;
+  return true;
 }
 
 function resolveAbsoluteUrl(baseUrl, origin, url) {
@@ -85,30 +121,33 @@ function readStreamToBuffer(stream) {
   });
 }
 
-function createProxyHeaders(targetUrl, req, customUa) {
+function createProxyHeaders(targetUrl, req, customHeaders = {}) {
+  const isFptOrVtv = targetUrl.includes('fptplay') || targetUrl.includes('vtv') || targetUrl.includes('vtvgo');
+  const browserUa = req.headers['user-agent'];
+  const fallbackUa = browserUa?.includes('Mozilla') ? DEFAULT_USER_AGENT_FOR_PROXY : (browserUa || DEFAULT_USER_AGENT_FOR_PROXY);
+  const defaultReferer = isFptOrVtv ? undefined : (new URL(targetUrl).origin + '/');
+
   return {
-    'User-Agent': (targetUrl.includes('fptplay') || targetUrl.includes('vtv') || targetUrl.includes('vtvgo'))
-                    ? 'VLC/3.0.16 LibVLC/3.0.16'
-                    : (customUa ? customUa : (req.headers['user-agent']?.includes('Mozilla') ? 'Dalvik/2.1.0 (Linux; U; Android 10; TV Box Build/QQ3A.200805.001)' : (req.headers['user-agent'] || 'Dalvik/2.1.0 (Linux; U; Android 10; TV Box Build/QQ3A.200805.001)'))),
+    'User-Agent': customHeaders.userAgent || (isFptOrVtv ? 'VLC/3.0.16 LibVLC/3.0.16' : fallbackUa),
     'Accept': '*/*',
     'Accept-Encoding': 'identity',
-    'X-Requested-With': (targetUrl.includes('fptplay') || targetUrl.includes('vtv')) ? undefined : 'org.xbmc.kodi',
-    'Origin': (targetUrl.includes('fptplay') || targetUrl.includes('vtv')) ? undefined : undefined,
-    'Referer': (targetUrl.includes('fptplay') || targetUrl.includes('vtv')) ? undefined : (new URL(targetUrl).origin + '/'),
+    'X-Requested-With': isFptOrVtv ? undefined : 'org.xbmc.kodi',
+    'Origin': customHeaders.origin || undefined,
+    'Referer': customHeaders.referer || defaultReferer,
     'X-Forwarded-For': `14.169.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`,
     'X-Real-IP': `14.169.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`,
     'Range': req.headers.range
   };
 }
 
-function fetchProxyResponse(targetUrl, req, customUa, controller) {
+function fetchProxyResponse(targetUrl, req, customHeaders, controller) {
   return axios({
     method: 'GET',
     url: targetUrl,
     signal: controller.signal,
     httpAgent: httpKeepAliveAgent,
     httpsAgent: httpsKeepAliveAgent,
-    headers: createProxyHeaders(targetUrl, req, customUa),
+    headers: createProxyHeaders(targetUrl, req, customHeaders),
     responseType: 'stream',
     decompress: false,
     maxRedirects: 10,
@@ -141,6 +180,15 @@ router.get('/resolve', (req, res) => {
 
   if (req.query.ua) {
     proxiedUrl += `${proxiedUrl.includes('?') ? '&' : '?'}ua=${encodeURIComponent(req.query.ua)}`;
+  }
+  if (req.query.ref) {
+    proxiedUrl += `${proxiedUrl.includes('?') ? '&' : '?'}ref=${encodeURIComponent(req.query.ref)}`;
+  }
+  if (req.query.origin) {
+    proxiedUrl += `${proxiedUrl.includes('?') ? '&' : '?'}origin=${encodeURIComponent(req.query.origin)}`;
+  }
+  if (['mpd', 'hls'].includes(req.query.pt)) {
+    proxiedUrl += `${proxiedUrl.includes('?') ? '&' : '?'}pt=${encodeURIComponent(req.query.pt)}`;
   }
 
   return res.json({ success: true, url: proxiedUrl });
@@ -177,9 +225,13 @@ router.get('/*', async (req, res) => {
     const controller = new AbortController();
     req.on('close', () => controller.abort());
 
-    const customUa = req.query.ua;
+    const customHeaders = {
+      userAgent: req.query.ua ? String(req.query.ua) : null,
+      referer: req.query.ref ? String(req.query.ref) : null,
+      origin: req.query.origin ? String(req.query.origin) : null,
+    };
     const expectedType = ['mpd', 'hls'].includes(req.query.pt) ? req.query.pt : null;
-    let response = await fetchProxyResponse(targetUrl, req, customUa, controller);
+    let response = await fetchProxyResponse(targetUrl, req, customHeaders, controller);
     let contentType = response.headers['content-type'] || '';
     let finalUrl = response.request?.res?.responseUrl || targetUrl;
 
@@ -208,7 +260,7 @@ router.get('/*', async (req, res) => {
 
         console.warn(`[Proxy] ${expectedType.toUpperCase()} manifest retry ${attempt + 1} for transient upstream response: ${manifestContentType || 'unknown'}`);
         await delay(250 + attempt * 250);
-        response = await fetchProxyResponse(targetUrl, req, customUa, controller);
+        response = await fetchProxyResponse(targetUrl, req, customHeaders, controller);
       }
 
       if (expectedType && !isValidManifestContent(content, expectedType)) {
@@ -224,9 +276,9 @@ router.get('/*', async (req, res) => {
 
       const originOfFinalUrl = new URL(manifestFinalUrl).origin;
       if (isM3u8) {
-        content = rewriteM3u8(content, manifestFinalUrl, proxyBase, originOfFinalUrl, customUa);
+        content = rewriteM3u8(content, manifestFinalUrl, proxyBase, originOfFinalUrl, customHeaders);
       } else if (isMpd) {
-        content = rewriteMpd(content, manifestFinalUrl, proxyBase, originOfFinalUrl, customUa);
+        content = rewriteMpd(content, manifestFinalUrl, proxyBase, originOfFinalUrl, customHeaders);
       }
 
       res.set({
@@ -268,7 +320,7 @@ router.get('/*', async (req, res) => {
 /**
  * Rewrite M3U8 playlist: chuyển mọi URL segment/key qua proxy
  */
-function rewriteM3u8(content, baseUrl, proxyBase, origin, customUa) {
+function rewriteM3u8(content, baseUrl, proxyBase, origin, customHeaders) {
   const lines = content.split('\n');
   const result = lines.map(line => {
     const trimmed = line.trim();
@@ -278,7 +330,7 @@ function rewriteM3u8(content, baseUrl, proxyBase, origin, customUa) {
     if (trimmed.startsWith('#EXT-X-KEY:') || trimmed.startsWith('#EXT-X-MAP:') || trimmed.startsWith('#EXT-X-MEDIA:')) {
       return line.replace(/URI="([^"]+)"/g, (match, uri) => {
         const absUri = resolveUrl(baseUrl, origin, uri);
-        const rewritten = appendProxyUa(`${proxyBase}${absUri}`, customUa);
+        const rewritten = appendProxyHeaders(`${proxyBase}${absUri}`, customHeaders);
         return `URI="${rewritten}"`;
       });
     }
@@ -288,7 +340,7 @@ function rewriteM3u8(content, baseUrl, proxyBase, origin, customUa) {
 
     // Dòng URL (segment hoặc sub-playlist)
     const absUrl = resolveUrl(baseUrl, origin, trimmed);
-    return appendProxyUa(proxyBase + absUrl, customUa);
+    return appendProxyHeaders(proxyBase + absUrl, customHeaders);
   });
   return result.join('\n');
 }
@@ -296,35 +348,43 @@ function rewriteM3u8(content, baseUrl, proxyBase, origin, customUa) {
 /**
  * Rewrite MPD manifest: chuyển mọi URL (BaseURL, SegmentTemplate, ...) qua proxy
  */
-function rewriteMpd(content, baseUrl, proxyBase, origin, customUa) {
+function rewriteMpd(content, baseUrl, proxyBase, origin, customHeaders) {
   const firstBaseUrl = (content.match(/<BaseURL>([^<]+)<\/BaseURL>/) || [])[1];
-  const segmentBaseUrl = firstBaseUrl ? resolveAbsoluteUrl(baseUrl, origin, firstBaseUrl) : baseUrl;
+  const segmentBaseUrl = firstBaseUrl ? resolveAbsoluteUrl(baseUrl, origin, decodeXmlEntities(firstBaseUrl)) : baseUrl;
 
   // 1. Rewrite <BaseURL> tags
   content = content.replace(/<BaseURL>([^<]+)<\/BaseURL>/g, (match, url) => {
-    const absUrl = resolveUrl(baseUrl, origin, url);
-    return `<BaseURL>${appendProxyUa(proxyBase + absUrl, customUa)}</BaseURL>`;
+    const absUrl = resolveUrl(baseUrl, origin, decodeXmlEntities(url));
+    return `<BaseURL>${escapeXmlText(appendProxyHeaders(proxyBase + absUrl, customHeaders))}</BaseURL>`;
   });
 
   // 2. Rewrite initialization="..." và media="..." trong SegmentTemplate
   content = content.replace(/initialization="([^"]+)"/g, (match, url) => {
-    const base = (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/')) ? baseUrl : segmentBaseUrl;
-    const absUrl = resolveUrl(base, origin, url);
-    return `initialization="${appendProxyUa(proxyBase + absUrl, customUa)}"`;
+    const decodedUrl = decodeXmlEntities(url);
+    const base = (decodedUrl.startsWith('http://') || decodedUrl.startsWith('https://') || decodedUrl.startsWith('/')) ? baseUrl : segmentBaseUrl;
+    const absUrl = resolveUrl(base, origin, decodedUrl);
+    return `initialization="${escapeXmlAttribute(appendProxyHeaders(proxyBase + absUrl, customHeaders))}"`;
   });
 
   content = content.replace(/media="([^"]+)"/g, (match, url) => {
     // Chỉ rewrite nếu chứa dấu / (là path, không phải template variable thuần)
-    if (url.startsWith('$') && !url.includes('/')) return match;
-    const base = (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/')) ? baseUrl : segmentBaseUrl;
-    const absUrl = resolveUrl(base, origin, url);
-    return `media="${appendProxyUa(proxyBase + absUrl, customUa)}"`;
+    const decodedUrl = decodeXmlEntities(url);
+    if (decodedUrl.startsWith('$') && !decodedUrl.includes('/')) return match;
+    const base = (decodedUrl.startsWith('http://') || decodedUrl.startsWith('https://') || decodedUrl.startsWith('/')) ? baseUrl : segmentBaseUrl;
+    const absUrl = resolveUrl(base, origin, decodedUrl);
+    return `media="${escapeXmlAttribute(appendProxyHeaders(proxyBase + absUrl, customHeaders))}"`;
   });
 
   // 3. Rewrite sourceURL="..." trong SegmentList
   content = content.replace(/sourceURL="([^"]+)"/g, (match, url) => {
-    const absUrl = resolveUrl(baseUrl, origin, url);
-    return `sourceURL="${appendProxyUa(proxyBase + absUrl, customUa)}"`;
+    const absUrl = resolveUrl(baseUrl, origin, decodeXmlEntities(url));
+    return `sourceURL="${escapeXmlAttribute(appendProxyHeaders(proxyBase + absUrl, customHeaders))}"`;
+  });
+
+  content = content.replace(/\b((?:xlink:)?href)="([^"]+)"/g, (match, attr, url) => {
+    if (!shouldRewriteXmlUrl(url)) return match;
+    const absUrl = resolveUrl(baseUrl, origin, decodeXmlEntities(url));
+    return `${attr}="${escapeXmlAttribute(appendProxyHeaders(proxyBase + absUrl, customHeaders))}"`;
   });
 
   return content;
