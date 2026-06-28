@@ -83,6 +83,15 @@ function shouldRewriteXmlUrl(url) {
   return true;
 }
 
+function maskUrlForLog(url) {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch (e) {
+    return String(url || '').split('?')[0].slice(0, 180);
+  }
+}
+
 function resolveAbsoluteUrl(baseUrl, origin, url) {
   if (!url) return url;
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
@@ -194,7 +203,7 @@ router.get('/resolve', (req, res) => {
   return res.json({ success: true, url: proxiedUrl });
 });
 
-router.get('/*', async (req, res) => {
+async function handleProxyRequest(req, res) {
   let targetUrl = req.params[0];
   try {
     targetUrl = targetUrl.replace(/^(https?):\/+/, '$1://');
@@ -234,6 +243,14 @@ router.get('/*', async (req, res) => {
     let response = await fetchProxyResponse(targetUrl, req, customHeaders, controller);
     let contentType = response.headers['content-type'] || '';
     let finalUrl = response.request?.res?.responseUrl || targetUrl;
+
+    if (response.status >= 400) {
+      console.warn('[Proxy] Upstream HTTP error', {
+        status: response.status,
+        type: contentType || 'unknown',
+        url: maskUrlForLog(finalUrl || targetUrl),
+      });
+    }
 
     const lowerUrl = targetUrl.toLowerCase();
     const isM3u8 = expectedType === 'hls' || lowerUrl.includes('.m3u8') || contentType.includes('mpegurl');
@@ -315,7 +332,10 @@ router.get('/*', async (req, res) => {
       res.status(502).send('Proxy Error: ' + error.message);
     }
   }
-});
+}
+
+router.head('/*', handleProxyRequest);
+router.get('/*', handleProxyRequest);
 
 /**
  * Rewrite M3U8 playlist: chuyển mọi URL segment/key qua proxy

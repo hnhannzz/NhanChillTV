@@ -242,8 +242,45 @@ export default function UnifiedPlayer({
     return codes;
   };
 
+  const getPrimaryShakaCode = (err) => {
+    if (typeof err?.code === 'number') return err.code;
+    const codes = Array.from(getShakaErrorCodes(err));
+    return codes[0] || null;
+  };
+
+  const getSafeUrlHint = (urlValue) => {
+    try {
+      const parsed = new URL(urlValue, window.location.href);
+      return `${parsed.origin}${parsed.pathname}`.slice(0, 160);
+    } catch {
+      return String(urlValue || '').slice(0, 120);
+    }
+  };
+
+  const getNetworkErrorInfo = (err) => {
+    const code = getPrimaryShakaCode(err);
+    const data = Array.isArray(err?.data) ? err.data : [];
+    return {
+      code,
+      uri: data[0],
+      status: code === 1001 ? data[1] : null,
+      responseText: code === 1001 ? data[2] : null,
+      requestType: code === 1001 ? data[4] : data[2],
+      finalUri: code === 1001 ? data[5] : data[0],
+      innerError: code === 1002 ? data[1] : null,
+    };
+  };
+
   const formatPlaybackError = (err, hasClearKeys) => {
     const codes = getShakaErrorCodes(err);
+    if (codes.has(1001)) {
+      const info = getNetworkErrorInfo(err);
+      const statusText = info.status ? `HTTP ${info.status}` : 'HTTP lỗi';
+      return `Lỗi tải nguồn (${statusText}). Máy chủ nguồn hoặc proxy đang từ chối manifest/segment.`;
+    }
+    if (codes.has(1002)) {
+      return 'Lỗi tải nguồn: trình duyệt không kết nối được tới manifest/segment. Hệ thống sẽ thử luồng dự phòng nếu có.';
+    }
     if (hasClearKeys && codes.has(6007)) {
       return 'Lỗi DRM ClearKey: key hiện tại không khớp với manifest hoặc nguồn đã đổi key. Vui lòng cập nhật lại key/nguồn trong M3U.';
     }
@@ -257,6 +294,24 @@ export default function UnifiedPlayer({
       return 'Lỗi DRM: nguồn yêu cầu license server nhưng hệ thống chưa có license URL.';
     }
     return `Lỗi phát video: ${err?.message || 'Không thể tải luồng video'}`;
+  };
+
+  const reportPlaybackError = (err, hasClearKeys = false) => {
+    const info = getNetworkErrorInfo(err);
+    console.warn('[Player] Playback failure', {
+      code: info.code || err?.code || err?.message,
+      status: info.status || null,
+      requestType: info.requestType || null,
+      url: getSafeUrlHint(info.finalUri || info.uri || url),
+      innerError: info.innerError?.message || null,
+    });
+
+    if (onError?.(err) === true) {
+      return true;
+    }
+
+    setError(formatPlaybackError(err, hasClearKeys));
+    return false;
   };
 
   const maskKeyIds = (clearKeysObj) => Object.keys(clearKeysObj).map(kid => `${kid.slice(0, 6)}...${kid.slice(-4)}`);
@@ -316,6 +371,7 @@ export default function UnifiedPlayer({
           }
         }, 3000);
       } else {
+        if (onError?.(mediaError) === true) return;
         setError(mediaError ? `Lỗi trình phát: ${mediaError.message || 'Lỗi tải luồng video'}` : 'Lỗi tải luồng video');
       }
     };
@@ -393,8 +449,8 @@ export default function UnifiedPlayer({
 
             mpegtsPlayer.on(mpegts.Events.ERROR, (errorType, errorDetail, errorInfo) => {
               console.error('MPEG-TS Error:', errorType, errorDetail, errorInfo);
+              if (onError?.(errorInfo) === true) return;
               setError(`Lỗi MPEG-TS: ${errorDetail}`);
-              onError?.(errorInfo);
             });
             return;
           }
@@ -522,8 +578,7 @@ export default function UnifiedPlayer({
 
         shakaPlayer.addEventListener('error', (event) => {
           console.error('Player error', event.detail);
-          setError(formatPlaybackError(event.detail, hasClearKeys));
-          onError?.(event.detail);
+          reportPlaybackError(event.detail, hasClearKeys);
         });
 
         await shakaPlayer.load(url, shouldGateResume ? 0 : initialTime);
@@ -570,8 +625,7 @@ export default function UnifiedPlayer({
       } catch (err) {
         if (cancelled) return;
         console.error('Error loading video', err);
-        setError(formatPlaybackError(err, activeHasClearKeys));
-        onError?.(err);
+        reportPlaybackError(err, activeHasClearKeys);
       }
     };
 

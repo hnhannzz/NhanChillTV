@@ -192,7 +192,7 @@ export default function LivePlayerView({ channelId, streamParam, channelName, is
 
   const handlePlayerError = (err) => {
     const nextUrl = fallbackQueueRef.current.find(item => item && item !== streamUrl);
-    if (!nextUrl) return;
+    if (!nextUrl) return false;
 
     const remaining = fallbackQueueRef.current.filter(item => item && item !== streamUrl && item !== nextUrl);
     console.warn('[LivePlayer] Switching to fallback URL after playback error:', err?.code || err?.message || err);
@@ -200,6 +200,7 @@ export default function LivePlayerView({ channelId, streamParam, channelName, is
     setFallbackUrls(remaining);
     setError(null);
     setStreamUrl(nextUrl);
+    return true;
   };
 
   if (error) {
