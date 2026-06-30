@@ -112,6 +112,7 @@ export default function UnifiedPlayer({
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
 
   const isLiveStream = isLive ?? (duration === Infinity || !isFinite(duration) || subTitle === 'Live TV');
+  const isLivePlayback = isLive === true || subTitle === 'Live TV';
   const shouldGateResume = !skipResumePrompt && initialTime > 5 && isLive !== true;
   const hasAudioVariants = Array.isArray(audioVariants) && audioVariants.length > 0;
   const selectedAudioVariant = audioVariants.find(item => item.id === currentAudioVariantId) || audioVariants[0];
@@ -427,8 +428,10 @@ export default function UnifiedPlayer({
             }, {
               enableWorker: true,
               lazyLoad: false,
-              enableStashBuffer: false,
-              liveBufferLatencyChasing: true,
+              enableStashBuffer: true,
+              stashInitialSize: 384 * 1024,
+              liveBufferLatencyChasing: false,
+              liveSync: false,
             });
             playerRef.current = mpegtsPlayer;
 
@@ -550,9 +553,19 @@ export default function UnifiedPlayer({
 
         const shakaConfig = {
           streaming: {
-            bufferingGoal: 45,
-            rebufferingGoal: 5,
-            bufferBehind: 15,
+            bufferingGoal: isLivePlayback ? 30 : 45,
+            rebufferingGoal: isLivePlayback ? 8 : 5,
+            bufferBehind: isLivePlayback ? 60 : 15,
+            lowLatencyMode: isLivePlayback ? false : true,
+            startAtSegmentBoundary: isLivePlayback,
+            safeSeekEndOffset: isLivePlayback ? 12 : 0,
+            inaccurateManifestTolerance: isLivePlayback ? 4 : 2,
+            segmentPrefetchLimit: isLivePlayback ? 2 : 1,
+            returnToEndOfLiveWindowWhenOutside: false,
+            liveSync: {
+              enabled: false,
+              panicMode: false,
+            },
             retryParameters: {
               maxAttempts: 5,
               timeout: 10000,
@@ -566,11 +579,20 @@ export default function UnifiedPlayer({
           drm: drmConfig,
         };
 
-        if (hasClearKeys) {
+        if (isLivePlayback) {
           shakaConfig.manifest = {
-            dash: {
-              keySystemsByURI: clearKeyUriMappings,
+            defaultPresentationDelay: 18,
+            hls: {
+              liveSegmentsDelay: 5,
             },
+          };
+        }
+
+        if (hasClearKeys) {
+          shakaConfig.manifest = shakaConfig.manifest || {};
+          shakaConfig.manifest.dash = {
+            ...(shakaConfig.manifest.dash || {}),
+            keySystemsByURI: clearKeyUriMappings,
           };
         }
 
@@ -581,7 +603,8 @@ export default function UnifiedPlayer({
           reportPlaybackError(event.detail, hasClearKeys);
         });
 
-        await shakaPlayer.load(url, shouldGateResume ? 0 : initialTime);
+        const shakaStartTime = isLivePlayback ? undefined : (shouldGateResume ? 0 : initialTime);
+        await shakaPlayer.load(url, shakaStartTime);
         if (cancelled) return;
         if (hasClearKeys) {
           const drmInfo = typeof shakaPlayer.drmInfo === 'function' ? shakaPlayer.drmInfo() : null;
@@ -663,7 +686,7 @@ export default function UnifiedPlayer({
         video.removeEventListener('canplay', doSeek);
       }
     };
-  }, [url, isMpd, streamType, initialTime, autoplay, shouldGateResume, clearKey]);
+  }, [url, isMpd, streamType, initialTime, autoplay, shouldGateResume, clearKey, isLivePlayback]);
 
   // Handle Fullscreen state change events, including webkit prefix
   useEffect(() => {
