@@ -103,6 +103,31 @@ test('finished World Cup matches do not render a player', async () => {
   assert.equal(shouldRenderWorldCupPlayer({ isFinished: false }), true);
 });
 
+test('manual World Cup streams bypass proxy playback', async () => {
+  const helperPath = path.resolve(__dirname, '../../frontend-astro/src/lib/worldCupMatchView.js');
+  const { getWorldCupStreamPlaybackTarget } = await import(pathToFileURL(helperPath));
+
+  const manualIptv = getWorldCupStreamPlaybackTarget({
+    sourceType: 'iptv',
+    sourceChannelId: 'vtv9hd',
+    stream: 'https://cdn.example.com/vtv9/index.m3u8',
+    manual: true,
+  });
+  assert.equal(manualIptv.channelId, null);
+  assert.equal(manualIptv.streamParam, 'https://cdn.example.com/vtv9/index.m3u8');
+  assert.equal(manualIptv.preferDirectStream, true);
+
+  const defaultIptv = getWorldCupStreamPlaybackTarget({
+    sourceType: 'iptv',
+    sourceChannelId: 'vtv3hd',
+    stream: 'https://cdn.example.com/vtv3/index.m3u8',
+    isDefault: true,
+  });
+  assert.equal(defaultIptv.channelId, 'vtv3hd');
+  assert.equal(defaultIptv.streamParam, null);
+  assert.equal(defaultIptv.preferDirectStream, false);
+});
+
 test('World Cup highlights are attached by match id', () => {
   const highlight = { sourceType: 'embed', url: 'https://example.com/highlight', title: 'Highlight' };
   const normalized = normalizeWorldCupData(sampleRawWorldCup(), {

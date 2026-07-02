@@ -3,7 +3,7 @@ import { CalendarClock, Clock, Heart, Info, Radio, Search, Trophy } from 'lucide
 import LivePlayerView from './LivePlayerView';
 import EventChat from './EventChat';
 import { getBrowserEpgSchedule } from '../lib/browserEpg';
-import { shouldRenderWorldCupPlayer } from '../lib/worldCupMatchView';
+import { getWorldCupStreamPlaybackTarget, shouldRenderWorldCupPlayer } from '../lib/worldCupMatchView';
 
 const API_BASE = '/api';
 
@@ -96,12 +96,10 @@ export default function TvPageContainer() {
             initialStreamUrl = null;
           } else {
             const firstStream = match.streams?.[0];
-            if (firstStream?.sourceType === 'iptv' && firstStream.sourceChannelId) {
-              initialChannelId = firstStream.sourceChannelId;
-              initialStreamUrl = null;
-            } else if (firstStream?.stream) {
-              initialStreamUrl = firstStream.stream;
-              initialChannelId = null;
+            const target = getWorldCupStreamPlaybackTarget(firstStream);
+            if (target.channelId || target.streamParam) {
+              initialChannelId = target.channelId;
+              initialStreamUrl = target.streamParam;
             } else {
               setMatchError('Chưa có luồng M3U8 khả dụng cho trận này.');
             }
@@ -175,13 +173,9 @@ export default function TvPageContainer() {
     const stream = matchData?.streams?.[index];
     if (!stream) return;
     setActiveMatchStream(index);
-    if (stream.sourceType === 'iptv') {
-      setCurrentChannelId(stream.sourceChannelId || null);
-      setStreamParam(null);
-    } else {
-      setCurrentChannelId(null);
-      setStreamParam(stream.stream || null);
-    }
+    const target = getWorldCupStreamPlaybackTarget(stream);
+    setCurrentChannelId(target.channelId);
+    setStreamParam(target.streamParam);
   };
 
   const playChannel = (id) => {
@@ -295,6 +289,7 @@ export default function TvPageContainer() {
       {matchError && <div className="rounded-md bg-yellow-500/10 p-3 text-xs text-yellow-200">{matchError}</div>}
     </div>
   );
+  const activeMatchPlaybackTarget = getWorldCupStreamPlaybackTarget(matchData?.streams?.[activeMatchStream]);
 
   if (eventId) {
     return (
@@ -330,7 +325,7 @@ export default function TvPageContainer() {
                   <div className="max-w-md text-sm text-white/55">Trận đấu đã kết thúc. Player phát sóng không còn hiển thị cho trận này.</div>
                 </div>
               )
-            ) : (currentChannelId || streamParam) ? <LivePlayerView key={`${currentChannelId || streamParam}-${activeMatchStream}`} channelId={currentChannelId} streamParam={streamParam} channelName={matchData ? `${matchData.home_team_display} vs ${matchData.away_team_display} - ${matchData.streams?.[activeMatchStream]?.name || 'World Cup'}` : currentChannel?.name} /> : <div className="flex aspect-video items-center justify-center text-sm text-white/45">Đang chờ nguồn phát World Cup...</div>}
+            ) : (currentChannelId || streamParam) ? <LivePlayerView key={`${currentChannelId || streamParam}-${activeMatchStream}`} channelId={currentChannelId} streamParam={streamParam} channelName={matchData ? `${matchData.home_team_display} vs ${matchData.away_team_display} - ${matchData.streams?.[activeMatchStream]?.name || 'World Cup'}` : currentChannel?.name} preferDirectStream={activeMatchPlaybackTarget.preferDirectStream} /> : <div className="flex aspect-video items-center justify-center text-sm text-white/45">Đang chờ nguồn phát World Cup...</div>}
           </div>
           <div className="aspect-video w-full lg:hidden" />
           <div className="px-4 lg:hidden">{matchHeading}</div>
