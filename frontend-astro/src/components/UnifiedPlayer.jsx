@@ -351,6 +351,7 @@ export default function UnifiedPlayer({
     const isDash = playbackType === 'dash';
     const isMpegTs = playbackType === 'mpegts';
     const isProgressive = playbackType === 'mp4';
+    const isLowLatencyHlsPlayback = isLivePlayback && playbackType === 'hls';
     let activeHasClearKeys = false;
 
     const handleNativeError = () => {
@@ -461,6 +462,7 @@ export default function UnifiedPlayer({
 
         if ((isSafariOrIOS && !isDash) || isProgressive) {
           console.log('[Player] Using native HTML5 playback engine');
+          video.preload = isLowLatencyHlsPlayback ? 'auto' : 'metadata';
           video.src = url;
           video.load();
 
@@ -551,21 +553,71 @@ export default function UnifiedPlayer({
           },
         } : undefined;
 
+        const shakaStreamingProfile = isLowLatencyHlsPlayback
+          ? {
+              bufferingGoal: 12,
+              rebufferingGoal: 3,
+              bufferBehind: 45,
+              lowLatencyMode: true,
+              startAtSegmentBoundary: false,
+              safeSeekEndOffset: 5,
+              inaccurateManifestTolerance: 0,
+              segmentPrefetchLimit: 3,
+              updateIntervalSeconds: 0.5,
+              returnToEndOfLiveWindowWhenOutside: false,
+              liveSync: {
+                enabled: true,
+                targetLatency: 6,
+                targetLatencyTolerance: 1.5,
+                maxPlaybackRate: 1.04,
+                minPlaybackRate: 0.97,
+                panicMode: true,
+                panicThreshold: 20,
+                dynamicTargetLatency: {
+                  enabled: true,
+                  stabilityThreshold: 25,
+                  rebufferIncrement: 1,
+                  maxAttempts: 4,
+                  maxLatency: 12,
+                  minLatency: 4,
+                },
+              },
+            }
+          : isLivePlayback
+            ? {
+                bufferingGoal: 30,
+                rebufferingGoal: 8,
+                bufferBehind: 60,
+                lowLatencyMode: false,
+                startAtSegmentBoundary: true,
+                safeSeekEndOffset: 12,
+                inaccurateManifestTolerance: 4,
+                segmentPrefetchLimit: 2,
+                returnToEndOfLiveWindowWhenOutside: false,
+                liveSync: {
+                  enabled: false,
+                  panicMode: false,
+                },
+              }
+            : {
+                bufferingGoal: 45,
+                rebufferingGoal: 5,
+                bufferBehind: 15,
+                lowLatencyMode: true,
+                startAtSegmentBoundary: false,
+                safeSeekEndOffset: 0,
+                inaccurateManifestTolerance: 2,
+                segmentPrefetchLimit: 1,
+                returnToEndOfLiveWindowWhenOutside: false,
+                liveSync: {
+                  enabled: false,
+                  panicMode: false,
+                },
+              };
+
         const shakaConfig = {
           streaming: {
-            bufferingGoal: isLivePlayback ? 30 : 45,
-            rebufferingGoal: isLivePlayback ? 8 : 5,
-            bufferBehind: isLivePlayback ? 60 : 15,
-            lowLatencyMode: isLivePlayback ? false : true,
-            startAtSegmentBoundary: isLivePlayback,
-            safeSeekEndOffset: isLivePlayback ? 12 : 0,
-            inaccurateManifestTolerance: isLivePlayback ? 4 : 2,
-            segmentPrefetchLimit: isLivePlayback ? 2 : 1,
-            returnToEndOfLiveWindowWhenOutside: false,
-            liveSync: {
-              enabled: false,
-              panicMode: false,
-            },
+            ...shakaStreamingProfile,
             retryParameters: {
               maxAttempts: 5,
               timeout: 10000,
@@ -581,9 +633,10 @@ export default function UnifiedPlayer({
 
         if (isLivePlayback) {
           shakaConfig.manifest = {
-            defaultPresentationDelay: 18,
+            defaultPresentationDelay: isLowLatencyHlsPlayback ? 6 : 18,
             hls: {
-              liveSegmentsDelay: 5,
+              liveSegmentsDelay: isLowLatencyHlsPlayback ? 2 : 5,
+              allowLowLatencyByteRangeOptimization: isLowLatencyHlsPlayback,
             },
           };
         }
